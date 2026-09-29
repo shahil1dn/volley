@@ -313,7 +313,7 @@ an index.
 
 | Request | Database call | Rows touched | Index |
 |---|---|---|---|
-| Phone or projector reads state | `get_state(code)` on cache miss only | 1 run, 1 item, ≤100 tallies, ≤10 players | `runs(code)` unique, `tallies(run_id, item_id, count desc)`, `players(run_id, score desc)` |
+| Phone or projector reads state | `get_state(code)` on cache miss only | 1 run, 1 item, ≤100 tallies, ≤10 players | `runs(code)` unique, `tallies(run_id, item_id, count desc, key) where not hidden`, `players(run_id, score desc)` |
 | Phone sends an answer | `submit_answer(...)` | 1 rate row, 1 response, 1 quota, 1 tally, 1 run | primary keys, `responses(participant_id, submit_id)` unique |
 | Phone joins | none (token signed by the server) | 0 | – |
 | Host action (open, next, hide, end) | one function per action | 1 run, plus the item's tallies for hide | primary keys |

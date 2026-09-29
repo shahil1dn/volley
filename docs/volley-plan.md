@@ -115,10 +115,29 @@ polling. If it does not, the delivery design changes and every later slice with 
   keeps the rate count; a hidden word still counts but stays hidden; limits are
   300 per 10s per IP and 600 per 10s per run.
 
-- [ ] **S4. `get_state` behind the cached route.** Returns version, current item
+- [x] **S4. `get_state` behind the cached route.** Returns version, current item
   without secrets, top 100 visible tallies, `serverNow`.
   *verify:* `EXPLAIN` on its queries shows index scans only (A11); a test proves
   a hidden tally is absent.
+  *done:* `db/migrations/0003_get_state.sql`, tested in
+  `tests/db-get-state.test.ts`. Receipts: before the migration, 8 of 8 new tests
+  red ("function public.get_state(unknown) does not exist"). Migrate run 1
+  EXIT=0 "Applied 0003_get_state.sql", run 2 EXIT=0 "Up to date". Then
+  `npm test` EXIT=0, 30 pass, 0 fail; `npm run check` EXIT=0; `npm run build`
+  EXIT=0. Mutation check, each restored after: no hidden filter, sort by key
+  only, cap raised to 1000, secrets not stripped, secrets stripped at top level
+  only, no index on `runs.code`, and `anon` allowed to call it. All 7 turned
+  their tests red. The route returned a real run as 306 bytes, with no
+  `correct` and no hidden word.
+  A11 method: it checks what `get_state` actually ran, not `EXPLAIN` on a copy
+  of its SQL. Inside a rolled-back transaction it seeds 2,000 runs, 300 deck
+  items, 6,000 tallies and 4,000 players, runs `ANALYZE`, calls `get_state` on
+  a fresh connection, and reads `pg_stat_xact_user_tables`: no sequential scan
+  on `runs`, `deck_items`, `tallies` or `players`, and at least one index scan
+  on each. S2's `tallies` index is replaced by a partial index on visible
+  words, in the order the state sends them, so the top 100 needs no sort.
+  Secrets: settings keys named `correct` are removed at any depth until the
+  item is revealed; the quiz adds names to that list in Milestone 2.
 
 - [ ] **S5. A phone can join and answer.** Signed participant token in a cookie
   scoped to the answer route; `/j/[code]` polls state; retry-safe submit with a
@@ -244,5 +263,12 @@ live, which must happen before the first real workshop anyway.
   hundreds a second.
 - **`npm test` takes over a minute** (the database A4 test ~35s, plus the
   submit tests). Fine for now; batch the A4 probes if it gets in the way.
-- **The state route logs `STATE_FN_CALL` on every call.** It's there so load
-  runs can be counted. Remove it once the delivery design is settled.
+- **`STATE_FN_CALL` log line removed in S4.** ADR-004 settled the delivery
+  design it was measuring. A10's load test will need another way to count calls
+  (Vercel's function metrics, or add the line back for the run).
+- **A cached state can be a few seconds old**, so `serverNow` is too. Clients
+  should add the response's `Age` header (always present, S1) to `serverNow`
+  before timing a quiz countdown, and ignore any state whose `version` is lower
+  than one they've already shown. Matters for S5 and the quiz.
+- **`ANALYZE` after a rolled-back seed**: the A11 test re-runs `ANALYZE` after
+  its rollback, because Postgres's row estimates survive a rollback.

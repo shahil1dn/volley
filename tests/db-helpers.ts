@@ -71,3 +71,19 @@ export async function submit(
 	]);
 	return rows[0].result;
 }
+
+export type ScanCounts = Record<string, { sequential: number; index: number }>;
+
+// Scans this transaction has made so far on each table, from Postgres's own
+// per-transaction statistics. Measures what a function really executed,
+// rather than EXPLAIN on a copy of its SQL that could drift from it.
+export async function scanCounts(db: pg.Client, tables: string[]): Promise<ScanCounts> {
+	const { rows } = await db.query(
+		`select relname, seq_scan, coalesce(idx_scan, 0) as idx_scan
+		 from pg_stat_xact_user_tables where schemaname = 'public' and relname = any($1)`,
+		[tables],
+	);
+	return Object.fromEntries(
+		rows.map((row) => [row.relname, { sequential: Number(row.seq_scan), index: Number(row.idx_scan) }]),
+	);
+}
