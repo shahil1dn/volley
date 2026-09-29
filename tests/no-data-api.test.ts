@@ -15,7 +15,7 @@ async function sourceFiles(dir: string): Promise<string[]> {
 }
 
 test('no app code calls the database through the Data API', async () => {
-	const offenders = [];
+	const offenders: string[] = [];
 	for (const file of await sourceFiles('src')) {
 		const lines = (await readFile(file, 'utf8')).split('\n');
 		lines.forEach((line, i) => {
