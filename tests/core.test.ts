@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { centreOut, countWords, normaliseWord } from '../lib/words.ts';
-import { CODE_PATTERN, hashHostToken, hostTokenMatches, makeHostToken, makeJoinCode } from '../lib/host-token.ts';
+import { centreOut, countWords, normaliseWord } from '../src/lib/words.ts';
+import { CODE_PATTERN, hashHostToken, hostTokenMatches, makeHostToken, makeJoinCode } from '../src/lib/server/host-token.ts';
 
 test('normaliseWord merges case and spacing, rejects empty and overlong', () => {
   assert.equal(normaliseWord('  Machine   Learning '), 'machine learning');

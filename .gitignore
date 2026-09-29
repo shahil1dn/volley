@@ -1,6 +1,5 @@
 .vercel
 .env*.local
 node_modules
-.next
-next-env.d.ts
+.svelte-kit
 *.tsbuildinfo

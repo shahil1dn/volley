@@ -1,4 +1,3 @@
-import 'server-only';
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 
 // No 0/O or 1/I, which get misread off a projector.
