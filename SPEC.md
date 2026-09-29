@@ -54,14 +54,18 @@ own copy by telling an AI agent to follow `AGENTS.md`.
 8. Timed quiz: 2–4 options, one correct, host-set limit (5–60s). The start is
    scheduled 3 seconds ahead, devices count down on server time, the database
    refuses answers outside the window, and speed is scored in 4 coarse bands from
-   server receive time. Leaderboard of optional nicknames (1–20 characters).
+   server receive time. Leaderboard of nicknames (1–20 characters): asked only
+   when the run contains a quiz, and then required ("nickname or first name",
+   not a full name). A duplicate gets a number added ("Sam 2"). The host can
+   remove a nickname from the control view, like hiding a word.
 9. All three share an in-repo `defineActivity` contract (settings schema,
    validate, tally rule, phone view, projector view), extracted once the three
    exist. `npm run new-activity <name>` scaffolds a folder with a failing test.
 
 **Participants**
-10. Join by QR or code. No account, no name or email; the quiz nickname is
-    optional and deleted with the run.
+10. Join by QR or code. No account, no name or email. A nickname is asked for
+    only in a run with a quiz (item 8), and is deleted with the run after 24
+    hours.
 11. The server issues a signed participant token in a cookie scoped to the answer
     route, so the shared state route stays cacheable.
 12. Each submit carries a one-time id; a repeat is stored once and answered with

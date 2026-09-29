@@ -199,6 +199,23 @@ polling. If it does not, the delivery design changes and every later slice with 
   closes, hides, freezes and ends.
   *verify:* A8 browser test (result on the projector within 3s; hide removes it
   within 3s); screenshot of the projector at 1280×720 with 120 words.
+  *paused 2026-09-29, in progress on local branch `s7-host-control`
+  (`feaab25`), not on main.* Written and checked locally (`npm run check`
+  EXIT=0, `npm run build` EXIT=0, unit tests 16/16): migration
+  `0006_host_control.sql` (`start_test_run`, a single `host_action` dispatcher
+  for open/close/reveal/next/back/freeze/unfreeze/end/hide/unhide, `host_view`);
+  `GET`/`POST /api/r/[code]/host`; "Start a test run" on `/decks`; the projector
+  `/run/[code]` (public: it shows only the shared state, and guarding it would
+  mean typing a password on shared PCs) and the guarded control view
+  `/run/[code]/control`; DB tests; the A8 and projector-fit browser tests; and
+  `scripts/load/burst.mjs`. **Nothing has touched the database yet.** To finish:
+  (1) with the owner's OK, run `tests/db-host-control.test.ts` red, then apply
+  0006 and migrate twice; (2) restart the dev server so it loads
+  `HOST_SESSION_SECRET`; (3) `npm test` and `npm run test:e2e` (throwaway host
+  and rooms, deleted after), including the fit screenshots in `screenshots/s7/`;
+  (4) dry-run `burst.mjs` with 50 phones against the local dev server; (5)
+  merge to main, tick. The branch's DB and browser tests fail until 0006 is
+  applied; that's the intended red step.
 
 - [ ] **S8. Retention and export.** Hourly `pg_cron` job; CSV and PNG export
   before deletion.
@@ -232,6 +249,12 @@ live, which must happen before the first real workshop anyway.
 - Poll activity (one vote per participant, live bars).
 - Quiz: scheduled start, server-clock countdown, refusal outside the window,
   speed bands, nicknames, leaderboard, reveal. Proves A2 and A9.
+  **Nicknames (owner decision, 2026-09-29):** asked only when the run contains a
+  quiz, and then required ("nickname or first name", not a full name). Shown on
+  the projector leaderboard. The host can remove a nickname from the control
+  view, like hiding a word. A duplicate gets a number added ("Sam 2"). Deleted
+  with the run after 24 hours. The `players.nickname` check allows 1–24
+  characters: SPEC's 20, plus room for " 12".
 - Extract `defineActivity` from the three activities; `npm run new-activity`.
   Proves A5.
 
@@ -336,7 +359,12 @@ live, which must happen before the first real workshop anyway.
   `npm run doctor`: fail if that endpoint reports `disable_signup: false`.
 - **`HOST_SESSION_SECRET` joins `PARTICIPANT_SECRET` as a deploy blocker.** Both
   are read through `$env/static/private`, so a Vercel build fails until both are
-  added there (owner's OK).
+  added there. **Status 2026-09-29: NOT added yet.** The owner approved adding
+  both to the Preview environment of Vercel project `aib-live`, but the CLI
+  attempts (from the other session) returned `git_branch_required` and changed
+  nothing. Retry next session, probably with an explicit Git branch or via the
+  dashboard, and generate fresh values per environment rather than copying the
+  laptop's.
 - **Test files run one at a time** (`--test-concurrency=1`). Supabase's
   connection pooler (session mode) allows 15 clients, not the database's 60;
   test files running in parallel alongside the 10-phone test went over it.
