@@ -1,0 +1,108 @@
+/* Same type and palette as the society website, so the live screen reads as
+   part of the society rather than a borrowed tool. */
+@font-face { font-family: "Zarathustra"; src: url("/fonts/zarathustra.otf") format("opentype"); font-display: swap; }
+@font-face { font-family: "Switzer"; src: url("/fonts/switzer-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Switzer"; src: url("/fonts/switzer-500.woff2") format("woff2"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "Switzer"; src: url("/fonts/switzer-600.woff2") format("woff2"); font-weight: 600; font-display: swap; }
+
+:root {
+  --accent: #4a2352;
+  --ink: #1e1622;
+  --graphite: #443b47;
+  --smoke: #5f5666;
+  --line: #e4e4e4;
+  --paper: #ffffff;
+  --mist: #f7f7f7;
+  --font-display: "Zarathustra", Georgia, serif;
+  --font-body: "Switzer", "Helvetica Neue", Arial, sans-serif;
+  --radius-input: 16px;
+  --radius-pill: 50px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  min-height: 100svh;
+  background: var(--paper);
+  color: var(--graphite);
+  font: 16px/1.5 var(--font-body);
+}
+h1, h2 { font-family: var(--font-display); font-weight: 400; color: var(--ink); margin: 0; line-height: 1.1; }
+p { margin: 0; }
+
+.label {
+  font-size: 12px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* ---------- controls ---------- */
+.field { display: block; }
+.field input {
+  width: 100%; padding: 14px 16px; font: 16px var(--font-body); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--radius-input); background: var(--paper);
+}
+.field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.btn {
+  display: inline-block; border: 0; cursor: pointer; text-decoration: none; text-align: center;
+  padding: 15px 24px; border-radius: var(--radius-pill);
+  background: var(--accent); color: var(--paper); font: 600 16px var(--font-body);
+}
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.btn--block { display: block; width: 100%; }
+.link { color: var(--accent); font-weight: 500; text-underline-offset: 2px; }
+.error { color: #9b1c1c; font-size: 14px; }
+.hint { color: var(--smoke); font-size: 14px; }
+
+/* ---------- small single-column pages (start, join, participant) ---------- */
+.narrow {
+  min-height: 100svh; display: grid; align-content: center;
+  width: 100%; max-width: 420px; margin: 0 auto; padding: 40px 16px;
+}
+.narrow h1 { font-size: 40px; margin: 14px 0 12px; }
+.stack { display: grid; gap: 14px; margin-top: 28px; }
+.narrow__foot { margin-top: 28px; }
+
+/* ---------- host screen ---------- */
+/* Built for a projector: the question and the way in stay fixed at the top,
+   and the cloud takes every pixel left over. */
+.host {
+  min-height: 100svh; display: grid; grid-template-rows: auto 1fr;
+  padding: clamp(20px, 3vw, 48px); gap: clamp(16px, 2vw, 32px);
+}
+.host__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 32px; }
+.host__question { font-size: clamp(32px, 4.4vw, 72px); max-width: 22ch; margin-top: 12px; }
+.host__join {
+  flex: none; display: flex; align-items: center; gap: 18px;
+  padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-input);
+}
+.host__join img { display: block; width: clamp(96px, 9vw, 150px); height: auto; }
+.host__joinText { font-size: 14px; color: var(--smoke); }
+.host__url { font-size: clamp(15px, 1.3vw, 20px); color: var(--ink); font-weight: 500; }
+.host__code { font-size: clamp(28px, 2.6vw, 44px); font-weight: 600; letter-spacing: 0.12em; color: var(--accent); }
+.host__count { font-size: 14px; color: var(--smoke); }
+
+/* ---------- the cloud ---------- */
+.cloud {
+  display: flex; flex-wrap: wrap; justify-content: center; align-content: center; align-items: center;
+  gap: 0.2em 0.55em; padding: 2vw; list-style: none; margin: 0;
+}
+.cloud__word {
+  font-family: var(--font-body); font-weight: 600; line-height: 1.05;
+  transition: font-size 400ms ease;
+  animation: pop 420ms ease both;
+}
+.cloud__word button {
+  all: unset; cursor: pointer; border-radius: 8px;
+}
+.cloud__word button:hover { text-decoration: line-through; text-decoration-thickness: 3px; }
+.cloud__word button:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.cloud__empty { place-self: center; text-align: center; color: var(--smoke); font-size: clamp(18px, 1.6vw, 26px); }
+@keyframes pop { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .cloud__word { animation: none; transition: none; }
+}
+
+@media (max-width: 720px) {
+  .host__top { flex-direction: column; }
+}
