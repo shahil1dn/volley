@@ -1,0 +1,25 @@
+{
+  "code": "F744R",
+  "base": "http://localhost:5173",
+  "phones": 50,
+  "joinFailures": 0,
+  "answersSent": 150,
+  "burstSeconds": 5.3,
+  "byStatus": {
+    "ok": 150
+  },
+  "byHttp": {
+    "200": 150
+  },
+  "networkErrors": {},
+  "serverErrors": 0,
+  "stored": {
+    "responses": 150,
+    "tallied": 150
+  },
+  "latencyMs": {
+    "p50": 129,
+    "p95": 251,
+    "max": 427
+  }
+}

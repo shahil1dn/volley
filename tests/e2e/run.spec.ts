@@ -40,12 +40,13 @@ test.afterAll(async () => {
 	const { rows } = await db.query('select id from auth.users where email = $1', [hostEmail]);
 	for (const { id } of rows) await admin.deleteUser(id);
 	for (const room of rooms) await db.query('delete from auth.users where id = $1', [room.userId]);
+	// By time as well as by room: the A8 room is made by the host's own button,
+	// so its id is never known here, and rate-limit rows outlive their room.
 	await db.query(
 		`delete from public.rate_limits
 		 where key like 'signin-%' and window_start >= $1::timestamptz - interval '15 minutes'
-		    or key like 'ip:%' and window_start >= $1::timestamptz - interval '10 seconds'
-		    or key = any($2)`,
-		[suiteStart, rooms.map((room) => `run:${room.runId}`)],
+		    or (key like 'ip:%' or key like 'run:%') and window_start >= $1::timestamptz - interval '10 seconds'`,
+		[suiteStart],
 	);
 	await db.end();
 });

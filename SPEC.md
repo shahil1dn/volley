@@ -76,7 +76,8 @@ own copy by telling an AI agent to follow `AGENTS.md`.
 **Delivery (no live connections)**
 14. Phones, projector and control view all read one state response per run. It
     is identical for everyone, carries nothing personal, and is cached at the edge
-    for 1 second (`s-maxage=1, stale-while-revalidate=60`; see ADR-004).
+    for 1 second (`CDN-Cache-Control: s-maxage=1, stale-while-revalidate=60`;
+    browsers never reuse a copy; see ADR-004).
 15. Polling: projector and control every 1s; phones every 3s, and every 1s while a
     quiz is running.
 16. State includes `version` and `serverNow`. It never includes a quiz's correct

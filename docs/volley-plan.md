@@ -193,29 +193,37 @@ polling. If it does not, the delivery design changes and every later slice with 
   once. Test written first: 600 answers from 200 participants on one IP in one
   window, only 300 accepted before the change, all 600 after.
 
-- [ ] **S7. Projector and host control for a word cloud.** Start a run from a
+- [x] **S7. Projector and host control for a word cloud.** Start a run from a
   hard-coded one-item deck; projector at `/run/[code]` polls every second and fits
   the cloud to the screen (ported from the prototype); control view opens,
   closes, hides, freezes and ends.
   *verify:* A8 browser test (result on the projector within 3s; hide removes it
   within 3s); screenshot of the projector at 1280×720 with 120 words.
-  *paused 2026-09-29, in progress on local branch `s7-host-control`
-  (`feaab25`), not on main.* Written and checked locally (`npm run check`
-  EXIT=0, `npm run build` EXIT=0, unit tests 16/16): migration
-  `0006_host_control.sql` (`start_test_run`, a single `host_action` dispatcher
-  for open/close/reveal/next/back/freeze/unfreeze/end/hide/unhide, `host_view`);
-  `GET`/`POST /api/r/[code]/host`; "Start a test run" on `/decks`; the projector
-  `/run/[code]` (public: it shows only the shared state, and guarding it would
+  *done:* migration `0006_host_control.sql` (`start_test_run`; one
+  `host_action` dispatcher for open/close/reveal/next/back/freeze/unfreeze/
+  end/hide/unhide, which locks the run, checks ownership, applies the
+  ARCHITECTURE §4 state machine and bumps the version; `host_view`);
+  `GET`/`POST /api/r/[code]/host`; "Start a test run" on `/decks`; the public
+  projector `/run/[code]` (it shows only the shared state, and guarding it would
   mean typing a password on shared PCs) and the guarded control view
-  `/run/[code]/control`; DB tests; the A8 and projector-fit browser tests; and
-  `scripts/load/burst.mjs`. **Nothing has touched the database yet.** To finish:
-  (1) with the owner's OK, run `tests/db-host-control.test.ts` red, then apply
-  0006 and migrate twice; (2) restart the dev server so it loads
-  `HOST_SESSION_SECRET`; (3) `npm test` and `npm run test:e2e` (throwaway host
-  and rooms, deleted after), including the fit screenshots in `screenshots/s7/`;
-  (4) dry-run `burst.mjs` with 50 phones against the local dev server; (5)
-  merge to main, tick. The branch's DB and browser tests fail until 0006 is
-  applied; that's the intended red step.
+  `/run/[code]/control`; `scripts/load/burst.mjs`. Another host's run answers
+  `not_found`, so codes can't be probed. Receipts: before 0006, 8 of 8 new DB
+  tests red ("function public.host_action(...) does not exist"). Migrate run 1
+  EXIT=0 "Applied 0006_host_control.sql", run 2 EXIT=0 "Up to date".
+  `npm test` EXIT=0, 53 pass; `npm run test:e2e` EXIT=0, 13 passed on two runs
+  in a row; `npm run check` EXIT=0; `npm run build` EXIT=0. A8: 3 phones answer
+  and the projector shows the words within 3s with no reload; a hidden word
+  leaves within 3s; freeze and end reach the phones and the projector, and the
+  results stay on screen. Fit: 120 distinct words from 40 participants (the
+  state sends the top 100), measured at 1280×720 and 1024×768: no word outside
+  the cloud, no overflow, no page scroll, fit factor above the floor.
+  Screenshots in `screenshots/s7/`. Mutation check: dropping the ownership
+  check, allowing next past the last item, and a hide with no moderation row
+  each turned a test red. Burst dry run, local dev server, 50 phones × 3 words
+  in 5.3s: 150 of 150 ok, 150 stored and tallied, 0 errors, p50 129 ms, p95 251
+  ms, max 427 ms (`scripts/load/burst-dryrun-local.json`).
+  Follow-up: the burst run against a Vercel preview (200 phones), once
+  `PARTICIPANT_SECRET` and `HOST_SESSION_SECRET` are in the Preview env.
 
 - [ ] **S8. Retention and export.** Hourly `pg_cron` job; CSV and PNG export
   before deletion.
@@ -375,5 +383,23 @@ live, which must happen before the first real workshop anyway.
 - **The per-run answer cap is now the tighter one**: 600 per 10s is exactly 200
   people × 3 words. A bigger room answering all at once would see some
   "Lots of answers are arriving" messages; the phone keeps the answer to resend.
+- **The state route sends separate cache headers for the CDN and browsers
+  (S7).** With plain `Cache-Control: … stale-while-revalidate=60`, a browser
+  with no CDN in front (the dev server, a self-hosted copy) served each state
+  one poll late. Proven in a browser: the first fetch after a change returned
+  the old version. It made the A8 test flaky. On Vercel the CDN strips those
+  directives, per its docs, so production was probably not affected. Now
+  `CDN-Cache-Control` carries the directives S1 measured and `Cache-Control:
+  public, max-age=0, must-revalidate` goes to browsers. **Re-measure the
+  function-call rate on the next preview** (S1's `poll.mjs`), since S1 measured
+  the old header.
+- **Deferred design, found in S7's screenshots:** (1) when every word is tied,
+  all of them take the accent colour ("most popular" is true for every word);
+  (2) the projector's answer count sums the top 100 visible words, so it
+  undercounts past 100 distinct words (showed "100 answers" for 120). Fix with
+  the theme work, or add a total to `get_state`.
+- **Browser-test cleanup removes rate-limit rows by time**, because rooms made by
+  the host's own button never tell the test their id, and rate-limit rows outlive
+  their room. A leftover row was found and deleted before this was fixed.
 - **`ANALYZE` after a rolled-back seed**: the A11 test re-runs `ANALYZE` after
   its rollback, because Postgres's row estimates survive a rollback.

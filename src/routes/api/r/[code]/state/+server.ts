@@ -12,6 +12,13 @@ export const GET: RequestHandler = async ({ params, setHeaders }) => {
 	if (dbError) error(500, 'Could not load the room');
 	if (!state) error(404, 'No such room');
 
-	setHeaders({ 'cache-control': 'public, s-maxage=1, stale-while-revalidate=60' });
+	setHeaders({
+		// For the CDN only (Vercel reads it before Cache-Control; browsers ignore
+		// it): the directives S1 measured (ADR-004).
+		'cdn-cache-control': 'public, s-maxage=1, stale-while-revalidate=60',
+		// For browsers: never reuse a copy. Given stale-while-revalidate, a browser
+		// with no CDN in front (dev, self-hosting) shows each state a poll late.
+		'cache-control': 'public, max-age=0, must-revalidate',
+	});
 	return json(state);
 };

@@ -255,7 +255,7 @@ sequenceDiagram
   CDN->>Fn: cache miss
   Fn->>Db: get_state(code)
   Db-->>Fn: {version, item, tallies top 100, serverNow}
-  Fn-->>CDN: 200, Cache-Control: s-maxage=1, stale-while-revalidate=60
+  Fn-->>CDN: 200, CDN-Cache-Control: s-maxage=1, stale-while-revalidate=60
   CDN-->>P1: state
   P2->>CDN: same URL within the second
   CDN-->>P2: cached copy (no function call, no database call)

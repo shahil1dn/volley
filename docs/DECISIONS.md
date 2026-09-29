@@ -159,6 +159,13 @@ a second when polling every 1s (run A).
   `+server.ts` GET with a 1-second expiry.
 - Supersedes ADR-003's "about one function call a second per run". Polling
   everywhere, with no live connections, stands.
+- **Amended 2026-09-29 (S7):** the same directives now travel in
+  `CDN-Cache-Control` (Vercel reads it before `Cache-Control`; browsers ignore
+  it), and browsers get `Cache-Control: public, max-age=0, must-revalidate`.
+  With the old single header, a browser with no CDN in front served every state
+  one poll late (proven; see volley-plan.md, S7). The CDN directives are
+  unchanged, but S1 measured the old header, so the rate is re-measured on the
+  next preview.
 
 ## ADR-005: Host sessions are our own signed cookie, not Supabase's (2026-09-29)
 
