@@ -35,6 +35,16 @@ polling. If it does not, the delivery design changes and every later slice with 
   (must-verify 2).
   *needs owner OK:* a deployment-protection bypass secret so the load script can
   reach the protected preview.
+  *result 2026-09-29: FAILED, left unticked for an owner decision.* Run with
+  `node --env-file=.env.local scripts/load/poll.mjs <url> 200 120`; summary in
+  `scripts/load/last-run.json`. 23,645 requests: 23,644 × 200 plus 1 connect
+  timeout, all served at the `lhr1` edge. `x-vercel-cache`: HIT 12,596,
+  STALE 7,993, MISS 3,055. **Function calls from the runtime logs: 3,394 in
+  120s, about 28 a second** (per second: median 31, max 44), against a pass
+  line of under 2. `Age` was present on every response (values 0 or 1), which
+  answers must-verify 2. Latency p50 75 ms, p95 488 ms, measured from one
+  laptop running all 200 clients. The cache absorbs about 86% of polls, not
+  the ~99% ADR-003 assumed.
 
 - [ ] **S2. The real schema.** Migration for `hosts`, `decks`, `deck_items`,
   `runs`, `responses`, `tallies`, `quotas`, `moderation`, `players`, unlogged
@@ -125,3 +135,19 @@ polling. If it does not, the delivery design changes and every later slice with 
 - **esbuild's install script was not run.** npm's `allowScripts` list does not
   include it. The build works without it (the prebuilt binary package installs
   normally), but `npm install-scripts ls` will keep flagging it.
+- **A project's first deploy is always production**, even with
+  `--target=preview` (Vercel CLI docs, `vercel deploy` → Prod). Two
+  accidental public deploys to `aib-live.vercel.app` were removed. The project
+  now has one production deploy made with `--prod --skip-domain`: it is not on
+  `aib-live.vercel.app` (still 404), and its own addresses need the bypass.
+  From now on, plain `vercel deploy` makes previews.
+- **Framework preset set in the repo**: `vercel.json` has
+  `"framework": "sveltekit-1"`, which overrides the dashboard's Next.js preset.
+  Plain `"sveltekit"` is the legacy v0 preset.
+- **Hobby keeps runtime logs for 1 hour.** Count function calls straight after
+  a load run, or stream them during it (`vercel logs <url> --json`).
+- **Hobby allowances** (Vercel fair-use guidelines, checked 2026-09-29): 1M
+  function calls, 100 GB data transfer, 4 hours of active CPU a month. No
+  request-count allowance is listed, so cache hits cost only data transfer.
+- **The state route logs `STATE_FN_CALL` on every call.** It's there so load
+  runs can be counted. Remove it once the delivery design is settled.

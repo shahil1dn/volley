@@ -1,0 +1,35 @@
+{
+  "code": "GSLTC",
+  "clients": 200,
+  "seconds": 120,
+  "window": {
+    "start": "2026-09-29T13:11:29.057Z",
+    "end": "2026-09-29T13:13:29.057Z"
+  },
+  "requests": 23645,
+  "status": {
+    "200": 23644
+  },
+  "xVercelCache": {
+    "MISS": 3055,
+    "HIT": 12596,
+    "STALE": 7993
+  },
+  "edgeRegion": {
+    "lhr1": 23644
+  },
+  "ageHeaderPresent": 23644,
+  "ageValues": {
+    "0": 15665,
+    "1": 7979
+  },
+  "networkErrors": {
+    "UND_ERR_CONNECT_TIMEOUT": 1
+  },
+  "skippedTicks": 355,
+  "latencyMs": {
+    "p50": 75,
+    "p95": 488,
+    "max": 4577
+  }
+}
