@@ -1,5 +1,5 @@
 import { error, json } from '@sveltejs/kit';
-import { db } from '$lib/server/db';
+import { dbCall } from '$lib/server/db';
 import { CODE_PATTERN } from '$lib/server/host-token';
 import type { RequestHandler } from './$types';
 
@@ -18,8 +18,7 @@ function hostAndCode(locals: App.Locals, code: string) {
 export const GET: RequestHandler = async ({ locals, params, setHeaders }) => {
 	const { hostId, code } = hostAndCode(locals, params.code);
 	setHeaders({ 'cache-control': 'no-store' });
-	const { data: view, error: dbError } = await db.rpc('host_view', { p_host_id: hostId, p_code: code });
-	if (dbError) error(500, 'Could not load the room');
+	const view = await dbCall<object>('host_view', [hostId, code]);
 	if (!view) error(404, 'No such room');
 	return json(view);
 };
@@ -35,12 +34,7 @@ export const POST: RequestHandler = async ({ locals, params, request, setHeaders
 	if (typeof action !== 'string' || action.length > 20 || (key !== undefined && (typeof key !== 'string' || key.length > 100))) {
 		return json({ status: 'invalid' }, { status: 400 });
 	}
-	const { data: result, error: dbError } = await db.rpc('host_action', {
-		p_host_id: hostId,
-		p_code: code,
-		p_action: action,
-		p_key: key ?? null,
-	});
-	if (dbError || !result) error(500, 'Could not apply that');
+	const result = await dbCall<{ status: string }>('host_action', [hostId, code, action, key ?? null]);
+	if (!result) error(500, 'Could not apply that');
 	return json(result, { status: HTTP_STATUS[result.status] ?? 500 });
 };

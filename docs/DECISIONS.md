@@ -207,3 +207,63 @@ own session cookie. It doesn't use `@supabase/ssr`'s cookie sessions.
   projector polls it. The state route ignores cookies, and Vercel's documented
   cache rules don't exclude requests that carry one. Whether the cache
   still holds with the cookie present gets checked at S7's deploy.
+
+## ADR-006: The server talks to Postgres through the transaction pooler (2026-09-29)
+
+**Decision.** Every server-side database call goes over a direct Postgres
+connection through Supabase's transaction pooler (`POSTGRES_URL`, port 6543),
+from one place: `src/lib/server/db.ts`. Nothing server-side uses the Data API
+(PostgREST). `supabase-js` stays only for the password check at sign-in (the
+Auth API) and for `npm run add-host` (the Auth admin API).
+`tests/no-data-api.test.ts` fails if app code calls `.rpc(` or `.from('…')`.
+
+**Why.** Measured in `scripts/load/diagnose-submit.mjs` (44d7267): every call
+through the Data API topped out at ~44 a second, even a no-op, while the
+database took `submit_answer` at 321–342 a second. On a protected preview, 200
+phones × 3 words within ~5s:
+
+| | p50 | p95 | max | stored = tallied | 5xx |
+| --- | --- | --- | --- | --- | --- |
+| Data API (before) | 6,692 ms | 9,855 ms | 10,576 ms | 600 = 600 | 0 |
+| Transaction pooler (after) | 57 ms | 269 ms | 368 ms | 600 = 600 | 0 |
+
+(`scripts/load/burst-preview-200.json`, `…-200-direct.json`.) No error-level
+or pool-error log lines during the runs.
+
+**Details**
+- One `pg.Pool` per function instance, created lazily, **max 3 connections**.
+  Fluid compute runs many requests on one instance, and a call holds a
+  connection for ~20 ms, so 3 carry ~150 calls a second per instance.
+  Supabase advises 1–5 for serverless, and every instance's connections count
+  against the pooler's client limit. That limit for the free plan wasn't in the
+  docs checked (so: unverified); 3 per instance stays under any limit of 200 or
+  more up to ~65 live instances. `attachDatabasePool` (`@vercel/functions`)
+  releases idle connections before Fluid suspends an instance.
+- Fail fast: 3s to get a connection, 5s per query, 5s idle. A stuck pooler
+  becomes a 5xx that the phone retries with the same submit id.
+- Only fixed statements, with values always as parameters. Transaction mode
+  doesn't support named prepared statements; node-postgres sends parameterised
+  queries as unnamed ones, which worked through the pooler in every test and
+  load run.
+- **TLS is verified, not skipped.** The pooler's certificate chains to Supabase
+  Root 2021 CA, which Node doesn't trust by default
+  (`SELF_SIGNED_CERT_IN_CHAIN`). That root is pinned in
+  `src/lib/server/supabase-ca.ts` (SHA-256 `80:70:25:AD:…:E6:CA:FA`, valid to
+  2031). The chain and hostname are checked: connecting by IP address is
+  refused (`ERR_TLS_CERT_ALTNAME_INVALID`). The root was taken from the live
+  chain; **owner to confirm** it matches the certificate from the Supabase
+  dashboard (Database Settings → SSL Configuration). The one-off scripts keep
+  `rejectUnauthorized: false` for now.
+- The pooler URL logs in as `postgres`, which bypasses RLS like the
+  service-role key it replaces. Anyone holding the server's environment had
+  full database access either way. A least-privilege login role would need a
+  new secret: a follow-up.
+
+**Consequence to decide.** The cached state route made **11.39 function calls
+a second** with 200 phones polling every 3s (`run-C-direct.json`), against 7.07
+before (`run-C.json`), which is above ADR-004's ~10/s budget. The CDN served
+more fresh hits (HIT 5,811, up from 4,319; STALE 2,183, down from 3,623), yet
+more refreshes reached the function. A likely reason, unproven, is that faster
+answers let the CDN start more refresh cycles. At this rate the owner's
+worst-case month is ~264k function calls, 26% of Hobby's 1M. Options: accept
+and raise the budget, a 2-second `s-maxage`, or ISR (logged in the plan).

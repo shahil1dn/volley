@@ -1,6 +1,6 @@
 import { error, json, type Cookies } from '@sveltejs/kit';
 import { PARTICIPANT_SECRET } from '$env/static/private';
-import { db } from '$lib/server/db';
+import { dbCall } from '$lib/server/db';
 import { CODE_PATTERN } from '$lib/server/host-token';
 import { hashClientIp, makeParticipantToken, readParticipantToken } from '$lib/server/participant-token';
 import type { RequestHandler } from './$types';
@@ -68,16 +68,16 @@ export const POST: RequestHandler = async ({ params, cookies, request, getClient
 		return json({ status: 'bad_request' }, { status: 400 });
 	}
 
-	const { data: result, error: dbError } = await db.rpc('submit_answer', {
-		p_code: code,
-		p_participant_id: participantId,
-		p_submit_id: submitId.toLowerCase(),
-		p_value: value,
+	const result = await dbCall<{ status: string; left?: number }>('submit_answer', [
+		code,
+		participantId,
+		submitId.toLowerCase(),
+		value,
 		// On Vercel this is the x-forwarded-for header, which Vercel overwrites so
 		// a client can't choose its own address.
-		p_ip_hash: hashClientIp(PARTICIPANT_SECRET, getClientAddress()),
-	});
-	if (dbError || !result) error(500, 'Could not save the answer');
+		hashClientIp(PARTICIPANT_SECRET, getClientAddress()),
+	]);
+	if (!result) error(500, 'Could not save the answer');
 
 	return json(result, { status: HTTP_STATUS[result.status] ?? 500 });
 };

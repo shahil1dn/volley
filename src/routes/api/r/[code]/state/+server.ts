@@ -1,5 +1,5 @@
 import { error, json } from '@sveltejs/kit';
-import { db } from '$lib/server/db';
+import { dbCall } from '$lib/server/db';
 import { CODE_PATTERN } from '$lib/server/host-token';
 import type { RequestHandler } from './$types';
 
@@ -8,8 +8,7 @@ import type { RequestHandler } from './$types';
 export const GET: RequestHandler = async ({ params, setHeaders }) => {
 	if (!CODE_PATTERN.test(params.code)) error(404, 'No such room');
 
-	const { data: state, error: dbError } = await db.rpc('get_state', { p_code: params.code });
-	if (dbError) error(500, 'Could not load the room');
+	const state = await dbCall<object>('get_state', [params.code]);
 	if (!state) error(404, 'No such room');
 
 	setHeaders({

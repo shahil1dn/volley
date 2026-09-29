@@ -1,0 +1,25 @@
+{
+  "code": "86CZE",
+  "base": "https://aib-live-fjf521xme-ldnshahil-1083s-projects.vercel.app",
+  "phones": 200,
+  "joinFailures": 0,
+  "answersSent": 600,
+  "burstSeconds": 5,
+  "byStatus": {
+    "ok": 600
+  },
+  "byHttp": {
+    "200": 600
+  },
+  "networkErrors": {},
+  "serverErrors": 0,
+  "stored": {
+    "responses": 600,
+    "tallied": 600
+  },
+  "latencyMs": {
+    "p50": 57,
+    "p95": 269,
+    "max": 368
+  }
+}

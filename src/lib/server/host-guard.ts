@@ -1,6 +1,6 @@
 import type { Cookies } from '@sveltejs/kit';
 import { HOST_SESSION_SECRET } from '$env/static/private';
-import { db } from '$lib/server/db';
+import { dbCall } from '$lib/server/db';
 import { HOST_SESSION_SECONDS, makeHostSession, readHostSession } from '$lib/server/host-session';
 
 const COOKIE = 'volley_host';
@@ -14,9 +14,8 @@ const nowSeconds = () => Math.floor(Date.now() / 1000);
 export async function currentHost(cookies: Cookies): Promise<Host | 'signed_out' | 'not_host'> {
 	const userId = readHostSession(HOST_SESSION_SECRET, cookies.get(COOKIE), nowSeconds());
 	if (!userId) return 'signed_out';
-	const { data: host, error } = await db.from('hosts').select('email').eq('user_id', userId).maybeSingle();
-	if (error) throw new Error('Could not check the host list');
-	return host ? { userId, email: host.email } : 'not_host';
+	const email = await dbCall<string>('host_email', [userId]);
+	return email ? { userId, email } : 'not_host';
 }
 
 // Path '/' because host pages and APIs are spread across the app (SPEC routes).

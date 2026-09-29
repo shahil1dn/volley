@@ -1,0 +1,36 @@
+{
+  "code": "JF3MY",
+  "clients": 200,
+  "seconds": 120,
+  "pollEverySeconds": 3,
+  "window": {
+    "start": "2026-09-29T22:22:34.434Z",
+    "end": "2026-09-29T22:24:34.434Z"
+  },
+  "requests": 8000,
+  "status": {
+    "200": 8000
+  },
+  "xVercelCache": {
+    "MISS": 6,
+    "HIT": 5811,
+    "STALE": 2183
+  },
+  "edgeRegion": {
+    "lhr1": 8000
+  },
+  "ageHeaderPresent": 8000,
+  "ageValues": {
+    "0": 5820,
+    "1": 1591,
+    "2": 498,
+    "3": 91
+  },
+  "networkErrors": {},
+  "skippedTicks": 0,
+  "latencyMs": {
+    "p50": 31,
+    "p95": 161,
+    "max": 2568
+  }
+}
