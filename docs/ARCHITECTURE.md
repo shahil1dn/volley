@@ -31,7 +31,7 @@ flowchart LR
 
   P -- "GET state (every 1-3s)" --> CDN
   PR -- "GET state (every 1s)" --> CDN
-  CDN -- "cache miss: about once a second" --> FN
+  CDN -- "cache miss or stale refresh: under 10 a second (§10)" --> FN
   P -- "POST answer" --> FN
   HC -- "POST next / open / hide / end" --> FN
   FN -- "one function call per request" --> RPC
@@ -242,7 +242,7 @@ sequenceDiagram
   Fn-->>Ph: 200 {status, left}
 ```
 
-## 7. Reading state: why 200 phones cost one call a second
+## 7. Reading state: why 200 phones cost a few calls a second
 
 ```mermaid
 sequenceDiagram
@@ -257,7 +257,7 @@ sequenceDiagram
   CDN->>Fn: cache miss
   Fn->>Db: get_state(code)
   Db-->>Fn: {version, item, tallies top 100, serverNow}
-  Fn-->>CDN: 200, Cache-Control: s-maxage=1, stale-while-revalidate=1
+  Fn-->>CDN: 200, Cache-Control: s-maxage=1, stale-while-revalidate=60
   CDN-->>P1: state
   P2->>CDN: same URL within the second
   CDN-->>P2: cached copy (no function call, no database call)
@@ -322,16 +322,19 @@ an index.
 | Host opens decks | `list_decks(host)` | the host's decks | `decks(host_id, updated_at desc)` |
 | Hourly clean-up | `delete from runs where ...` | expired runs, cascading | `runs(ended_at)`, `runs(last_activity_at)` |
 
-**One 200-person, 60-minute event, estimated:**
+**One 200-person, 60-minute event, phones polling every 3s.** Measured rows
+come from S1 (`docs/volley-plan.md`); the budget they're held to is ADR-004.
 
-| Budget (free) | Usage | Why |
-|---|---|---|
-| Vercel function calls, 1M/month | ~4,000 | state misses ~1/s (3,600) + answers (~600) + host actions |
-| Vercel Active CPU, 4h/month | a few minutes | thin handlers, mostly waiting on the database |
-| Vercel data transfer, 100 GB/month | ~0.5 GB | 200 phones × 1,200 polls × ~2 KB, served from cache |
-| Supabase database, 500 MB | < 5 MB per event | deleted after 24h |
-| Supabase egress, 5 GB/month | ~10 MB | only cache misses reach the database |
-| Supabase realtime | 0 | not used |
+| Budget (free) | Usage | Measured or estimated | Why |
+|---|---|---|---|
+| Vercel function calls, 1M/month | ~25,000 | **measured**: 6.9 state calls/s (S1 run B) × 3,600s | the CDN doesn't merge stale refreshes for function responses (ADR-004) |
+| | + ~600 | estimated | answers and host actions |
+| Vercel Active CPU, 4h/month | a few minutes | estimated | thin handlers, mostly waiting on the database |
+| Vercel data transfer, 100 GB/month | ~0.5 GB | estimated | 200 phones × 1,200 polls × ~2 KB |
+| Supabase database, 500 MB | < 5 MB per event | estimated | deleted after 24h |
+| Supabase egress, 5 GB/month | ~50 MB | estimated from the measured call count | ~25,000 state reads × ~2 KB |
+| Supabase realtime | 0 | by design | not used |
 
-These are estimates. The load check in `SPEC.md` (A10) measures them, and the
-numbers above get replaced with measured ones.
+At 1s polling the measured rate is 8.8 calls/s (S1 run A), about 32,000 an
+hour. The S1 runs lasted 2 minutes. The 10-minute load check in `SPEC.md` (A10)
+replaces the remaining estimates.

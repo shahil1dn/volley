@@ -26,7 +26,7 @@ polling. If it does not, the delivery design changes and every later slice with 
   EXIT=0, 5 pass, 0 fail; dev server serves `/` and `/fonts/*` with no
   console errors. Folder not renamed yet (see below).
 
-- [ ] **S1. Prove the edge cache (riskiest).** A `GET /api/r/[code]/state` route
+- [x] **S1. Prove the edge cache (riskiest).** A `GET /api/r/[code]/state` route
   returning a real row from the database with `s-maxage=1,
   stale-while-revalidate=1`, deployed as a protected preview in `lhr1`. A script
   runs 200 simulated clients polling every second for 2 minutes.
@@ -62,6 +62,8 @@ polling. If it does not, the delivery design changes and every later slice with 
   Image Optimization as supported, not function responses cached with
   `Cache-Control`. That fits the refreshes not being merged, but no run here
   isolates the cause.
+  *done:* the owner accepted the measured cost as a budget, **ADR-004** (at most
+  about 10 calls/s at 200 phones polling every 3s). Measured runs in `8daf4c5`.
 
 - [ ] **S2. The real schema.** Migration for `hosts`, `decks`, `deck_items`,
   `runs`, `responses`, `tallies`, `quotas`, `moderation`, `players`, unlogged
@@ -69,6 +71,20 @@ polling. If it does not, the delivery design changes and every later slice with 
   everywhere; every privilege revoked from the public roles.
   *verify:* the permission probe (A4) fails on the old schema and passes on the
   new one.
+
+- [ ] **S2b. Keep-alive before the first real workshop.** Supabase free projects
+  pause after 7 days without activity, and workshops are fortnightly. The repo
+  isn't on GitHub, so the keep-alive is a Vercel Cron Job in `vercel.json`
+  calling a route that runs one tiny query, secured with `CRON_SECRET` (Vercel
+  sends it as `Authorization: Bearer <secret>`). Hobby limits (Vercel cron docs,
+  checked 2026-09-29): at most once a day, fired anywhere within the scheduled
+  hour, no retries, delivery best effort. Daily is well inside 7 days.
+  Check before building: cron jobs don't follow redirects, and this project's
+  production addresses currently redirect to Vercel's login (deployment
+  protection). Confirm the cron call reaches the function on the hidden
+  production deploy.
+  *verify:* the route refuses a call without the secret; after deploying, the
+  cron's run shows in the logs with a 200.
 
 - [ ] **S3. `submit_answer` for the word cloud.** One transaction: rate limit, run
   and item open, duplicate submit id, quota by conditional upsert, tally,
@@ -137,9 +153,8 @@ polling. If it does not, the delivery design changes and every later slice with 
 - **Folder rename to `volley` still to do.** It was left out of S0 because the
   build ran from inside the folder. Rename it between sessions, then re-link
   anything that points at the old path.
-- **Vercel project needs its framework preset changed.** The linked project
-  (`aib-live`) was created for Next.js. Switch the preset to SvelteKit (and
-  consider renaming the project) before the first deploy in S1.
+- **Vercel project's framework preset: done in S1** through `vercel.json`
+  (below). Renaming the project from `aib-live` is still open.
 - **Adapter runtime pinned to `nodejs24.x`.** The Vercel adapter otherwise
   copies the build machine's Node and refuses anything but 20, 22 or 24, so it
   failed on a Node 25 laptop. The docs mark `runtime` as deprecated in favour of
@@ -168,9 +183,10 @@ polling. If it does not, the delivery design changes and every later slice with 
   request-count allowance is listed, so cache hits cost only data transfer.
 - **The log stream stops after 5 minutes** ("Exceeded query duration limit of 5
   minutes"). Keep a counted run inside that, or restart the stream between runs.
-- **Untested option for S1: ISR.** Vercel's docs say request collapsing, including
-  for stale refreshes, is supported for ISR, and adapter-vercel has an `isr`
-  route option. Whether it works on a `+server.ts` GET, and at a 1-second
-  expiry, is unverified.
+- **Later optimisation: ISR for the state route** (ADR-004). Vercel's docs say
+  request collapsing, including for stale refreshes, is supported for ISR, and
+  adapter-vercel has an `isr` route option. Unverified whether it works on a
+  `+server.ts` GET with a 1-second expiry. Worth trying only if the budget gets
+  tight.
 - **The state route logs `STATE_FN_CALL` on every call.** It's there so load
   runs can be counted. Remove it once the delivery design is settled.

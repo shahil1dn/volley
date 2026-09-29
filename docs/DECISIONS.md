@@ -135,3 +135,27 @@ the Supabase free plan.
 - **Data model split into decks and runs.** Decks (host content) are kept; runs
   (one live showing, with every participant answer) are deleted 24 hours after
   ending. Tallies are maintained on write so reads never count raw answers.
+
+## ADR-004: A function-call budget replaces "about one call a second" (2026-09-29)
+
+S1 measured the shared, cached state route under load (runs in
+`docs/volley-plan.md`, S1). Vercel's CDN does not keep function calls near one
+a second: with `Cache-Control: public, s-maxage=1, stale-while-revalidate=60`,
+200 phones produced 6.9 calls a second when polling every 3s (run B) and 8.8
+a second when polling every 1s (run A).
+
+- **Decision: accept the measured cost.** The pass line becomes a budget: at
+  most about 10 function calls a second with 200 phones polling every 3s
+  (about 36k an hour). The header stays at `s-maxage=1,
+  stale-while-revalidate=60`.
+- **Why it fits.** The owner's usage is a 20–40-person workshop every fortnight
+  and one 200-person event every 1–3 months. That's about 160k function calls a
+  month in the worst case, 16% of Hobby's 1M.
+- **Why the cache can't do better as built.** Vercel documents request
+  collapsing (merging simultaneous refreshes into one call) only for ISR and
+  Image Optimization, not for function responses cached with `Cache-Control`.
+- **Later optimisation, not a blocker:** serve the state route through ISR,
+  where collapsing is documented. Unverified whether that works on a
+  `+server.ts` GET with a 1-second expiry.
+- Supersedes ADR-003's "about one function call a second per run". Polling
+  everywhere, with no live connections, stands.
