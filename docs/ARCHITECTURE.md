@@ -225,19 +225,17 @@ sequenceDiagram
   Fn->>Fn: verify token signature, check shape, hash IP
   Fn->>Db: submit_answer(code, participant, submitId, value, ipHash)
   Note over Db: single transaction
-  Db->>Db: rate limit: upsert counter, reject if over
+  Db->>Db: rate limit per hashed IP, then per run: upsert counter, reject if over
+  Db->>Db: seen this submit id before? answer as the first time ("ok", left)
   Db->>Db: run live, not frozen, item open, now() within opens_at..closes_at?
+  Db->>Db: normalise the word (trim, collapse spaces, lower-case, 1–25 characters)
   Db->>Db: insert response ON CONFLICT (participant, submit_id) DO NOTHING
-  alt repeat of an earlier submit
-    Db-->>Fn: {status: "duplicate", left}
-  else new submit
-    Db->>Db: quota: upsert used+1 WHERE used < limit
-    alt limit reached
-      Db-->>Fn: {status: "limit"} (whole transaction rolled back)
-    else within limit
-      Db->>Db: tally +1, quiz score if correct, runs.version +1
-      Db-->>Fn: {status: "ok", left, score?}
-    end
+  Db->>Db: quota: upsert used+1 WHERE used < limit
+  alt limit reached
+    Db-->>Fn: {status: "limit"} (response and quota rolled back, rate count kept)
+  else within limit
+    Db->>Db: tally +1 (a hidden word stays hidden), quiz score if correct, runs.version +1
+    Db-->>Fn: {status: "ok", left}
   end
   Fn-->>Ph: 200 {status, left}
 ```

@@ -5,7 +5,10 @@ export const WORDS_PER_PERSON = 3;
 // so everything is compared in one form.
 export function normaliseWord(raw: string): string | null {
   const word = raw.trim().replace(/\s+/g, ' ').toLowerCase();
-  if (word.length === 0 || word.length > MAX_WORD_LENGTH) return null;
+  // Counted in characters, as the database counts them: .length would count
+  // an emoji as two and refuse words the server accepts.
+  const characters = [...word].length;
+  if (characters === 0 || characters > MAX_WORD_LENGTH) return null;
   return word;
 }
 

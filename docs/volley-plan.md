@@ -89,25 +89,31 @@ polling. If it does not, the delivery design changes and every later slice with 
   `responses(run_id)` and `moderation(run_id)` are indexed so cascading
   deletes use an index.
 
-- [ ] **S2b. Keep-alive before the first real workshop.** Supabase free projects
-  pause after 7 days without activity, and workshops are fortnightly. The repo
-  isn't on GitHub, so the keep-alive is a Vercel Cron Job in `vercel.json`
-  calling a route that runs one tiny query, secured with `CRON_SECRET` (Vercel
-  sends it as `Authorization: Bearer <secret>`). Hobby limits (Vercel cron docs,
-  checked 2026-09-29): at most once a day, fired anywhere within the scheduled
-  hour, no retries, delivery best effort. Daily is well inside 7 days.
-  Check before building: cron jobs don't follow redirects, and this project's
-  production addresses currently redirect to Vercel's login (deployment
-  protection). Confirm the cron call reaches the function on the hidden
-  production deploy.
-  *verify:* the route refuses a call without the secret; after deploying, the
-  cron's run shows in the logs with a 200.
-
-- [ ] **S3. `submit_answer` for the word cloud.** One transaction: rate limit, run
+- [x] **S3. `submit_answer` for the word cloud.** One transaction: rate limit, run
   and item open, duplicate submit id, quota by conditional upsert, tally,
   `version`.
   *verify:* database tests A1 (4th word refused; 10 concurrent submits store
   exactly 3) and A3 (same submit id stored once), written first and seen red.
+  *done:* `db/migrations/0002_submit_answer.sql`, tested in
+  `tests/db-submit-answer.test.ts`. Receipts: before the migration, `npm test`
+  EXIT=1, all 11 new tests red ("function public.submit_answer(...) does not
+  exist"). Migrate run 1 EXIT=0 "Applied 0002_submit_answer.sql"; run 2 EXIT=0
+  "Up to date". The first run after that caught a real mismatch: `words.ts`
+  counted an emoji as 2 characters, so 13 emoji were refused on the phone but
+  accepted by the database. Fixed, and pinned by a unit test. Then `npm test`
+  EXIT=0, 22 pass, 0 fail; `npm run check` EXIT=0; `npm run build` EXIT=0.
+  Mutation check, each restored after: removing the quota guard turned 5 tests
+  red, including both A1s; removing the early repeat check turned red "a
+  retried submit is still answered ok after the item closes"; un-hiding on
+  submit turned the hidden-word test red; ignoring the IP limit turned the
+  rate-limit test red. The state route returns 200
+  `{code, status: "live", serverNow}` with the cache header for a real run.
+  Decisions: the word is cleaned up in SQL (it can't be bypassed, and the stored
+  word always equals its tally key); a repeat answers `ok` with the current
+  answers-left, not a separate `duplicate` (SPEC 12, A3), and is checked before
+  the open/closed rules; a full quota rolls back the response and quota but
+  keeps the rate count; a hidden word still counts but stays hidden; limits are
+  300 per 10s per IP and 600 per 10s per run.
 
 - [ ] **S4. `get_state` behind the cached route.** Returns version, current item
   without secrets, top 100 visible tallies, `serverNow`.
@@ -138,6 +144,27 @@ polling. If it does not, the delivery design changes and every later slice with 
   *verify:* A12 (a run ended 25 hours ago is gone with everything under it, one
   ended 23 hours ago is not, the deck survives); the downloaded CSV matches the
   tallies.
+
+## Going live: just before the first real workshop
+
+Moved out of Milestone 1 on 2026-09-29. Vercel calls cron jobs on "your
+project's production deployment URL" (Vercel cron docs), and the owner doesn't
+want a public production app yet. So the keep-alive can't run until going
+live, which must happen before the first real workshop anyway.
+
+- [ ] **Keep-alive** (was S2b). Supabase free projects
+  pause after 7 days without activity, and workshops are fortnightly. The repo
+  isn't on GitHub, so the keep-alive is a Vercel Cron Job in `vercel.json`
+  calling a route that runs one tiny query, secured with `CRON_SECRET` (Vercel
+  sends it as `Authorization: Bearer <secret>`). Hobby limits (Vercel cron docs,
+  checked 2026-09-29): at most once a day, fired anywhere within the scheduled
+  hour, no retries, delivery best effort. Daily is well inside 7 days.
+  Check before building: cron jobs don't follow redirects, and this project's
+  production addresses currently redirect to Vercel's login (deployment
+  protection). Confirm the cron call reaches the function on the hidden
+  production deploy.
+  *verify:* the route refuses a call without the secret; after deploying, the
+  cron's run shows in the logs with a 200.
 
 ## Milestone 2: poll and quiz, then the shared template
 
@@ -210,5 +237,12 @@ polling. If it does not, the delivery design changes and every later slice with 
 - **The database A4 test takes about 33s**: every table × 2 roles × 5
   statements, each a round trip to London. Fine for now; batch the probes if
   the suite gets slow.
+- **`rate_limits` only grows**: one row per IP and per run every 10 seconds of
+  activity. S8's hourly clean-up should also delete windows older than an hour.
+- **Each accepted answer updates its run's row** (`version`), so answers to one
+  run are written one at a time. Fine at ADR-002's ~2 writes/s; a bottleneck at
+  hundreds a second.
+- **`npm test` takes over a minute** (the database A4 test ~35s, plus the
+  submit tests). Fine for now; batch the A4 probes if it gets in the way.
 - **The state route logs `STATE_FN_CALL` on every call.** It's there so load
   runs can be counted. Remove it once the delivery design is settled.

@@ -9,6 +9,9 @@ test('normaliseWord merges case and spacing, rejects empty and overlong', () => 
   assert.equal(normaliseWord('   '), null);
   assert.equal(normaliseWord('a'.repeat(25)), 'a'.repeat(25));
   assert.equal(normaliseWord('a'.repeat(26)), null);
+  // Emoji count as one character each, as in the database's check.
+  assert.equal(normaliseWord('😀'.repeat(25)), '😀'.repeat(25));
+  assert.equal(normaliseWord('😀'.repeat(26)), null);
 });
 
 test('countWords counts repeats and orders biggest first, ties alphabetical', () => {

@@ -4,8 +4,8 @@ import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type pg from 'pg';
 import { connectAsOwner } from '../scripts/pg-connect.ts';
+import { inRolledBackTransaction as rolledBack, skipWithoutDatabase as skip } from './db-helpers.ts';
 
-const skip = process.env.POSTGRES_URL_NON_POOLING ? false : 'no database in .env.local';
 const PUBLIC_ROLES = ['anon', 'authenticated'];
 const EXPECTED_TABLES = [
 	'deck_items', 'decks', 'hosts', 'moderation', 'players', 'quotas',
@@ -38,14 +38,7 @@ async function publicTables(): Promise<{ name: string; plainColumn: string }[]> 
 	return rows;
 }
 
-async function inRolledBackTransaction(work: () => Promise<void>) {
-	await db.query('begin');
-	try {
-		await work();
-	} finally {
-		await db.query('rollback');
-	}
-}
+const inRolledBackTransaction = (work: () => Promise<void>) => rolledBack(db, work);
 
 // The error code from running `sql` as `role`, or null if it succeeded.
 async function errorCodeAs(role: string, sql: string): Promise<string | null> {
@@ -134,4 +127,13 @@ test('A4 through the API: the publishable key is refused on every table', { skip
 			assert.ok(REFUSED.includes(res.status), `${action} on ${name} was not refused (HTTP ${res.status})`);
 		}
 	}
+});
+
+test('A4: public roles cannot call any function', { skip }, async () => {
+	const { rows } = await db.query(`
+		select p.oid::regprocedure::text as signature, r.role
+		from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+		cross join unnest(array['anon', 'authenticated']) as r(role)
+		where n.nspname = 'public' and has_function_privilege(r.role, p.oid, 'EXECUTE')`);
+	assert.deepEqual(rows, []);
 });
