@@ -16,11 +16,15 @@ runner and `pg`. No second database is needed.
 The riskiest assumption goes first: that Vercel's edge cache absorbs the
 polling. If it does not, the delivery design changes and every later slice with it.
 
-- [ ] **S0. SvelteKit skeleton replaces Next.js.** Rename the folder to `volley`.
+- [x] **S0. SvelteKit skeleton replaces Next.js.** Rename the folder to `volley`.
   SvelteKit + TypeScript + Vercel adapter pinned to `lhr1`. Remove the Next.js
   app; keep `db/`, `scripts/migrate.mjs`, `tests/`.
   *verify:* `npm run build` and `npm test` pass with exit codes intact; the
   existing 5 unit tests still pass.
+  *done:* `1a357bf`. `npm run build` EXIT=0 (function config: `lhr1`,
+  `nodejs24.x`); `npm run check` EXIT=0, 0 errors, 0 warnings; `npm test`
+  EXIT=0, 5 pass, 0 fail; dev server serves `/` and `/fonts/*` with no
+  console errors. Folder not renamed yet (see below).
 
 - [ ] **S1. Prove the edge cache (riskiest).** A `GET /api/r/[code]/state` route
   returning a real row from the database with `s-maxage=1,
@@ -102,3 +106,22 @@ polling. If it does not, the delivery design changes and every later slice with 
 ## Found along the way
 
 (New tasks discovered while building go here.)
+
+- **Folder rename to `volley` still to do.** It was left out of S0 because the
+  build ran from inside the folder. Rename it between sessions, then re-link
+  anything that points at the old path.
+- **Vercel project needs its framework preset changed.** The linked project
+  (`aib-live`) was created for Next.js. Switch the preset to SvelteKit (and
+  consider renaming the project) before the first deploy in S1.
+- **Adapter runtime pinned to `nodejs24.x`.** The Vercel adapter otherwise
+  copies the build machine's Node and refuses anything but 20, 22 or 24, so it
+  failed on a Node 25 laptop. The docs mark `runtime` as deprecated in favour of
+  the dashboard's Node setting. When it is removed, set Node 24 on the
+  dashboard and add an `engines` field instead.
+- **TypeScript held at 5.9.** The latest release is 7.0, but SvelteKit 2.70.3
+  supports only `^5.3.3 || ^6.0.0`.
+- **`npm run typecheck` replaced by `npm run check`** (svelte-check). Plain
+  `tsc` cannot read `.svelte` files.
+- **esbuild's install script was not run.** npm's `allowScripts` list does not
+  include it. The build works without it (the prebuilt binary package installs
+  normally), but `npm install-scripts ls` will keep flagging it.
