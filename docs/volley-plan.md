@@ -400,18 +400,48 @@ live, which must happen before the first real workshop anyway.
   public, max-age=0, must-revalidate` goes to browsers. **Re-measure the
   function-call rate on the next preview** (S1's `poll.mjs`), since S1 measured
   the old header.
-- **A 200-phone burst is correct but slow on the preview (open question).**
-  Every answer was stored once, but the median answer took 6.7s. The laptop's
-  network isn't the cause: poll run C from the same laptop on the same
-  campus Wi-Fi had a p50 of 38 ms. Leading hypothesis, unproven: all answers
-  to one room queue up in the database, because each one updates the same
-  per-run counter row and `runs.version`, and the same per-IP row (the load
-  script sends from one IP, as a real campus room does) and holds those row
-  locks until it commits. Vercel's request logs have no timing field, so they
-  can't settle it. Next step, with the owner's OK: time 600 `submit_answer`
-  calls straight against the database from about 10 connections, (a) as now,
-  (b) with a separate IP per phone, (c) with the version bump and counters
-  moved to the end. Then decide whether to change the design.
+- **Why a 200-phone burst is slow: Supabase's Data API tops out at ~44 calls a
+  second (diagnosed 2026-09-29, `scripts/load/diagnose-submit.mjs`, run twice
+  with matching results).** 600 answers (200 phones × 3, one room), 10
+  connections unless stated:
+
+  | Path and variant | Answers/s | p50 / p95 ms |
+  | --- | --- | --- |
+  | Straight to the database, `submit_answer` as shipped | 321–342 | 24 / 53–74 |
+  | … one IP per phone | 463–494 | 19–20 / 27–29 |
+  | … rate counters written last | 543–557 | 16–17 / 23–26 |
+  | … no `runs.version` bump | 367–441 | 19–20 / 37–100 |
+  | … no per-run counter | 245–489 | 19–20 / 30–151 |
+  | … none of the shared rows | 550–575 | 16–17 / 21 |
+  | Data API (supabase-js `rpc`), as shipped, 10 at once | 39–40 | 235 / 409–438 |
+  | … 100 at once, one IP / one IP per phone | 41–44 | 1,118–2,192 / 3,807–11,488 |
+  | Data API `rpc('get_state')` for no room (does nothing), 10 / 100 at once | 43 / 45 | 220 / 2,090 |
+  | Auth `/health` on the same Supabase host (no database), 10 at once | 258–260 | 29–33 / 62 |
+
+  Row locks are real: sampled during the as-shipped run, most busy calls were
+  waiting on another transaction (`Lock:transactionid`, 125–159 of ~200
+  samples), because every answer in a room updates the same run counter,
+  `runs` row and (from one campus IP) IP counter. But even so the database
+  takes 321–342 answers a second. **Every call through the Data API, even one
+  that does nothing, stops at ~44 a second, whatever the concurrency or IP**,
+  while a non-database endpoint on the same host does 258. So the ceiling is
+  the Data API layer (PostgREST and its connections on this plan), not our
+  function. 600 answers at ~44/s take ~14s, matching the preview burst
+  (15.1s). A real room typing over 30–60s sends ~10–20 a second, under the
+  ceiling, so only an everyone-at-once burst queues.
+  **Proposed fix (not applied; owner decides):** call `submit_answer` (and
+  later the host actions) from the SvelteKit server over a direct Postgres
+  connection through Supabase's transaction pooler, instead of the Data API.
+  Still one database call per request. Measured headroom: the database takes
+  ~320–340 answers/s as shipped vs ~44 through the API, so a 600-answer burst
+  should drain in ~2s instead of ~14s. To verify on a preview first: the
+  pooled `POSTGRES_URL` from Vercel's `lhr1`, the pooler's client limit on the
+  free plan, `pg` moving to a runtime dependency, and prepared statements off
+  (transaction mode). Needs an ADR. Second, only if the first isn't
+  enough: write the rate counters last, with the check kept as a read up
+  front (variant "counters last": 543–557/s at the database). This lets the
+  cap be overshot by a few answers under a race, so it's a rule change to
+  approve, not a free win.
 - **Deferred design, found in S7's screenshots:** (1) when every word is tied,
   all of them take the accent colour ("most popular" is true for every word);
   (2) the projector's answer count sums the top 100 visible words, so it
