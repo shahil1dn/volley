@@ -137,7 +137,7 @@ polling. If it does not, the delivery design changes and every later slice with 
   on each. S2's `tallies` index is replaced by a partial index on visible
   words, in the order the state sends them, so the top 100 needs no sort.
   Secrets: settings keys named `correct` are removed at any depth until the
-  item is revealed; the quiz adds names to that list in Milestone 2.
+  item is revealed; a future quiz would add names to that list (ADR-007).
 
 - [x] **S5. A phone can join and answer.** Signed participant token in a cookie
   scoped to the answer route; `/j/[code]` polls state; retry-safe submit with a
@@ -262,19 +262,21 @@ live, which must happen before the first real workshop anyway.
   *verify:* the route refuses a call without the secret; after deploying, the
   cron's run shows in the logs with a 200.
 
-## Milestone 2: poll and quiz, then the shared template
+## Milestone 2: poll, then the shared template
+
+The first release ships word cloud and poll only (ADR-007, 2026-09-30).
 
 - Poll activity (one vote per participant, live bars).
-- Quiz: scheduled start, server-clock countdown, refusal outside the window,
-  speed bands, nicknames, leaderboard, reveal. Proves A2 and A9.
-  **Nicknames (owner decision, 2026-09-29):** asked only when the run contains a
-  quiz, and then required ("nickname or first name", not a full name). Shown on
-  the projector leaderboard. The host can remove a nickname from the control
-  view, like hiding a word. A duplicate gets a number added ("Sam 2"). Deleted
-  with the run after 24 hours. The `players.nickname` check allows 1–24
-  characters: SPEC's 20, plus room for " 12".
-- Extract `defineActivity` from the three activities; `npm run new-activity`.
-  Proves A5.
+- Extract `defineActivity` from the word cloud and poll; `npm run
+  new-activity`. Proves A5. The contract stays internal until a third
+  activity proves it (ADR-007).
+- **Out of scope for v1: the timed quiz**, now "later, or a community
+  contribution" (ADR-007). The nickname decision recorded on 2026-09-29 goes
+  with it, so joining stays fully anonymous. The groundwork already built stays,
+  unused and harmless: the `scheduled` item state, `submit_answer`'s
+  `opens_at`/`closes_at` window (tested in S3), secret settings stripped until
+  reveal (S4), the phone's clock offset (S5), and the `players` table with its
+  index (no migration dropped).
 
 ## Milestone 3: decks
 
@@ -351,8 +353,9 @@ live, which must happen before the first real workshop anyway.
   (Vercel's function metrics, or add the line back for the run).
 - **A cached state can be a few seconds old**, so `serverNow` is too. Clients
   should add the response's `Age` header (always present, S1) to `serverNow`
-  before timing a quiz countdown, and ignore any state whose `version` is lower
-  than one they've already shown. Matters for S5 and the quiz.
+  before timing anything on the server's clock, and ignore any state whose
+  `version` is lower than one they've already shown. Done in S5. The countdown
+  it was for (the quiz) is out of scope for v1 (ADR-007).
 - **Design is deferred (owner, 2026-09-29).** Order: a working MVP, then the
   open-source template with a generic default theme, then the AI Builders
   version. The society look in `src/app.css` is a placeholder. S5's vibe audit
@@ -412,9 +415,10 @@ live, which must happen before the first real workshop anyway.
   9,855 ms to **p50 57 ms / p95 269 ms**, still 600 stored = 600 tallied and 0
   5xx. Writing the rate counters last was measured (543–557/s) but not
   approved; the rules stay exact.
-- **Open decision: state-route calls rose to 11.39/s after ADR-006** (run
-  C-direct, 200 phones every 3s), against 7.07 before, which is above ADR-004's
-  ~10/s budget. See ADR-006, "Consequence to decide".
+- **Decided 2026-09-30: state-route calls of 11.39/s after ADR-006 are
+  accepted.** Run C-direct, 200 phones every 3s, against 7.07 before. The owner
+  raised ADR-004's budget to ~15/s, making the worst-case month ~264k calls,
+  26% of Hobby's 1M. ISR and a longer `s-maxage` stay later optimisations.
 - **Owner check: confirm the pinned Supabase root CA.** Download the
   certificate from the Supabase dashboard (Database Settings → SSL
   Configuration) and check its SHA-256 is `80:70:25:AD:50:D4:ED:21:9D:2C:9C:

@@ -31,7 +31,7 @@ flowchart LR
 
   P -- "GET state (every 1-3s)" --> CDN
   PR -- "GET state (every 1s)" --> CDN
-  CDN -- "cache miss or stale refresh: under 10 a second (§10)" --> FN
+  CDN -- "cache miss or stale refresh: ~11 a second at 200 phones (§10)" --> FN
   P -- "POST answer" --> FN
   HC -- "POST next / open / hide / end" --> FN
   FN -- "one function call per request" --> RPC
@@ -50,10 +50,7 @@ flowchart TD
   C --> D["Waiting screen<br/>polls shared state every 3s"]
   D --> E{"Current activity<br/>open?"}
   E -- no --> D
-  E -- yes --> F{"Quiz?"}
-  F -- yes --> G["Nickname (quiz runs only, required),<br/>countdown on server time"]
-  F -- no --> H["Answer form"]
-  G --> H
+  E -- yes --> H["Answer form<br/>(word cloud or poll; no name asked, ADR-007)"]
   H --> I["Submit with one-time id"]
   I --> J{"Accepted?"}
   J -- "yes" --> K["'Sent' + answers left<br/>(kept on the phone)"]
@@ -108,10 +105,10 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
   [*] --> closed
-  closed --> scheduled: host opens (quiz)
+  closed --> scheduled: host opens (quiz, not in v1)
   scheduled --> open: start time reached (~3s)
   closed --> open: host opens (word cloud, poll)
-  open --> closed: host closes / quiz timer ends
+  open --> closed: host closes
   closed --> revealed: host reveals (quiz answer, results)
   revealed --> [*]
 ```
@@ -130,7 +127,7 @@ erDiagram
   runs ||--o{ tallies : "counts into"
   runs ||--o{ quotas : "limits via"
   runs ||--o{ moderation : "hides via"
-  runs ||--o{ players : "quiz scores"
+  runs ||--o{ players : "quiz scores (unused in v1, ADR-007)"
 
   hosts {
     uuid user_id PK "= auth.users.id"
@@ -147,7 +144,7 @@ erDiagram
     uuid id PK
     uuid deck_id FK
     int position "unique per deck"
-    text type "word_cloud | poll | quiz"
+    text type "word_cloud | poll (quiz: not in v1)"
     jsonb settings "validated by the activity's schema"
   }
   runs {
@@ -201,6 +198,8 @@ erDiagram
   }
 ```
 
+`players` exists for a quiz leaderboard and is unused in v1 (ADR-007).
+
 Not shown: `rate_limits` (an **unlogged** table of per-IP-hash counters. It
 skips the write-ahead log because losing it in a crash costs nothing).
 
@@ -234,7 +233,7 @@ sequenceDiagram
   alt limit reached
     Db-->>Fn: {status: "limit"} (response and quota rolled back, rate count kept)
   else within limit
-    Db->>Db: tally +1 (a hidden word stays hidden), quiz score if correct, runs.version +1
+    Db->>Db: tally +1 (a hidden word stays hidden), runs.version +1
     Db-->>Fn: {status: "ok", left}
   end
   Fn-->>Ph: 200 {status, left}
@@ -264,9 +263,15 @@ sequenceDiagram
   Note over P1,Db: The response is identical for everyone, never personal.<br/>What a phone has sent lives on the phone,<br/>and the answer response returns "answers left".
 ```
 
-The state never includes a quiz's correct answer before the host reveals it.
+The state never includes an activity's secret settings (such as a correct
+answer) before the host reveals them.
 
-## 8. A fair timed quiz without live connections
+## 8. A fair timed quiz without live connections (out of scope for v1)
+
+**Not in the first release (ADR-007).** Kept as the design for a later quiz,
+or for a community contribution. The groundwork already exists and is unused:
+the `scheduled` state, the answer time window, secret stripping until reveal,
+the phone clock offset and the `players` table.
 
 ```mermaid
 sequenceDiagram
@@ -321,18 +326,19 @@ an index.
 | Hourly clean-up | `delete from runs where ...` | expired runs, cascading | `runs(ended_at)`, `runs(last_activity_at)` |
 
 **One 200-person, 60-minute event, phones polling every 3s.** Measured rows
-come from S1 (`docs/volley-plan.md`); the budget they're held to is ADR-004.
+come from the load runs in `docs/volley-plan.md` (S1, and run C-direct after
+ADR-006); the budget they're held to is ADR-004's ~15 calls a second.
 
 | Budget (free) | Usage | Measured or estimated | Why |
 |---|---|---|---|
-| Vercel function calls, 1M/month | ~25,000 | **measured**: 6.9 state calls/s (S1 run B) × 3,600s | the CDN doesn't merge stale refreshes for function responses (ADR-004) |
+| Vercel function calls, 1M/month | ~41,000 | **measured**: 11.39 state calls/s (run C-direct, after ADR-006) × 3,600s | the CDN doesn't merge stale refreshes for function responses; budget ~15/s (ADR-004) |
 | | + ~600 | estimated | answers and host actions |
 | Vercel Active CPU, 4h/month | a few minutes | estimated | thin handlers, mostly waiting on the database |
 | Vercel data transfer, 100 GB/month | ~0.5 GB | estimated | 200 phones × 1,200 polls × ~2 KB |
 | Supabase database, 500 MB | < 5 MB per event | estimated | deleted after 24h |
-| Supabase egress, 5 GB/month | ~50 MB | estimated from the measured call count | ~25,000 state reads × ~2 KB |
+| Supabase egress, 5 GB/month | ~80 MB | estimated from the measured call count | ~41,000 state reads × ~2 KB |
 | Supabase realtime | 0 | by design | not used |
 
-At 1s polling the measured rate is 8.8 calls/s (S1 run A), about 32,000 an
-hour. The S1 runs lasted 2 minutes. The 10-minute load check in `SPEC.md` (A10)
+At 1s polling the rate was 8.8 calls/s (S1 run A, before ADR-006; not
+re-measured since), about 32,000 an hour. The S1 runs lasted 2 minutes. The 10-minute load check in `SPEC.md` (A10)
 replaces the remaining estimates.

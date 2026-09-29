@@ -170,6 +170,12 @@ a second when polling every 1s (run A).
   3,623 / MISS 58, 848 function calls = **7.07 a second** (median 7, max 14),
   against run B's 6.9. The split leaves the CDN's behaviour unchanged and within
   this budget.
+- **Amended 2026-09-30 (owner): the budget is now about 15 function calls a
+  second** with 200 phones polling every 3s (about 54k an hour). After ADR-006
+  the measured rate was 11.39 a second (`scripts/load/run-C-direct.json`), up
+  from 7.07; the owner accepted it. Worst-case month about 264k calls, 26% of
+  Hobby's 1M. ISR and a longer `s-maxage` stay later optimisations, not
+  blockers.
 
 ## ADR-005: Host sessions are our own signed cookie, not Supabase's (2026-09-29)
 
@@ -259,11 +265,31 @@ or pool-error log lines during the runs.
   full database access either way. A least-privilege login role would need a
   new secret: a follow-up.
 
-**Consequence to decide.** The cached state route made **11.39 function calls
-a second** with 200 phones polling every 3s (`run-C-direct.json`), against 7.07
+**Consequence, accepted by the owner on 2026-09-30 (ADR-004 amended to a ~15/s
+budget).** The cached state route made **11.39 function calls a second** with 200 phones polling every 3s (`run-C-direct.json`), against 7.07
 before (`run-C.json`), which is above ADR-004's ~10/s budget. The CDN served
 more fresh hits (HIT 5,811, up from 4,319; STALE 2,183, down from 3,623), yet
 more refreshes reached the function. A likely reason, unproven, is that faster
 answers let the CDN start more refresh cycles. At this rate the owner's
 worst-case month is ~264k function calls, 26% of Hobby's 1M. Options: accept
 and raise the budget, a 2-second `s-maxage`, or ISR (logged in the plan).
+
+## ADR-007: The first release ships word cloud and poll; no quiz (2026-09-30)
+
+Owner decision.
+
+- **The first release has two activities, word cloud and multiple-choice poll.**
+  These are Mentimeter's core. The timed quiz moves to "later, or a community
+  contribution" through the activity contract (`defineActivity`).
+- **Joining is fully anonymous again.** The quiz nickname (recorded 2026-09-29,
+  SPEC 8) goes with the quiz: no name of any kind is asked for in v1.
+- **What already exists stays, unused and harmless:** the `scheduled` item
+  state and the `opens_at`/`closes_at` window in `submit_answer` (it still
+  refuses answers outside a window if one is set, tested in S3); `get_state`
+  stripping secret settings until reveal (tested in S4); the phone's `Age` +
+  `serverNow` clock offset (S5); the `players` table and its index. No table or
+  migration is dropped.
+- **Contract timing:** ADR-001 said to publish the activity contract after the
+  third activity. With two in v1, `defineActivity` is extracted from word cloud
+  and poll and stays internal until a third activity (possibly the quiz) proves
+  it.
