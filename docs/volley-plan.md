@@ -1,0 +1,104 @@
+# Volley build plan
+
+From `SPEC.md` (acceptance checks A1–A17) and `docs/ARCHITECTURE.md`. Four
+milestones. Only Milestone 1 is sliced in detail; the rest are sliced when
+Milestone 1 lands, because what it proves may change them.
+
+Each slice leaves the app working and ends with its proof. Tick a slice with
+the commit and the command output that proved it.
+
+**How the database is tested.** Database tests run against the London dev
+database, each inside a transaction that is rolled back, using Node's test
+runner and `pg`. No second database is needed.
+
+## Milestone 1: one word cloud, end to end, hardened
+
+The riskiest assumption goes first: that Vercel's edge cache absorbs the
+polling. If it does not, the delivery design changes and every later slice with it.
+
+- [ ] **S0. SvelteKit skeleton replaces Next.js.** Rename the folder to `volley`.
+  SvelteKit + TypeScript + Vercel adapter pinned to `lhr1`. Remove the Next.js
+  app; keep `db/`, `scripts/migrate.mjs`, `tests/`.
+  *verify:* `npm run build` and `npm test` pass with exit codes intact; the
+  existing 5 unit tests still pass.
+
+- [ ] **S1. Prove the edge cache (riskiest).** A `GET /api/r/[code]/state` route
+  returning a real row from the database with `s-maxage=1,
+  stale-while-revalidate=1`, deployed as a protected preview in `lhr1`. A script
+  runs 200 simulated clients polling every second for 2 minutes.
+  *verify:* the function's call count from Vercel logs stays under 2 a second
+  (must-verify 1), and the response headers show whether `Age` is present
+  (must-verify 2).
+  *needs owner OK:* a deployment-protection bypass secret so the load script can
+  reach the protected preview.
+
+- [ ] **S2. The real schema.** Migration for `hosts`, `decks`, `deck_items`,
+  `runs`, `responses`, `tallies`, `quotas`, `moderation`, `players`, unlogged
+  `rate_limits`; indexes from ARCHITECTURE §10; RLS enabled and forced
+  everywhere; every privilege revoked from the public roles.
+  *verify:* the permission probe (A4) fails on the old schema and passes on the
+  new one.
+
+- [ ] **S3. `submit_answer` for the word cloud.** One transaction: rate limit, run
+  and item open, duplicate submit id, quota by conditional upsert, tally,
+  `version`.
+  *verify:* database tests A1 (4th word refused; 10 concurrent submits store
+  exactly 3) and A3 (same submit id stored once), written first and seen red.
+
+- [ ] **S4. `get_state` behind the cached route.** Returns version, current item
+  without secrets, top 100 visible tallies, `serverNow`.
+  *verify:* `EXPLAIN` on its queries shows index scans only (A11); a test proves
+  a hidden tally is absent.
+
+- [ ] **S5. A phone can join and answer.** Signed participant token in a cookie
+  scoped to the answer route; `/j/[code]` polls state; retry-safe submit with a
+  one-time id; answers-left kept on the phone.
+  *verify:* browser test: 3 phones join and answer; a forced retry of one submit
+  does not change the count.
+
+- [ ] **S6. Host sign-in.** `npm run add-host <email>` creates the account;
+  password sign-in with an `httpOnly` cookie session; every host route guarded.
+  Check the current Supabase + SvelteKit auth guide first (must-verify 3).
+  *verify:* A6 (403 without a host session, or as a non-host), A7
+  (`document.cookie` does not contain the session).
+
+- [ ] **S7. Projector and host control for a word cloud.** Start a run from a
+  hard-coded one-item deck; projector at `/run/[code]` polls every second and fits
+  the cloud to the screen (ported from the prototype); control view opens,
+  closes, hides, freezes and ends.
+  *verify:* A8 browser test (result on the projector within 3s; hide removes it
+  within 3s); screenshot of the projector at 1280×720 with 120 words.
+
+- [ ] **S8. Retention and export.** Hourly `pg_cron` job; CSV and PNG export
+  before deletion.
+  *verify:* A12 (a run ended 25 hours ago is gone with everything under it, one
+  ended 23 hours ago is not, the deck survives); the downloaded CSV matches the
+  tallies.
+
+## Milestone 2: poll and quiz, then the shared template
+
+- Poll activity (one vote per participant, live bars).
+- Quiz: scheduled start, server-clock countdown, refusal outside the window,
+  speed bands, nicknames, leaderboard, reveal. Proves A2 and A9.
+- Extract `defineActivity` from the three activities; `npm run new-activity`.
+  Proves A5.
+
+## Milestone 3: decks
+
+- Deck list and deck editor with forms generated from each activity's settings
+  schema. Replaces the hard-coded deck from S7.
+
+## Milestone 4: ready for strangers
+
+- Settings for name, colours and logo; remove AI Builders from `src/` (A16).
+- `npm run setup` and `npm run doctor` (A14).
+- `AGENTS.md`; Deploy button with the `stores` parameter (must-verify 4).
+- Full load test: 200 phones for 10 minutes, measured numbers replace the
+  estimates in ARCHITECTURE §10 (A10).
+- Supabase Security Advisor clean (A13).
+- One gate command: build, typecheck, all tests, exit code intact (A17).
+- A fresh AI agent sets up a copy from `AGENTS.md` alone (A15).
+
+## Found along the way
+
+(New tasks discovered while building go here.)
