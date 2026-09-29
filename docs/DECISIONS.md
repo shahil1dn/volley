@@ -57,3 +57,55 @@ against a 1M monthly allowance).
 **Key risk.** The plan is only free if polling is cheap. If cache hits count as
 invocations, split the shared cached state from a small per-person endpoint
 called only on submit, or self-host.
+
+## ADR-002: Scale, framework, region, retention and self-hosting (2026-09-29)
+
+Refines ADR-001 after the owner set the real scale and goals.
+
+- **Scale is 20–100 people, 200 at a big event.** Peak load is about 2 writes a
+  second. No reverse proxy, load balancer, queue or Redis: Vercel's edge already
+  terminates HTTPS and routes. Phones still poll instead of holding a live
+  connection, because 200 phones alone would use the whole free realtime cap.
+  Uncached polling (200 phones every 3s for an hour ≈ 240k requests) fits the
+  1M monthly allowance, so the CDN-cache question drops from blocking to nice to
+  know.
+- **Correctness concerns that do matter at this scale:** server is the source of
+  truth; retry-safe submits (a one-time id per submit, repeats ignored);
+  reconnect and resume; rate limits against scripts; server clock for timers;
+  projector falls back to polling if its live connection drops.
+- **Framework: SvelteKit** (replaces Next.js). Smaller and simpler for an app
+  that is mostly live client screens; `$env/static/private` and `$lib/server`
+  keep secrets out of the browser natively. The owner chose it knowing it means a
+  rebuild of the screens and routes; the database, rules and tests carry over.
+- **Region: London.** Database recreated in `eu-west-2` (the first was created in
+  US East by default and deleted). Server functions pinned to `lhr1` via the
+  SvelteKit Vercel adapter's `regions`.
+- **Where logic lives:** rules in Postgres functions (atomic, cannot be
+  bypassed); SvelteKit server routes are a thin front desk (validate shape,
+  identify host or participant, rate-limit by IP, call the function, broadcast);
+  activity maths in pure TypeScript for testing.
+- **Retention: delete a session and all its answers 24 hours after it ends**, or
+  after 24 hours with no activity if never ended. Hosts get an "Export results"
+  button before that. Saved decks are host content and are kept. Replaces the
+  30 days in ADR-001.
+- **Two levels of "template".** Activity types are code: one self-contained
+  folder per type (settings schema, rules, tally, screens), scaffolded by
+  `npm run new-activity`, contributed by pull request. No uploading of code
+  into a running site. Hosts build presentations in a no-code deck editor whose
+  forms are generated from each activity's settings schema; saved decks, starter
+  packs and deck import/export follow.
+- **Every copy is independent.** Self-hosters run their own Vercel and Supabase
+  free tiers; nothing reaches the owner's servers. Nothing is hard-coded to AI
+  Builders (name, colours, logo, approved hosts all come from settings). No
+  analytics or usage pings. Host sign-in limited to an approved email list per
+  copy. The privacy notice ships as a template.
+- **Audience for self-hosting: one tech-comfortable person per society**, who
+  sets it up once; everyone after is Menti-easy. Made agent-ready: an
+  `AGENTS.md` with exact ordered commands, expected output and clearly marked
+  human-only steps; an idempotent `npm run setup`; a plain-English
+  `npm run doctor` health check. A fresh agent following the guide from scratch
+  is a release gate. A public shared instance is out of scope for now.
+
+**Added to must-verify:** whether Vercel's deploy button can provision the
+Supabase integration; whether pg_cron (for the 24-hour deletion) is available on
+the Supabase free plan.
