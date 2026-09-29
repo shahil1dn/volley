@@ -1,0 +1,40 @@
+{
+  "code": "SLGNV",
+  "clients": 200,
+  "seconds": 120,
+  "pollEverySeconds": 1,
+  "window": {
+    "start": "2026-09-29T13:21:44.623Z",
+    "end": "2026-09-29T13:23:44.623Z"
+  },
+  "requests": 24000,
+  "status": {
+    "200": 23999
+  },
+  "xVercelCache": {
+    "MISS": 52,
+    "HIT": 11102,
+    "STALE": 12845
+  },
+  "edgeRegion": {
+    "lhr1": 23999
+  },
+  "ageHeaderPresent": 23999,
+  "ageValues": {
+    "0": 11161,
+    "1": 6916,
+    "2": 4254,
+    "3": 1514,
+    "4": 142,
+    "5": 12
+  },
+  "networkErrors": {
+    "ECONNRESET": 1
+  },
+  "skippedTicks": 0,
+  "latencyMs": {
+    "p50": 86,
+    "p95": 180,
+    "max": 1995
+  }
+}

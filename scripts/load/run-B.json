@@ -1,0 +1,36 @@
+{
+  "code": "PGNPW",
+  "clients": 200,
+  "seconds": 120,
+  "pollEverySeconds": 3,
+  "window": {
+    "start": "2026-09-29T13:24:06.140Z",
+    "end": "2026-09-29T13:26:06.140Z"
+  },
+  "requests": 8000,
+  "status": {
+    "200": 8000
+  },
+  "xVercelCache": {
+    "MISS": 38,
+    "HIT": 4399,
+    "STALE": 3563
+  },
+  "edgeRegion": {
+    "lhr1": 8000
+  },
+  "ageHeaderPresent": 8000,
+  "ageValues": {
+    "0": 4440,
+    "1": 2184,
+    "2": 1067,
+    "3": 309
+  },
+  "networkErrors": {},
+  "skippedTicks": 0,
+  "latencyMs": {
+    "p50": 81,
+    "p95": 164,
+    "max": 1730
+  }
+}

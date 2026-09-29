@@ -1,14 +1,16 @@
 // S1 load test: can Vercel's CDN absorb a room of phones polling the shared state?
 // Seeds a throwaway room, polls it from many simulated clients, deletes the room.
-//   node --env-file=.env.local scripts/load/poll.mjs <deployment-url> [clients] [seconds]
+//   node --env-file=.env.local scripts/load/poll.mjs <deployment-url> [clients] [seconds] [poll-every-seconds] [run-name]
+// The summary is written to scripts/load/run-<run-name>.json.
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { createClient } from '@supabase/supabase-js';
 
-const [baseUrl, clientsArg = '200', secondsArg = '120'] = process.argv.slice(2);
+const [baseUrl, clientsArg = '200', secondsArg = '120', intervalArg = '1', runName = 'last'] = process.argv.slice(2);
 if (!baseUrl?.startsWith('https://')) throw new Error('Pass the deployment URL, starting https://');
 const clients = Number(clientsArg);
 const seconds = Number(secondsArg);
+const intervalMs = Number(intervalArg) * 1000;
 const { SUPABASE_URL, SUPABASE_SECRET_KEY, VERCEL_AUTOMATION_BYPASS_SECRET } = process.env;
 if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) throw new Error('Run with --env-file=.env.local');
 if (!VERCEL_AUTOMATION_BYPASS_SECRET) throw new Error('VERCEL_AUTOMATION_BYPASS_SECRET is not set');
@@ -23,10 +25,10 @@ const percentile = (sorted, p) => sorted[Math.min(sorted.length - 1, Math.floor(
 async function pollAsOneClient(url, startAt, endAt, results) {
 	// Ticks are fixed to the client's own clock, so a slow response is followed by
 	// the next scheduled poll rather than an immediate catch-up burst.
-	for (let tick = startAt; tick < endAt; tick += 1000) {
+	for (let tick = startAt; tick < endAt; tick += intervalMs) {
 		const wait = tick - Date.now();
 		if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
-		else if (wait < -1000) {
+		else if (wait < -intervalMs) {
 			results.skippedTicks++;
 			continue;
 		}
@@ -70,13 +72,12 @@ try {
 	};
 	const runStart = Date.now() + 2000;
 	const runEnd = runStart + seconds * 1000;
-	console.log(`Room ${code}: ${clients} clients x 1/s for ${seconds}s`);
+	console.log(`Room ${code}: ${clients} clients, one poll every ${intervalArg}s, for ${seconds}s`);
 	console.log(`RUN_WINDOW ${new Date(runStart).toISOString()} ${new Date(runEnd).toISOString()}`);
-	// Spread the clients across the first second, as phones joining a room would be.
+	// Real phones don't poll in lockstep, so each client starts at a random point
+	// in the first interval.
 	await Promise.all(
-		Array.from({ length: clients }, (_, i) =>
-			pollAsOneClient(url, runStart + Math.floor((i * 1000) / clients), runEnd, results),
-		),
+		Array.from({ length: clients }, () => pollAsOneClient(url, runStart + randomInt(intervalMs), runEnd, results)),
 	);
 
 	const sorted = results.latencies.toSorted((a, b) => a - b);
@@ -84,6 +85,7 @@ try {
 		code,
 		clients,
 		seconds,
+		pollEverySeconds: Number(intervalArg),
 		window: { start: new Date(runStart).toISOString(), end: new Date(runEnd).toISOString() },
 		requests: sorted.length + [...results.networkErrors.values()].reduce((a, b) => a + b, 0),
 		status: Object.fromEntries(results.status),
@@ -95,7 +97,7 @@ try {
 		skippedTicks: results.skippedTicks,
 		latencyMs: { p50: Math.round(percentile(sorted, 50)), p95: Math.round(percentile(sorted, 95)), max: Math.round(sorted.at(-1)) },
 	};
-	await writeFile(new URL('./last-run.json', import.meta.url), JSON.stringify(summary, null, 2));
+	await writeFile(new URL(`./run-${runName}.json`, import.meta.url), JSON.stringify(summary, null, 2));
 	console.log(JSON.stringify(summary, null, 2));
 } finally {
 	const { error: deleteError } = await db.from('sessions').delete().eq('code', code);

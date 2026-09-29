@@ -23,6 +23,6 @@ export const GET: RequestHandler = async ({ params, setHeaders }) => {
 	if (dbError) error(500, 'Could not load the room');
 	if (!room) error(404, 'No such room');
 
-	setHeaders({ 'cache-control': 'public, s-maxage=1, stale-while-revalidate=1' });
+	setHeaders({ 'cache-control': 'public, s-maxage=1, stale-while-revalidate=60' });
 	return json({ code: room.code, question: room.question, serverNow: Date.now() });
 };

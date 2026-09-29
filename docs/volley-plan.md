@@ -45,6 +45,23 @@ polling. If it does not, the delivery design changes and every later slice with 
   answers must-verify 2. Latency p50 75 ms, p95 488 ms, measured from one
   laptop running all 200 clients. The cache absorbs about 86% of polls, not
   the ~99% ADR-003 assumed.
+  *re-test 2026-09-29, `stale-while-revalidate=60`, clients start at random
+  points in the first interval: still FAILED, left unticked.* Summaries in
+  `scripts/load/run-A.json` and `run-B.json`. Function calls come from a log
+  stream running during both runs; its last line is 0.08s after run B ended.
+
+  | Run | Poll every | Requests | HIT / STALE / MISS | Function calls | Calls/s avg, median, max | p50 / p95 |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | Original (SWR 1s) | 1s | 23,645 | 12,596 / 7,993 / 3,055 | 3,394 | 28.3, 31, 44 | 75 / 488 ms |
+  | A (SWR 60s) | 1s | 24,000 | 11,102 / 12,845 / 52 | 1,055 | 8.8, 10, 13 | 86 / 180 ms |
+  | B (SWR 60s) | 3s | 8,000 | 4,399 / 3,563 / 38 | 832 | 6.9, 8, 35 | 81 / 164 ms |
+
+  A longer stale window almost removes MISSes, but background refreshes still
+  reach the function 7–9 times a second. Cutting traffic by two-thirds (A to B)
+  cut calls by only a fifth. Vercel's request-collapsing docs list only ISR and
+  Image Optimization as supported, not function responses cached with
+  `Cache-Control`. That fits the refreshes not being merged, but no run here
+  isolates the cause.
 
 - [ ] **S2. The real schema.** Migration for `hosts`, `decks`, `deck_items`,
   `runs`, `responses`, `tallies`, `quotas`, `moderation`, `players`, unlogged
@@ -149,5 +166,11 @@ polling. If it does not, the delivery design changes and every later slice with 
 - **Hobby allowances** (Vercel fair-use guidelines, checked 2026-09-29): 1M
   function calls, 100 GB data transfer, 4 hours of active CPU a month. No
   request-count allowance is listed, so cache hits cost only data transfer.
+- **The log stream stops after 5 minutes** ("Exceeded query duration limit of 5
+  minutes"). Keep a counted run inside that, or restart the stream between runs.
+- **Untested option for S1: ISR.** Vercel's docs say request collapsing, including
+  for stale refreshes, is supported for ISR, and adapter-vercel has an `isr`
+  route option. Whether it works on a `+server.ts` GET, and at a 1-second
+  expiry, is unverified.
 - **The state route logs `STATE_FN_CALL` on every call.** It's there so load
   runs can be counted. Remove it once the delivery design is settled.
