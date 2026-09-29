@@ -7,13 +7,15 @@
     "preview": "vite preview",
     "prepare": "svelte-kit sync || echo \"\"",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "test": "node --env-file-if-exists=.env.local --test tests/*.test.ts"
+    "test": "node --env-file-if-exists=.env.local --test tests/*.test.ts",
+    "test:e2e": "node --env-file-if-exists=.env.local node_modules/@playwright/test/cli.js test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@sveltejs/adapter-vercel": "^6.3.4",
     "@sveltejs/kit": "^2.70.3",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",

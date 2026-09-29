@@ -139,11 +139,32 @@ polling. If it does not, the delivery design changes and every later slice with 
   Secrets: settings keys named `correct` are removed at any depth until the
   item is revealed; the quiz adds names to that list in Milestone 2.
 
-- [ ] **S5. A phone can join and answer.** Signed participant token in a cookie
+- [x] **S5. A phone can join and answer.** Signed participant token in a cookie
   scoped to the answer route; `/j/[code]` polls state; retry-safe submit with a
   one-time id; answers-left kept on the phone.
   *verify:* browser test: 3 phones join and answer; a forced retry of one submit
   does not change the count.
+  *done:* `src/routes/j/[code]/+page.svelte`, `src/routes/api/r/[code]/answer/+server.ts`,
+  `src/lib/server/participant-token.ts`; browser test `tests/e2e/phone.spec.ts`
+  (`npm run test:e2e`). Receipts: `npm test` EXIT=0, 37 pass, 0 fail;
+  `npm run check` EXIT=0; `npm run build` EXIT=0; `npm run test:e2e` EXIT=0,
+  5 passed: 3 phones answer and are held to 3 each; a phone waits, then sees the
+  question open; a lost reply is retried with the same submit id and stored once
+  (the dropped attempt is shown to have reached the server with a 200); a phone
+  with a clock an hour fast still gets the server's time; an unknown room gets a
+  friendly page. Mutation checks: a new submit id per retry turns the retry test
+  red; unbinding the token from the room, skipping the signature check, an IP
+  hash without the secret, and showing older states each turn a unit test red.
+  Test rooms were deleted afterwards (checked: 0 users, runs, tallies, rate rows).
+  Screens at 375×812 are in `screenshots/s5/` (git-ignored).
+  How joining works: the page calls `GET /api/r/{code}/answer`, which sets the
+  signed participant cookie only if the phone doesn't already have one. A cookie
+  scoped to the answer route is invisible to the page, so setting it on the page
+  load would issue a new participant, and a fresh 3 answers, on every reload.
+  Answer replies: 200 ok, 422 invalid, 409 limit/closed/frozen, 429
+  rate-limited, 400/415 bad request, 401 not joined (the phone joins and retries
+  once); network errors and 5xx are retried with the same submit id after 1s and
+  2.5s. The IP is hashed with HMAC under `PARTICIPANT_SECRET`, not bare SHA-256.
 
 - [ ] **S6. Host sign-in.** `npm run add-host <email>` creates the account;
   password sign-in with an `httpOnly` cookie session; every host route guarded.
@@ -270,5 +291,19 @@ live, which must happen before the first real workshop anyway.
   should add the response's `Age` header (always present, S1) to `serverNow`
   before timing a quiz countdown, and ignore any state whose `version` is lower
   than one they've already shown. Matters for S5 and the quiz.
+- **Design is deferred (owner, 2026-09-29).** Order: a working MVP, then the
+  open-source template with a generic default theme, then the AI Builders
+  version. The society look in `src/app.css` is a placeholder. S5's vibe audit
+  found two things, left for the theming work: (1) the column is vertically
+  centred, so the label and question jump about 110px between states; pin it
+  near the top. (2) After sending, a faded Send button outweighs what you sent;
+  show "your words" as a clear line under the question.
+- **`PARTICIPANT_SECRET` must be added to Vercel before the next deploy.** It is
+  read through `$env/static/private`, so a build without it fails. It's only in
+  `.env.local` so far; adding it to Vercel needs the owner's OK.
+- **Playwright's browser (Chrome for Testing 153, ~550 MB) is in
+  `~/Library/Caches/ms-playwright`.** Installing it removed two older cached
+  builds (`chromium_headless_shell-1228`, `webkit-2272`), which Playwright does
+  for builds it considers unused.
 - **`ANALYZE` after a rolled-back seed**: the A11 test re-runs `ANALYZE` after
   its rollback, because Postgres's row estimates survive a rollback.

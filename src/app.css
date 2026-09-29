@@ -1,0 +1,64 @@
+/* Carried over from the prototype's phone form, which passed a vibe audit: the
+   society's type and palette, so the phone reads as part of the society rather
+   than a borrowed tool. Name, colours and logo become settings in Milestone 4. */
+@font-face { font-family: "Zarathustra"; src: url("/fonts/zarathustra.otf") format("opentype"); font-display: swap; }
+@font-face { font-family: "Switzer"; src: url("/fonts/switzer-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Switzer"; src: url("/fonts/switzer-500.woff2") format("woff2"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "Switzer"; src: url("/fonts/switzer-600.woff2") format("woff2"); font-weight: 600; font-display: swap; }
+
+:root {
+  --accent: #4a2352;
+  --ink: #1e1622;
+  --graphite: #443b47;
+  --smoke: #5f5666;
+  --line: #e4e4e4;
+  --paper: #ffffff;
+  --error: #9b1c1c;
+  --font-display: "Zarathustra", Georgia, serif;
+  --font-body: "Switzer", "Helvetica Neue", Arial, sans-serif;
+  --radius-input: 16px;
+  --radius-pill: 50px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  min-height: 100svh;
+  background: var(--paper);
+  color: var(--graphite);
+  font: 16px/1.5 var(--font-body);
+}
+h1 { font-family: var(--font-display); font-weight: 400; color: var(--ink); margin: 0; line-height: 1.1; }
+p { margin: 0; }
+
+.label {
+  font-size: 12px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* ---------- controls ---------- */
+.field { display: block; }
+.field input {
+  width: 100%; padding: 14px 16px; font: 16px var(--font-body); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--radius-input); background: var(--paper);
+}
+.field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.btn {
+  display: inline-block; border: 0; cursor: pointer; text-decoration: none; text-align: center;
+  padding: 15px 24px; border-radius: var(--radius-pill);
+  background: var(--accent); color: var(--paper); font: 600 16px var(--font-body);
+}
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.btn--block { display: block; width: 100%; }
+.error { color: var(--error); font-size: 14px; }
+.hint { color: var(--smoke); font-size: 14px; }
+
+/* ---------- the phone: one centred column ---------- */
+.phone {
+  min-height: 100svh; display: grid; align-content: center;
+  width: 100%; max-width: 420px; margin: 0 auto; padding: 40px 16px;
+}
+.phone h1 { font-size: clamp(26px, 7vw, 40px); margin: 14px 0 12px; }
+.stack { display: grid; gap: 14px; margin-top: 28px; }
+.phone__foot { margin-top: 28px; }

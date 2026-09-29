@@ -1,10 +1,7 @@
 import { error, json } from '@sveltejs/kit';
-import { createClient } from '@supabase/supabase-js';
-import { SUPABASE_SECRET_KEY, SUPABASE_URL } from '$env/static/private';
+import { db } from '$lib/server/db';
 import { CODE_PATTERN } from '$lib/server/host-token';
 import type { RequestHandler } from './$types';
-
-const db = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, { auth: { persistSession: false } });
 
 // Every device polls this, so it must be identical for all of them: Vercel's CDN
 // then answers most polls without calling the function (ADR-004).

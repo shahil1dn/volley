@@ -9,9 +9,12 @@ SvelteKit on Vercel (London), Supabase for the database.
 
 ```bash
 vercel env pull .env.local --yes
+echo "PARTICIPANT_SECRET=\"$(openssl rand -base64 48)\"" >> .env.local
 npm install
 npm run dev
 ```
+
+`PARTICIPANT_SECRET` signs each phone's participant cookie. Keep it out of git.
 
 ## Database
 
@@ -28,4 +31,5 @@ node --env-file=.env.local scripts/migrate.mjs
 npm test
 npm run check
 npm run build
+npm run test:e2e   # browser test; first run: node_modules/.bin/playwright install chromium
 ```
