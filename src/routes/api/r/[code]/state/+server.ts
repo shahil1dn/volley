@@ -15,14 +15,14 @@ export const GET: RequestHandler = async ({ params, setHeaders }) => {
 
 	if (!CODE_PATTERN.test(params.code)) error(404, 'No such room');
 
-	const { data: room, error: dbError } = await db
-		.from('sessions')
-		.select('code, question')
+	const { data: run, error: dbError } = await db
+		.from('runs')
+		.select('code, status')
 		.eq('code', params.code)
 		.maybeSingle();
 	if (dbError) error(500, 'Could not load the room');
-	if (!room) error(404, 'No such room');
+	if (!run) error(404, 'No such room');
 
 	setHeaders({ 'cache-control': 'public, s-maxage=1, stale-while-revalidate=60' });
-	return json({ code: room.code, question: room.question, serverNow: Date.now() });
+	return json({ code: run.code, status: run.status, serverNow: Date.now() });
 };

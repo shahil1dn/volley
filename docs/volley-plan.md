@@ -65,12 +65,29 @@ polling. If it does not, the delivery design changes and every later slice with 
   *done:* the owner accepted the measured cost as a budget, **ADR-004** (at most
   about 10 calls/s at 200 phones polling every 3s). Measured runs in `8daf4c5`.
 
-- [ ] **S2. The real schema.** Migration for `hosts`, `decks`, `deck_items`,
+- [x] **S2. The real schema.** Migration for `hosts`, `decks`, `deck_items`,
   `runs`, `responses`, `tallies`, `quotas`, `moderation`, `players`, unlogged
   `rate_limits`; indexes from ARCHITECTURE §10; RLS enabled and forced
   everywhere; every privilege revoked from the public roles.
   *verify:* the permission probe (A4) fails on the old schema and passes on the
   new one.
+  *done:* `db/migrations/0001_volley_schema.sql`, applied by
+  `scripts/migrate.mjs`, which records each file in `schema_migrations`.
+  Receipts: on the old schema, `npm test` EXIT=1, 5 of 5 database tests red for
+  the right reasons (tables missing; RLS not forced on `sessions`; `anon` could
+  read `words` and use `words_id_seq`; the publishable key read `words` over
+  the API, HTTP 200). Migrate run 1 EXIT=0, "Applied 0001_volley_schema.sql";
+  run 2 EXIT=0, "Up to date: no migrations to apply". Then `npm run build`
+  EXIT=0, `npm run check` EXIT=0 (0 errors, 0 warnings), `npm test` EXIT=0, 10
+  pass, 0 fail. The API refuses with 401 `42501` "permission denied", not 404.
+  The state route now reads `runs`: an unknown code returns 404 through the
+  secret key. The success path is untested until a run can exist (needs a host
+  and a deck).
+  Changed from the original ARCHITECTURE §5 (now updated to match): `tallies`
+  and `quotas` are keyed by `run_id` as well, because a deck shown twice would otherwise share its
+  counts. `item_id` columns reference `deck_items`, and `runs(deck_id)`,
+  `responses(run_id)` and `moderation(run_id)` are indexed so cascading
+  deletes use an index.
 
 - [ ] **S2b. Keep-alive before the first real workshop.** Supabase free projects
   pause after 7 days without activity, and workshops are fortnightly. The repo
@@ -188,5 +205,10 @@ polling. If it does not, the delivery design changes and every later slice with 
   adapter-vercel has an `isr` route option. Unverified whether it works on a
   `+server.ts` GET with a 1-second expiry. Worth trying only if the budget gets
   tight.
+- **`pg_cron` is not enabled** on the London database (checked 2026-09-29, S2).
+  S8's hourly clean-up needs it switched on first.
+- **The database A4 test takes about 33s**: every table × 2 roles × 5
+  statements, each a round trip to London. Fine for now; batch the probes if
+  the suite gets slow.
 - **The state route logs `STATE_FN_CALL` on every call.** It's there so load
   runs can be counted. Remove it once the delivery design is settled.

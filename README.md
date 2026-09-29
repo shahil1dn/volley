@@ -15,7 +15,8 @@ npm run dev
 
 ## Database
 
-Tables and permissions live in `db/schema.sql`. Apply (safe to re-run):
+Migrations live in `db/migrations/` and apply in filename order. Each is
+recorded in `schema_migrations`, so re-running applies only new ones:
 
 ```bash
 node --env-file=.env.local scripts/migrate.mjs

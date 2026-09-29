@@ -173,16 +173,16 @@ erDiagram
     timestamptz received_at "server clock"
   }
   tallies {
+    uuid run_id PK "FK: a deck shown twice keeps separate counts"
     uuid item_id PK
     text key PK "word or option"
-    uuid run_id FK
     int count
     bool hidden
   }
   quotas {
+    uuid run_id PK "FK"
     uuid item_id PK
     uuid participant_id PK
-    uuid run_id FK
     int used
   }
   moderation {
@@ -315,7 +315,7 @@ an index.
 
 | Request | Database call | Rows touched | Index |
 |---|---|---|---|
-| Phone or projector reads state | `get_state(code)` on cache miss only | 1 run, 1 item, ≤100 tallies, ≤10 players | `runs(code)` unique, `tallies(item_id, count desc)`, `players(run_id, score desc)` |
+| Phone or projector reads state | `get_state(code)` on cache miss only | 1 run, 1 item, ≤100 tallies, ≤10 players | `runs(code)` unique, `tallies(run_id, item_id, count desc)`, `players(run_id, score desc)` |
 | Phone sends an answer | `submit_answer(...)` | 1 rate row, 1 response, 1 quota, 1 tally, 1 run | primary keys, `responses(participant_id, submit_id)` unique |
 | Phone joins | none (token signed by the server) | 0 | – |
 | Host action (open, next, hide, end) | one function per action | 1 run, plus the item's tallies for hide | primary keys |
