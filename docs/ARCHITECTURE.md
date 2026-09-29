@@ -51,7 +51,7 @@ flowchart TD
   D --> E{"Current activity<br/>open?"}
   E -- no --> D
   E -- yes --> F{"Quiz?"}
-  F -- yes --> G["Optional nickname,<br/>countdown on server time"]
+  F -- yes --> G["Nickname (quiz runs only, required),<br/>countdown on server time"]
   F -- no --> H["Answer form"]
   G --> H
   H --> I["Submit with one-time id"]
