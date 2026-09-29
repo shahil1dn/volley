@@ -165,7 +165,11 @@ a second when polling every 1s (run A).
   With the old single header, a browser with no CDN in front served every state
   one poll late (proven; see volley-plan.md, S7). The CDN directives are
   unchanged, but S1 measured the old header, so the rate is re-measured on the
-  next preview.
+  next preview. **Re-measured the same day (run C, `scripts/load/run-C.json`):**
+  200 phones polling every 3s for 120s → 8,000 × HTTP 200, HIT 4,319 / STALE
+  3,623 / MISS 58, 848 function calls = **7.07 a second** (median 7, max 14),
+  against run B's 6.9. The split leaves the CDN's behaviour unchanged and within
+  this budget.
 
 ## ADR-005: Host sessions are our own signed cookie, not Supabase's (2026-09-29)
 

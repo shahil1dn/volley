@@ -1,0 +1,25 @@
+{
+  "code": "3Z9CD",
+  "base": "https://aib-live-qtah4qm7i-ldnshahil-1083s-projects.vercel.app",
+  "phones": 200,
+  "joinFailures": 0,
+  "answersSent": 600,
+  "burstSeconds": 15.1,
+  "byStatus": {
+    "ok": 600
+  },
+  "byHttp": {
+    "200": 600
+  },
+  "networkErrors": {},
+  "serverErrors": 0,
+  "stored": {
+    "responses": 600,
+    "tallied": 600
+  },
+  "latencyMs": {
+    "p50": 6692,
+    "p95": 9855,
+    "max": 10576
+  }
+}

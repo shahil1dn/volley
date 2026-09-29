@@ -2,22 +2,18 @@
 // Seeds a throwaway room, polls it from many simulated clients, deletes the room.
 //   node --env-file=.env.local scripts/load/poll.mjs <deployment-url> [clients] [seconds] [poll-every-seconds] [run-name]
 // The summary is written to scripts/load/run-<run-name>.json.
-import { createHash, randomBytes, randomInt } from 'node:crypto';
+import { randomInt } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
-import { createClient } from '@supabase/supabase-js';
+import { connectAsOwner } from '../pg-connect.ts';
+import { makeRun } from '../../tests/db-helpers.ts';
 
 const [baseUrl, clientsArg = '200', secondsArg = '120', intervalArg = '1', runName = 'last'] = process.argv.slice(2);
 if (!baseUrl?.startsWith('https://')) throw new Error('Pass the deployment URL, starting https://');
 const clients = Number(clientsArg);
 const seconds = Number(secondsArg);
 const intervalMs = Number(intervalArg) * 1000;
-const { SUPABASE_URL, SUPABASE_SECRET_KEY, VERCEL_AUTOMATION_BYPASS_SECRET } = process.env;
-if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) throw new Error('Run with --env-file=.env.local');
+const { VERCEL_AUTOMATION_BYPASS_SECRET } = process.env;
 if (!VERCEL_AUTOMATION_BYPASS_SECRET) throw new Error('VERCEL_AUTOMATION_BYPASS_SECRET is not set');
-
-const db = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, { auth: { persistSession: false } });
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const code = Array.from({ length: 5 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join('');
 
 const tally = (map, key) => map.set(key, (map.get(key) ?? 0) + 1);
 const percentile = (sorted, p) => sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))];
@@ -51,12 +47,11 @@ async function pollAsOneClient(url, startAt, endAt, results) {
 	}
 }
 
-const { error: seedError } = await db.from('sessions').insert({
-	code,
-	question: 'S1 load test (throwaway)',
-	host_token_hash: createHash('sha256').update(randomBytes(24)).digest('hex'),
-});
-if (seedError) throw new Error(`Could not seed the test room: ${seedError.message}`);
+// A live room with its word cloud open, as the state route now reads it (S4).
+const db = await connectAsOwner();
+const room = await makeRun(db, { settings: { prompt: 'Poll test (throwaway)' } });
+const code = room.code;
+const startedAt = new Date();
 
 try {
 	const url = `${baseUrl.replace(/\/$/, '')}/api/r/${code}/state`;
@@ -100,6 +95,8 @@ try {
 	await writeFile(new URL(`./run-${runName}.json`, import.meta.url), JSON.stringify(summary, null, 2));
 	console.log(JSON.stringify(summary, null, 2));
 } finally {
-	const { error: deleteError } = await db.from('sessions').delete().eq('code', code);
-	console.log(deleteError ? `CLEANUP FAILED for room ${code}: ${deleteError.message}` : `Room ${code} deleted.`);
+	await db.query('delete from auth.users where id = $1', [room.userId]);
+	await db.query(`delete from public.rate_limits where key = $1`, [`run:${room.runId}`]);
+	await db.end();
+	console.log(`Room ${code} deleted (started ${startedAt.toISOString()}).`);
 }

@@ -222,8 +222,15 @@ polling. If it does not, the delivery design changes and every later slice with 
   each turned a test red. Burst dry run, local dev server, 50 phones × 3 words
   in 5.3s: 150 of 150 ok, 150 stored and tallied, 0 errors, p50 129 ms, p95 251
   ms, max 427 ms (`scripts/load/burst-dryrun-local.json`).
-  Follow-up: the burst run against a Vercel preview (200 phones), once
-  `PARTICIPANT_SECRET` and `HOST_SESSION_SECRET` are in the Preview env.
+  *Preview burst, 2026-09-29* (protected preview `aib-live-qtah4qm7i…`,
+  built from `c607b0e` plus a temporary `STATE_FN_CALL` line, never
+  committed; the build succeeded with both secrets; `aib-live.vercel.app`
+  still 404): `burst.mjs … 200 preview-200`, 200 phones × 3 words →
+  **600 of 600 ok (HTTP 200), 600 stored = 600 tallied, 0 5xx, 0 network
+  errors, 0 rate-limited.** The per-run cap (600/10s) was not hit.
+  **Slow: p50 6.7 s, p95 9.9 s, max 10.6 s**, and answers meant to arrive over
+  5s took 15.1s (`scripts/load/burst-preview-200.json`). Not yet explained;
+  see "Found along the way".
 
 - [ ] **S8. Retention and export.** Hourly `pg_cron` job; CSV and PNG export
   before deletion.
@@ -393,6 +400,18 @@ live, which must happen before the first real workshop anyway.
   public, max-age=0, must-revalidate` goes to browsers. **Re-measure the
   function-call rate on the next preview** (S1's `poll.mjs`), since S1 measured
   the old header.
+- **A 200-phone burst is correct but slow on the preview (open question).**
+  Every answer was stored once, but the median answer took 6.7s. The laptop's
+  network isn't the cause: poll run C from the same laptop on the same
+  campus Wi-Fi had a p50 of 38 ms. Leading hypothesis, unproven: all answers
+  to one room queue up in the database, because each one updates the same
+  per-run counter row and `runs.version`, and the same per-IP row (the load
+  script sends from one IP, as a real campus room does) and holds those row
+  locks until it commits. Vercel's request logs have no timing field, so they
+  can't settle it. Next step, with the owner's OK: time 600 `submit_answer`
+  calls straight against the database from about 10 connections, (a) as now,
+  (b) with a separate IP per phone, (c) with the version bump and counters
+  moved to the end. Then decide whether to change the design.
 - **Deferred design, found in S7's screenshots:** (1) when every word is tied,
   all of them take the accent colour ("most popular" is true for every word);
   (2) the projector's answer count sums the top 100 visible words, so it
