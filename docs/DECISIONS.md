@@ -109,3 +109,29 @@ Refines ADR-001 after the owner set the real scale and goals.
 **Added to must-verify:** whether Vercel's deploy button can provision the
 Supabase integration; whether pg_cron (for the 24-hour deletion) is available on
 the Supabase free plan.
+
+## ADR-003: Name, host sign-in and polling everywhere (2026-09-30)
+
+- **Name: Volley.** Rapid back-and-forth between host and room. Plain-word
+  names are all taken on npm and `.app`; neither matters, since Volley is an app
+  people deploy rather than a package they install, and each copy lives at its
+  own address. Repository lives under the owner's GitHub account.
+- **Host sign-in: password, accounts created only by `npm run add-host`.**
+  Supabase's built-in email sender sends 2 emails an hour and only to the
+  project's own team (supabase.com/docs/guides/auth/rate-limits,
+  .../auth-smtp), so email links would force every self-hoster to set up a mail
+  service. The command creates the account directly with the secret key; there is
+  no public sign-up and no email is ever sent. Supersedes the magic-link host
+  sign-in in ADR-001.
+- **No live connections at all; everything polls one shared, cached state.**
+  Found while designing the queries: if the state response is identical for every
+  device and personal data stays on the phone, Vercel's edge cache answers all
+  devices with about one function call a second per run. The projector can then
+  poll too (every 1s), so Supabase Realtime is no longer needed. That removes the
+  200-connection ceiling, the Broadcast quota and a moving part for self-hosters,
+  at the cost of results arriving within about 2 seconds instead of instantly.
+  Supersedes the projector Broadcast in ADR-001 and ADR-002. Whether the cache
+  behaves as assumed is proven by the spec's load test (A10).
+- **Data model split into decks and runs.** Decks (host content) are kept; runs
+  (one live showing, with every participant answer) are deleted 24 hours after
+  ending. Tallies are maintained on write so reads never count raw answers.
