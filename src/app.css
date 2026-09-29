@@ -62,3 +62,60 @@ p { margin: 0; }
 .phone h1 { font-size: clamp(26px, 7vw, 40px); margin: 14px 0 12px; }
 .stack { display: grid; gap: 14px; margin-top: 28px; }
 .phone__foot { margin-top: 28px; }
+
+.btn--quiet { background: var(--paper); color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+h2 { font-family: var(--font-body); font-size: 18px; font-weight: 600; color: var(--ink); margin: 32px 0 12px; }
+
+/* ---------- projector (ported from the prototype) ---------- */
+/* Built for a projector: the question and the way in stay fixed at the top,
+   and the cloud takes every pixel left over. Locked to the screen, because a
+   projector can't scroll. */
+.host {
+  height: 100svh; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr);
+  padding: clamp(20px, 3vw, 48px); gap: clamp(16px, 2vw, 32px);
+}
+.host__top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 24px 32px; }
+.host__question { font-size: clamp(32px, 4.4vw, 72px); max-width: 22ch; margin-top: 12px; }
+.host__join {
+  flex: none; display: flex; align-items: center; gap: 18px;
+  padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-input);
+}
+/* Sized for the back of a lecture theatre, not a laptop. */
+.host__qr { width: clamp(120px, 11vw, 240px); line-height: 0; }
+.host__qr svg { display: block; width: 100%; height: auto; }
+.host__joinText { font-size: clamp(16px, 1.3vw, 24px); color: var(--smoke); }
+.host__url { font-size: clamp(18px, 1.7vw, 32px); color: var(--ink); font-weight: 500; }
+.host__code { font-size: clamp(32px, 3.2vw, 60px); font-weight: 600; letter-spacing: 0.12em; color: var(--accent); }
+.host__count { font-size: clamp(16px, 1.3vw, 24px); color: var(--ink); font-weight: 500; }
+
+.cloud {
+  min-height: 0; overflow: hidden;
+  display: flex; flex-wrap: wrap; justify-content: center; align-content: center; align-items: center;
+  gap: 0.2em 0.55em; padding: 2vw; list-style: none; margin: 0;
+}
+.cloud__word {
+  font-family: var(--font-body); font-weight: 600; line-height: 1.05; color: var(--ink);
+  /* Sizes are set per word and shrunk together by --fit. No transition on
+     font-size: the fit measures the final size straight away. */
+  max-width: 100%; overflow-wrap: anywhere;
+  animation: pop 420ms ease both;
+}
+/* The most popular answer takes the accent; the rest alternate by word, so a
+   word keeps its colour as the cloud reshuffles around it. */
+.cloud__word--top { color: var(--accent); }
+.cloud__word--quiet { color: var(--smoke); }
+.cloud__empty { place-self: center; text-align: center; color: var(--smoke); font-size: clamp(18px, 1.6vw, 26px); }
+@keyframes pop { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .cloud__word { animation: none; }
+}
+
+/* ---------- host control ---------- */
+.control { max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
+.control h1 { font-size: clamp(26px, 5vw, 40px); margin: 14px 0 12px; }
+.control .hint { margin-top: 8px; }
+.control__actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+.control__words { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.control__words li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); color: var(--ink); }
+.control__words .btn { padding: 8px 18px; }
+.control__word--hidden > span { text-decoration: line-through; color: var(--smoke); }

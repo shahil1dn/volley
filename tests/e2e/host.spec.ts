@@ -1,14 +1,13 @@
 // S6: host sign-in, the host guard (A6) and the httpOnly session (A7). Makes
 // real Supabase Auth users for the run and deletes them in afterAll.
-import { spawnSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import type pg from 'pg';
 import { connectAsOwner } from '../../scripts/pg-connect.ts';
 import { makeHostSession } from '../../src/lib/server/host-session.ts';
+import { addHost, BASE, signIn } from './helpers.ts';
 
-const BASE = 'http://localhost:5174';
 const HOST_API = '/api/r/ABCDE/host';
 const admin = createClient(process.env.SUPABASE_URL ?? '', process.env.SUPABASE_SECRET_KEY ?? '', {
 	auth: { persistSession: false, autoRefreshToken: false },
@@ -22,19 +21,6 @@ let firstPassword = '';
 let hostPassword = '';
 let nonHostId = '';
 const suiteStart = new Date();
-
-function addHost(email: string): { output: string; password: string } {
-	const run = spawnSync('node', ['--env-file=.env.local', 'scripts/add-host.mjs', email], { encoding: 'utf8' });
-	if (run.status !== 0) throw new Error(`add-host failed: ${run.stderr}`);
-	return { output: run.stdout, password: /Password: (\S+)/.exec(run.stdout)?.[1] ?? '' };
-}
-
-async function signIn(page: Page, email: string, password: string) {
-	await page.goto('/');
-	await page.getByLabel('Email').fill(email);
-	await page.getByLabel('Password').fill(password);
-	await page.getByRole('button', { name: 'Sign in' }).click();
-}
 
 async function hostCookie(page: Page) {
 	return (await page.context().cookies(BASE)).find((cookie) => cookie.name === 'volley_host');
