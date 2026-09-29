@@ -146,7 +146,7 @@ Each check fails if the behaviour is missing.
 | A3 | DB test: the same `submit_id` sent twice stores one row and returns the same result both times. |
 | A4 | Permission probe with the public key: cannot select, insert, update or delete on any table. |
 | A5 | Unit tests: word normalising and ordering, poll tally, quiz speed bands; each shown to fail when the logic is broken. |
-| A6 | A host route called without a host cookie, or with a non-host account, returns 403. `add-host` is the only way to create a host. |
+| A6 | A host route called without a host session sends a page to sign-in and answers an API with 401; with a non-host account it returns 403. `add-host` is the only way to create a host. |
 | A7 | The host cookie is `httpOnly`: `document.cookie` in the browser does not contain it. |
 | A8 | Browser test: 3 phones answer; the projector shows the result within 3s without reload. Hide removes it from the projector within 3s. |
 | A9 | Browser test: the quiz state never contains the correct answer before reveal; an answer after close is refused. |

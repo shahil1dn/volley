@@ -10,11 +10,23 @@ SvelteKit on Vercel (London), Supabase for the database.
 ```bash
 vercel env pull .env.local --yes
 echo "PARTICIPANT_SECRET=\"$(openssl rand -base64 48)\"" >> .env.local
+echo "HOST_SESSION_SECRET=\"$(openssl rand -base64 48)\"" >> .env.local
 npm install
 npm run dev
 ```
 
-`PARTICIPANT_SECRET` signs each phone's participant cookie. Keep it out of git.
+`PARTICIPANT_SECRET` signs each phone's participant cookie and
+`HOST_SESSION_SECRET` signs host sessions. Keep both out of git.
+
+## Hosts
+
+Hosts sign in at `/`. The only way to make one (or reset their password):
+
+```bash
+npm run add-host someone@example.com
+```
+
+It prints a new password once; pass it to the host.
 
 ## Database
 

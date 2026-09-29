@@ -159,3 +159,40 @@ a second when polling every 1s (run A).
   `+server.ts` GET with a 1-second expiry.
 - Supersedes ADR-003's "about one function call a second per run". Polling
   everywhere, with no live connections, stands.
+
+## ADR-005: Host sessions are our own signed cookie, not Supabase's (2026-09-29)
+
+Host sign-in (S6) checks the password with Supabase Auth, then issues Volley's
+own session cookie. It doesn't use `@supabase/ssr`'s cookie sessions.
+
+- **Why not `@supabase/ssr`.** Its cookies are written with `httpOnly: false`
+  by default, "so browser JavaScript can read the token cookies" (its
+  DEFAULT_COOKIE_OPTIONS), and Supabase's SvelteKit guide copies those options
+  onto every cookie. That breaks A7. They can be forced to httpOnly, but they
+  would still put Supabase's access and refresh tokens (valid 400 days by
+  default) in the browser, and need refresh-token handling on every request.
+- **What we do.** The sign-in action checks the password with `supabase-js`
+  (`signInWithPassword` on a throwaway server-side client), revokes the
+  Supabase session it gets back straight away, then sets `volley_host`:
+  `<user id>.<expiry>.<HMAC-SHA256>`, signed with `HOST_SESSION_SECRET`,
+  httpOnly, SameSite=Lax, Secure (SvelteKit's default outside
+  http://localhost), Path=/, lasting 12 hours. The same pattern as the
+  participant token (S5), with its own secret, so a leaked participant secret
+  can't forge a host session.
+- **Being a host is checked every time.** A valid cookie only proves the
+  password was checked. `hooks.server.ts` also looks the user up in `hosts` on
+  every host page and API, so removing a host takes effect at once. A
+  confirmed Supabase account with no `hosts` row gets 403 (tested). Host paths:
+  `/decks…`, `/run/[code]/control…`, `/api/host…`, `/api/r/[code]/host…`.
+  Signed out: pages redirect to `/`, APIs answer 401. Not a host: 403.
+- **Brute force.** `allow_sign_in` counts every attempt per hashed IP (30 per
+  15 min) and per hashed email (10 per 15 min) before the password is checked.
+- **Accepted costs.** A session can't be ended early except by signing out, by
+  removing the host, or by rotating `HOST_SESSION_SECRET`. A host request makes
+  one `hosts` lookup before its own work; later host actions can fold that check
+  into their database function so each request still makes one call.
+- **Path=/** because host routes are spread across the app (SPEC's route table),
+  so the cookie also goes along on the cached state route when a host's
+  projector polls it. The state route ignores cookies, and Vercel's documented
+  cache rules don't exclude requests that carry one. Whether the cache
+  still holds with the cookie present gets checked at S7's deploy.

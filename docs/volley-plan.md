@@ -166,11 +166,32 @@ polling. If it does not, the delivery design changes and every later slice with 
   once); network errors and 5xx are retried with the same submit id after 1s and
   2.5s. The IP is hashed with HMAC under `PARTICIPANT_SECRET`, not bare SHA-256.
 
-- [ ] **S6. Host sign-in.** `npm run add-host <email>` creates the account;
+- [x] **S6. Host sign-in.** `npm run add-host <email>` creates the account;
   password sign-in with an `httpOnly` cookie session; every host route guarded.
   Check the current Supabase + SvelteKit auth guide first (must-verify 3).
   *verify:* A6 (403 without a host session, or as a non-host), A7
   (`document.cookie` does not contain the session).
+  *done:* ADR-005 (our own signed httpOnly session; `@supabase/ssr` rejected
+  because its cookies default to non-httpOnly). `scripts/add-host.mjs`,
+  `src/hooks.server.ts`, `src/lib/server/host-guard.ts`,
+  `src/lib/server/host-session.ts`, `db/migrations/0005_sign_in_limits.sql`.
+  Receipts: migrate run 1 EXIT=0 "Applied 0004_campus_ip_limit.sql, Applied
+  0005_sign_in_limits.sql"; run 2 EXIT=0 "Up to date"; `npm test` EXIT=0, 45
+  pass; `npm run test:e2e` EXIT=0, 11 passed; `npm run check` EXIT=0; `npm run
+  build` EXIT=0. Browser tests: add-host creates a host and a second run resets
+  the password (the old one then fails); sign in, see `/decks`, sign out;
+  `document.cookie` lacks the session, which is httpOnly, Lax, Path=/ and ~12h
+  (A7); a confirmed non-host can't sign in, and a valid session for it gets 403
+  on `/decks` and on host APIs (A6); no session: pages redirect to `/`, APIs 401;
+  the 11th attempt for one email is refused. Mutation check: letting non-hosts
+  through, a non-httpOnly cookie, skipping the sign-in limit and ignoring expiry
+  each turned a test red. Test accounts were deleted (checked: 0 left).
+  A6 as built: signed out, pages redirect to sign-in and APIs answer 401; not a
+  host, 403. SPEC A6 is updated to match.
+  Also in this slice, **migration 0004 raises the per-IP answer cap from 300 to
+  2,000 per 10s**: a 200-person room on one campus IP sends ~600 answers at
+  once. Test written first: 600 answers from 200 participants on one IP in one
+  window, only 300 accepted before the change, all 600 after.
 
 - [ ] **S7. Projector and host control for a word cloud.** Start a run from a
   hard-coded one-item deck; projector at `/run/[code]` polls every second and fits
@@ -305,5 +326,26 @@ live, which must happen before the first real workshop anyway.
   `~/Library/Caches/ms-playwright`.** Installing it removed two older cached
   builds (`chromium_headless_shell-1228`, `webkit-2272`), which Playwright does
   for builds it considers unused.
+- **Owner action: turn off public sign-up in Supabase.** The public settings
+  endpoint (`GET /auth/v1/settings` with the publishable key, no management
+  token needed) shows `disable_signup: false`: anyone can create a Supabase
+  account (email confirmation is required). The guard makes such an account
+  useless (tested), but switch it off: Supabase dashboard → the project →
+  Authentication → Sign In / Providers → turn off "Allow new users to sign up"
+  → Save (label as best known; not confirmed in the docs). For M4's
+  `npm run doctor`: fail if that endpoint reports `disable_signup: false`.
+- **`HOST_SESSION_SECRET` joins `PARTICIPANT_SECRET` as a deploy blocker.** Both
+  are read through `$env/static/private`, so a Vercel build fails until both are
+  added there (owner's OK).
+- **Test files run one at a time** (`--test-concurrency=1`). Supabase's
+  connection pooler (session mode) allows 15 clients, not the database's 60;
+  test files running in parallel alongside the 10-phone test went over it.
+- **Page start-up wiped typed text.** An input with `value={...}` is reset when
+  the page finishes loading, so an email typed on a slow connection before then
+  was lost (reproduced on a cold dev server). The sign-in form uses
+  `defaultValue`. Use `defaultValue` or `bind:value` for any pre-filled input.
+- **The per-run answer cap is now the tighter one**: 600 per 10s is exactly 200
+  people × 3 words. A bigger room answering all at once would see some
+  "Lots of answers are arriving" messages; the phone keeps the answer to resend.
 - **`ANALYZE` after a rolled-back seed**: the A11 test re-runs `ANALYZE` after
   its rollback, because Postgres's row estimates survive a rollback.

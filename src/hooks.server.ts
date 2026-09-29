@@ -1,0 +1,24 @@
+import type { Handle } from '@sveltejs/kit';
+import { currentHost } from '$lib/server/host-guard';
+import { hostArea } from '$lib/server/host-session';
+
+// The one place hosts are checked (A6). Runs before routing, so a host path is
+// guarded even before its route exists.
+export const handle: Handle = async ({ event, resolve }) => {
+	const area = hostArea(event.url.pathname);
+	if (!area) return resolve(event);
+
+	const host = await currentHost(event.cookies);
+	if (host === 'signed_out') {
+		return area === 'api'
+			? Response.json({ status: 'signed_out' }, { status: 401 })
+			: new Response(null, { status: 303, headers: { location: '/' } });
+	}
+	if (host === 'not_host') {
+		return area === 'api'
+			? Response.json({ status: 'not_host' }, { status: 403 })
+			: new Response("This account isn't a host on this Volley.", { status: 403, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+	}
+	event.locals.host = host;
+	return resolve(event);
+};

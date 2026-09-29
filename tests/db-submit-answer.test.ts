@@ -162,15 +162,37 @@ test('words are stored in the same normalised form the phone uses', { skip }, as
 	});
 });
 
+test('a full lecture theatre sharing one campus IP is never rate-limited', { skip }, async () => {
+	await inRolledBackTransaction(db, async () => {
+		const run = await makeRun(db);
+		// 200 students on eduroam, 3 words each, all inside one 10-second window
+		// (now() is fixed for the transaction), from one public IP.
+		const { rows } = await db.query(
+			`select result ->> 'status' as status, count(*)::int as n
+			 from (
+				select public.submit_answer($1, p.id, gen_random_uuid(), 'word ' || k, 'campus-ip') as result
+				from (select gen_random_uuid() as id from generate_series(1, 200)) p
+				cross join generate_series(1, 3) k
+			 ) submits
+			 group by 1`,
+			[run.code],
+		);
+		assert.deepEqual(rows, [{ status: 'ok', n: 600 }]);
+	});
+});
+
 test('rate limits trip per IP and per run, and refusals still count', { skip }, async () => {
 	await inRolledBackTransaction(db, async () => {
 		const run = await makeRun(db);
-		await seedRateLimit('ip:flooder', 300);
+		// The per-IP cap is 2,000 a window: the 2,000th is let through, the next refused.
+		await seedRateLimit('ip:flooder', 1999);
+		assert.equal((await submit(db, run.code, randomUUID(), randomUUID(), 'word', 'flooder')).status, 'ok');
 		assert.equal((await submit(db, run.code, randomUUID(), randomUUID(), 'word', 'flooder')).status, 'rate_limited');
 
-		await seedRateLimit(`run:${run.runId}`, 600);
-		assert.equal((await submit(db, run.code, randomUUID(), randomUUID(), 'word', 'another-ip')).status, 'rate_limited');
-		assert.equal(await count('select count(*) from public.responses where run_id = $1', [run.runId]), 0);
+		const busyRoom = await makeRun(db);
+		await seedRateLimit(`run:${busyRoom.runId}`, 600);
+		assert.equal((await submit(db, busyRoom.code, randomUUID(), randomUUID(), 'word', 'another-ip')).status, 'rate_limited');
+		assert.equal(await count('select count(*) from public.responses where run_id = $1', [busyRoom.runId]), 0);
 
 		// A submit refused for its quota still used up rate-limit budget.
 		const other = await makeRun(db, { settings: { answersPerPerson: 1 } });
