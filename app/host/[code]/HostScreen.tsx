@@ -1,22 +1,39 @@
 'use client';
 
 import QRCode from 'qrcode';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { browserClient } from '@/lib/supabase-browser';
 import { centreOut, countWords } from '@/lib/words';
 
 type Props = { sessionId: string; code: string; question: string };
 type WordRow = { id: number; text: string };
 
-// All readable on white at display sizes. Picked by the word itself, so a
-// word keeps its colour when the cloud reshuffles around it.
-const PALETTE = ['#4a2352', '#1e1622', '#3a5bb8', '#8e3a68', '#5f5666'];
+// The society's plum marks the most popular answer; everything else is ink
+// or grey, picked by the word itself so it keeps its colour as the cloud
+// reshuffles around it.
+const TOP_COLOUR = '#4a2352';
+const OTHER_COLOURS = ['#1e1622', '#5f5666'];
 
 // Many distinct words need smaller type to fit one screen.
 function largestSizeVw(distinctWords: number) {
   return Math.max(3.5, 8 - distinctWords * 0.08);
 }
 const SMALLEST_SIZE_VW = 1.4;
+// Each shrink step, and the floor below which words would be unreadable anyway.
+const FIT_STEP = 0.9;
+const MIN_FIT = 0.2;
+
+// Shrinks every word together until the cloud fits its box. Done on the DOM
+// directly, before paint, so the room never sees a frame that overflows.
+function fitToBox(cloud: HTMLElement) {
+  let fit = 1;
+  cloud.style.setProperty('--fit', String(fit));
+  const overflows = () => cloud.scrollHeight > cloud.clientHeight || cloud.scrollWidth > cloud.clientWidth;
+  while (overflows() && fit > MIN_FIT) {
+    fit *= FIT_STEP;
+    cloud.style.setProperty('--fit', String(fit));
+  }
+}
 
 export default function HostScreen({ sessionId, code, question }: Props) {
   // Keyed by row id, so a word that arrives both live and in the first load
@@ -66,6 +83,16 @@ export default function HostScreen({ sessionId, code, question }: Props) {
   }, [sessionId]);
 
   const counts = useMemo(() => countWords([...words.values()]), [words]);
+  const cloudRef = useRef<HTMLUListElement>(null);
+
+  useLayoutEffect(() => {
+    const cloud = cloudRef.current;
+    if (!cloud) return;
+    fitToBox(cloud);
+    const observer = new ResizeObserver(() => fitToBox(cloud));
+    observer.observe(cloud);
+    return () => observer.disconnect();
+  }, [counts]);
   const biggest = counts[0]?.count ?? 1;
   const largest = largestSizeVw(counts.length);
 
@@ -103,12 +130,12 @@ export default function HostScreen({ sessionId, code, question }: Props) {
       {counts.length === 0 ? (
         <p className="cloud__empty">Answers will appear here as they come in.</p>
       ) : (
-        <ul className="cloud" aria-label="Word cloud">
+        <ul className="cloud" aria-label="Word cloud" ref={cloudRef}>
           {centreOut(counts).map(({ text, count }) => {
             const share = Math.sqrt(count / biggest);
             const style = {
-              fontSize: `${SMALLEST_SIZE_VW + (largest - SMALLEST_SIZE_VW) * share}vw`,
-              color: PALETTE[text.length % PALETTE.length],
+              fontSize: `calc(var(--fit, 1) * ${SMALLEST_SIZE_VW + (largest - SMALLEST_SIZE_VW) * share}vw)`,
+              color: count === biggest ? TOP_COLOUR : OTHER_COLOURS[text.length % OTHER_COLOURS.length],
             };
             return (
               <li key={text} className="cloud__word" style={style}>
