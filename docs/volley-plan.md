@@ -533,11 +533,10 @@ The first release ships word cloud and poll only (ADR-007, 2026-09-30).
 - **The phone keeps a chosen poll option when the question changes.** Only
   matters once decks have two polls in a row (Milestone 3); nothing is sent
   until Vote is pressed.
-- **Drop `start_test_run` and `start_test_poll` after the next deploy.** The
-  app now starts sessions with `start_session`, but the deployed production
-  build still calls the old two, so 0010 kept them. Once a deploy lands, a
-  migration drops them and `tests/db-host-control.test.ts` and
-  `tests/db-poll.test.ts` move to `start_session`.
+- **Dropped `start_test_run` and `start_test_poll`** (0011, 2026-09-30):
+  after the production deploy stopped calling them. Applied to the test
+  database, then to production with the owner's approval; their tests now
+  start sessions.
 - **The projector's Q&A count tops out at 40**, because it counts the shared
   state's list, which is capped. Fine for a workshop; a true count would need
   one more field in the state.
