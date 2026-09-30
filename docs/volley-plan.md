@@ -282,6 +282,27 @@ live, which must happen before the first real workshop anyway.
   production deploy.
   *verify:* the route refuses a call without the secret; after deploying, the
   cron's run shows in the logs with a 200.
+  *done except the first real run (2026-09-30):* `GET /api/cron/keep-alive`
+  runs `select 1` when the header matches `CRON_SECRET` (constant-time, and an
+  unset or short secret refuses everything); cron `0 9 * * *` in `vercel.json`.
+  The secret is read at runtime so Preview builds, which have no
+  `CRON_SECRET`, still succeed. Proof: `tests/cron-auth.test.ts` and
+  `tests/e2e/cron.spec.ts` (no secret 401, wrong secret 401, right secret 200),
+  each mutation-checked. **Not yet seen:** a scheduled run with a 200 in the
+  logs; the first is due between 09:00 and 09:59 UTC.
+- [x] **Production env vars.** `PARTICIPANT_SECRET`, `HOST_SESSION_SECRET` and
+  `CRON_SECRET` added to Production only, freshly generated, type sensitive,
+  through the REST API (owner-approved, 2026-09-30). The database and Supabase
+  variables were already on Production.
+- [x] **Public production.** Vercel Authentication now protects preview
+  deployments only (`ssoProtection.deploymentType: "preview"`), so production
+  and the cron's target address are reachable while previews stay locked. First
+  production deploy from the CLI (owner-approved), `dpl_7C6TQiUdakZkQQnyNabDsX4SA38V`;
+  it took `aib-live.vercel.app` on its own, so no `vercel alias set`. Checked
+  on the public address: the sign-in page and `/j/<code>` serve 200; an unknown
+  room's state answers a JSON 404; host pages redirect to sign-in and host APIs
+  answer 401; the keep-alive answers 401 without or with a wrong secret;
+  Supabase still reports `disable_signup: true`; Vercel lists the cron.
 
 ## Milestone 2: poll, then the shared template
 
@@ -458,3 +479,12 @@ The first release ships word cloud and poll only (ADR-007, 2026-09-30).
   their room. A leftover row was found and deleted before this was fixed.
 - **`ANALYZE` after a rolled-back seed**: the A11 test re-runs `ANALYZE` after
   its rollback, because Postgres's row estimates survive a rollback.
+- **The pooler wakes slowly.** After a few idle minutes the first connection to
+  Supabase's transaction pooler took 3.3s (measured 2026-09-30), just over the
+  pool's 3s connect limit; the next ones took ~70ms. The first database call
+  after a quiet spell failed. `src/lib/server/cold-connect.ts` retries that one
+  error once. The live cold case didn't recur when re-tried after 6.5 idle
+  minutes, so the retry is proven by unit and mutation tests only.
+- **`/join` (enter a code) was never built.** SPEC lists it beside `/j/[code]`,
+  but no slice made it, so it answers 404. The projector shows the full join
+  address and the code, and the QR goes to `/j/[code]`.
