@@ -25,6 +25,7 @@ const STATEMENTS = {
 	host_export: 'select public.host_export($1, $2) as result',
 	host_email: 'select email as result from public.hosts where user_id = $1',
 	keep_alive: 'select 1 as result',
+	run_exists: 'select exists (select 1 from public.runs where code = $1) as result',
 } as const;
 
 let pool: pg.Pool | undefined;
