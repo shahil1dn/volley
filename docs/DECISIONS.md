@@ -394,13 +394,24 @@ Supersedes SPEC 1's "hosts are created only by `add-host`".
   path does appear in Vercel's request logs (kept about an hour on Hobby);
   accepted, because the link is single-use and short-lived, and the logs are
   the owner's.
-- **Resets:** an admin can make a reset link for another host. An admin can't
-  reset or remove themselves on the page; the owner's own reset stays
+- **Accepting is claim → set password → finish** (migration 0013). The link is
+  locked and marked used before any password is set, so a link cancelled,
+  expired or used by someone else meanwhile changes nothing; if setting the
+  password fails, the claim is released so the link can be tried again.
+- **A reset ends every older session.** `hosts.sessions_valid_after` moves on a
+  reset, an accepted invite and `add-host`; the guard refuses a session cookie
+  issued before it and clears it. New sessions are stamped no earlier than
+  that time, so a clock difference can't refuse the session a reset just made.
+  Existing hosts started at 1970, so nobody was signed out by the change.
+- **Resets:** an admin can make a reset link for another host, but not for
+  another admin. An admin can't reset or remove themselves, or other admins,
+  on the page; the owner's own reset stays
   `npm run add-host <email>` from the terminal (with the production paste,
   ADR-010), so the owner keeps their password safe.
 - **Removal** deletes the `hosts` row (the guard checks it on every request, so
-  access ends at once; their decks and runs go with it) and then the Auth
-  account, best effort.
+  access ends at once; their decks and runs go with it), their unused links,
+  and then the Auth account, best effort. A reset link for someone no longer a
+  host is dead however they went.
 - **Admins:** a boolean on `hosts`, set by `npm run set-host -- <email> --admin`
   (which also sets `--name` and never touches the password). Only the owner is
   an admin for now; making others admin from the page is left out.

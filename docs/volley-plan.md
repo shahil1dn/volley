@@ -377,32 +377,15 @@ The first release ships word cloud, poll and Q&A (ADR-007, amended by ADR-008, 2
   themself (database); the page's admin gate, signing in after accepting,
   deleting the Auth account, the projector's name (browser): each turned a
   test red. Screenshots in `screenshots/hosts/`.
-  **PAUSED 2026-09-30, mid-review. Do not merge yet.** The 3-reviewer check
-  found real problems, each verified against the code. The first is
-  reproduced by a committed test that fails on purpose ("pressing Cancel on
-  the remove prompt removes nobody"). Fix list, in order:
-  1. Cancel on Remove still removes: `use:enhance` ignores `onsubmit`'s
-     preventDefault (SvelteKit `forms.js` handle_submit). Move the confirm into
-     the enhance callback and call `cancel()`.
-  2. The password is set before the link is claimed: split accept into
-     claim (lock, mark used) → set password → finish (make host); release the
-     claim if setting the password fails.
-  3. `remove_host` leaves that email's unused links alive: delete them; the
-     reset peek/claim refuses when no host exists.
-  4. A new link vanishes after any other button: keep it in local state.
-  5. A reset doesn't end open sessions: add `hosts.sessions_valid_after`
-     (default 1970 for existing hosts), bump it on reset and invite accept and
-     in add-host, and have the guard reject cookies issued before it.
-  6. Admins can reset or remove other admins: refuse targets that are admins.
-  7. Small: the reset name should come from the database, not the hidden field;
-     use the full UUID pattern in remove/cancel; `auth_user_id` adds
-     `and not is_sso_user` (check the column exists first).
-  Do these as migration `0013` (0012 is already on the test database), with a
-  test that fails first for each. Test-review gaps to add: a second reset link
-  replaces the first; cancelling a used link gives not_found; a non-admin can't
-  make a reset link. One reviewer claim is false: removed hosts' rows do go
-  (hosts.user_id cascades from auth.users).
-  **To go live** (each needs the owner's OK): migrate 0012 on production;
+  *Reviewed (code, security, tests) and fixed* in migration `0013` and the
+  app: Remove's Cancel really cancels; links are claimed before any password
+  is set; a reset ends older sessions (and the guard clears the dead cookie,
+  no redirect loop); admins can't reset or remove admins; removal deletes the
+  host's unused links; a new link stays on screen; the reset greeting uses the
+  database's name. Each fix has a test that failed first, and each rule was
+  mutation-checked. One reviewer claim was false: removed hosts' rows do go
+  (`hosts.user_id` cascades from `auth.users`).
+  **To go live** (each needs the owner's OK): migrate 0012 and 0013 on production;
   `npm run set-host -- <owner email> --name "…" --admin` against production;
   merge and deploy.
 - **(b) Milestone 4**, in the order below.
