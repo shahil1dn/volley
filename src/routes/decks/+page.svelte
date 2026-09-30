@@ -27,9 +27,11 @@
 				<legend>Activity {i + 1}</legend>
 				<label class="field">
 					<span class="hint">Activity {i + 1} type</span>
-					<select name="type{i}" value={slot.type}>
-						{#if i > 0}<option value="">None</option>{/if}
-						{#each TYPES as [value, name] (value)}<option {value}>{name}</option>{/each}
+					<!-- `selected` on the option, not `value` on the select: `value` is applied
+					     when the page finishes loading and undid a choice made before then. -->
+					<select name="type{i}">
+						{#if i > 0}<option value="" selected={slot.type === ''}>None</option>{/if}
+						{#each TYPES as [value, name] (value)}<option {value} selected={slot.type === value}>{name}</option>{/each}
 					</select>
 				</label>
 				<label class="field">
