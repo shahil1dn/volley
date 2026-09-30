@@ -27,6 +27,9 @@
 
 	const live = $derived(view?.status === 'live');
 	const ended = $derived(view?.status === 'ended');
+	// Ending leaves the item's own state as it was, but nothing is accepted after
+	// the end (submit_answer checks the status), so say so.
+	const answers = $derived(ended ? 'closed' : view?.itemState);
 	const prompt = $derived(typeof view?.item?.settings.prompt === 'string' ? view.item.settings.prompt : '');
 	// What the projector shows: hidden words stay out of the image too.
 	const visible = $derived((view?.tallies ?? []).filter(([, , hidden]) => !hidden).map(([word, count]): [string, number] => [word, count]));
@@ -94,7 +97,7 @@
 	{:else}
 		<h1>{prompt}</h1>
 		<p class="hint" aria-live="polite">
-			Session: {view.status}. Answers: {view.itemState}. Activity {view.currentPosition + 1} of {view.itemCount}.
+			Session: {view.status}. Answers: {answers}. Activity {view.currentPosition + 1} of {view.itemCount}.
 		</p>
 		<p class="hint">
 			Projector: <a href="/run/{data.code}" target="_blank" rel="noopener">open the projector view</a>. Phones join at
@@ -102,7 +105,7 @@
 		</p>
 
 		<div class="control__actions">
-			{#if view.itemState === 'open'}
+			{#if answers === 'open'}
 				<button class="btn" disabled={busy || ended} onclick={() => act('close')}>Close answers</button>
 			{:else}
 				<button class="btn" disabled={busy || ended || view.status === 'frozen'} onclick={() => act('open')}>Open answers</button>

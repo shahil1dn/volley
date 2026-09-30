@@ -185,7 +185,7 @@ test('S8: after the session ends, the host downloads a CSV matching the tallies 
 	await expect(control.getByRole('button', { name: 'Unhide “a, b”' })).toBeVisible();
 	control.once('dialog', (dialog) => dialog.accept());
 	await control.getByRole('button', { name: 'End session' }).click();
-	await expect(control.getByText('Session: ended.')).toBeVisible();
+	await expect(control.getByText('Session: ended. Answers: closed.'), 'an ended session never reads as open').toBeVisible();
 	await control.screenshot({ path: 'screenshots/s8/control-export.png', fullPage: true });
 
 	const csvDownload = control.waitForEvent('download');
