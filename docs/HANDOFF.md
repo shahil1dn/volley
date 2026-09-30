@@ -81,6 +81,9 @@ After S8 comes **"Going live"**, just before the first real workshop:
   production, migrations included, needs Shahil's OK. `.env.local` holds only
   the test project. `npm test`, the browser tests and `migrate` refuse
   production; `migrate --production` is the deliberate way in.
+- **Previews and Development use the test project; Production alone uses
+  the live one** (ADR-010). Production's Vercel settings are write-only now:
+  a production migration needs the owner to paste the store's snippet.
 - **The test project allows public sign-up** (Supabase's default). Production
   has it off. Nothing deployed uses the test project's keys.
 - **Test commands never pipe a verdict into `tail`.** Redirect to a file and

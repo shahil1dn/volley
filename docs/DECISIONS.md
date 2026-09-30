@@ -360,8 +360,18 @@ Owner decision, taken once the app went public.
   ref. `migrate` refuses production unless given `--production`.
   `tests/production-guard.test.ts` proves each of these, and each was
   mutation-checked.
-- **To migrate production** (with approval): pull its settings into a
-  temporary file (`vercel env pull .env.production.local --environment=production`,
-  untested so far), run
+- **Vercel environments (2026-09-30, owner-approved):** `aib-live-db` is
+  connected to aib-live's **Production only**; `volley-test-db` to **Preview
+  and Development**. So previews and `vercel env pull` can't reach production.
+  The test store names its public settings `NEXT_PUBLIC_…`, so
+  `PUBLIC_SUPABASE_URL` and `PUBLIC_SUPABASE_PUBLISHABLE_KEY` were added by hand
+  to Preview and Development with the test project's values; if that store's
+  keys ever rotate, update these two. Setting the dashboard framework to
+  SvelteKit did not change the names.
+- **Production's settings are write-only.** Moving the connection
+  (disconnect, then reconnect on Production) made them `sensitive`, so they
+  can't be pulled. **To migrate production** (with approval): the owner copies
+  `aib-live-db`'s `.env.local` snippet from the Vercel store page into a
+  git- and deploy-ignored `.env.production.local`, the session runs
   `node --env-file=.env.production.local scripts/migrate.mjs --production`,
-  then delete the file.
+  then deletes the file. Used this way once for a read-only check.
