@@ -375,3 +375,24 @@ Owner decision, taken once the app went public.
   git- and deploy-ignored `.env.production.local`, the session runs
   `node --env-file=.env.production.local scripts/migrate.mjs --production`,
   then deletes the file. Used this way once for a read-only check.
+
+## ADR-011: Name, colours and logo live in one built-in file (2026-09-30)
+
+Milestone 4 step 1, SPEC 26 and A16.
+
+- **One file, `src/lib/brand.ts`:** the name, three colours (accent, ink,
+  paper) and an optional logo path in `static/`. Chosen over environment
+  variables because a copy is a fork of the repository anyway, the settings
+  are typed and reviewed like code, and nothing needs the database or a
+  deploy-time setting. Changing them means a redeploy.
+- **Every other colour is derived** (`src/lib/theme.ts`): the softer greys,
+  lines and fills are mixed from ink and paper, and button text takes
+  whichever of ink or paper reads better on the accent. So three choices
+  can't produce an unreadable pair unnoticed: `tests/brand.test.ts` measures
+  each pair the screens use against WCAG AA and names the one that fails.
+- **The default look is neutral** so a copy's own brand leads: white page,
+  near-black text, a deep teal accent kept to buttons, focus rings, the most
+  popular word and the poll bars; system fonts, so there is nothing to
+  download or license.
+- **The society's fonts (Zarathustra, Switzer) and plum were removed** from
+  the template. They stay in git history for the AI Builders copy.
