@@ -7,7 +7,8 @@ How Volley is put together, drawn out. Decisions behind it are in
 
 Everything runs in London. Phones and the projector never talk to the database
 directly and never hold a live connection: they read one shared, cached state
-response and send answers through the server.
+response and send answers through the server. Production is one Supabase
+project; tests and previews use a second, separate one (ADR-010).
 
 ```mermaid
 flowchart LR
@@ -50,7 +51,7 @@ flowchart TD
   C --> D["Waiting screen<br/>polls shared state every 3s"]
   D --> E{"Current activity<br/>open?"}
   E -- no --> D
-  E -- yes --> H["Answer form<br/>(word cloud or poll; no name asked, ADR-007)"]
+  E -- yes --> H["Answer form<br/>(word cloud, poll, or Q&A: ask and upvote;<br/>no name asked, ADR-007/008)"]
   H --> I["Submit with one-time id"]
   I --> J{"Accepted?"}
   J -- "yes" --> K["'Sent' + answers left<br/>(kept on the phone)"]
@@ -107,7 +108,7 @@ stateDiagram-v2
   [*] --> closed
   closed --> scheduled: host opens (quiz, not in v1)
   scheduled --> open: start time reached (~3s)
-  closed --> open: host opens (word cloud, poll)
+  closed --> open: host opens (word cloud, poll, Q&A)
   open --> closed: host closes
   closed --> revealed: host reveals (quiz answer, results)
   revealed --> [*]
@@ -128,6 +129,8 @@ erDiagram
   runs ||--o{ quotas : "limits via"
   runs ||--o{ moderation : "hides via"
   runs ||--o{ players : "quiz scores (unused in v1, ADR-007)"
+  runs ||--o{ questions : "asked in (Q&A, ADR-008)"
+  questions ||--o{ question_votes : "upvoted by"
 
   hosts {
     uuid user_id PK "= auth.users.id"
@@ -144,7 +147,7 @@ erDiagram
     uuid id PK
     uuid deck_id FK
     int position "unique per deck"
-    text type "word_cloud | poll (quiz: not in v1)"
+    text type "word_cloud | poll | qna (quiz: not in v1)"
     jsonb settings "validated by the activity's schema"
   }
   runs {
@@ -195,6 +198,20 @@ erDiagram
     uuid participant_id PK
     text nickname
     int score
+  }
+  questions {
+    bigint id PK
+    uuid run_id FK
+    uuid item_id FK
+    text text "1-280 chars; who asked is in responses"
+    int votes "kept up to date on write"
+    bool hidden
+    bool answered "out of the main list"
+    timestamptz created_at
+  }
+  question_votes {
+    bigint question_id PK "FK"
+    uuid participant_id PK "one upvote each"
   }
 ```
 
@@ -253,7 +270,7 @@ sequenceDiagram
   P1->>CDN: GET /api/r/{code}/state
   CDN->>Fn: cache miss
   Fn->>Db: get_state(code)
-  Db-->>Fn: {version, item, tallies top 100, serverNow}
+  Db-->>Fn: {version, item, tallies top 100, questions top 40, serverNow}
   Fn-->>CDN: 200, CDN-Cache-Control: s-maxage=1, stale-while-revalidate=60
   CDN-->>P1: state
   P2->>CDN: same URL within the second
@@ -307,7 +324,7 @@ flowchart LR
   B --> C["Run ended<br/>or 24h idle"]
   C --> D["Host exports PNG / CSV<br/>(optional)"]
   C --> E["pg_cron hourly job<br/>deletes run 24h later"]
-  E --> F["Run, responses, tallies,<br/>quotas, players, moderation gone<br/>(one cascade delete)"]
+  E --> F["Run, responses, tallies, quotas,<br/>players, moderation, questions,<br/>votes gone (one cascade delete)"]
   G["Deck"] -. "kept until host deletes it" .-> G
 ```
 
@@ -318,12 +335,13 @@ an index.
 
 | Request | Database call | Rows touched | Index |
 |---|---|---|---|
-| Phone or projector reads state | `get_state(code)` on cache miss only | 1 run, 1 item, ≤100 tallies, ≤10 players | `runs(code)` unique, `tallies(run_id, item_id, count desc, key) where not hidden`, `players(run_id, score desc)` |
+| Phone or projector reads state | `get_state(code)` on cache miss only | 1 run, 1 item, ≤100 tallies, ≤40 questions, ≤10 players | `runs(code)` unique, `tallies(run_id, item_id, count desc, key) where not hidden`, `questions(run_id, item_id, votes desc, created_at, id) where not hidden and not answered`, `players(run_id, score desc)` |
 | Phone sends an answer | `submit_answer(...)` | 1 rate row, 1 response, 1 quota, 1 tally, 1 run | primary keys, `responses(participant_id, submit_id)` unique |
+| Phone upvotes a question, or takes it back | `vote_question(...)` | 1 rate row, 1 vote, 1 question, 1 run | primary keys |
 | Phone joins | none (token signed by the server) | 0 | – |
-| Host action (open, next, hide, end) | one function per action | 1 run, plus the item's tallies for hide | primary keys |
+| Host action (open, next, hide, answered, end) | `host_action(...)` | 1 run, plus the tally or question for hide and answered | primary keys |
 | Host opens decks | `list_decks(host)` | the host's decks | `decks(host_id, updated_at desc)` |
-| Hourly clean-up | `delete from runs where ...` | expired runs, cascading | `runs(ended_at)`, `runs(last_activity_at)` |
+| Hourly clean-up | `purge_expired()` | expired runs, cascading; rate-limit windows over an hour old | `runs(ended_at)`, `runs(last_activity_at)`, `rate_limits(window_start)` |
 
 **One 200-person, 60-minute event, phones polling every 3s.** Measured rows
 come from the load runs in `docs/volley-plan.md` (S1, and run C-direct after
