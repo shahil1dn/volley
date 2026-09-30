@@ -240,6 +240,26 @@ polling. If it does not, the delivery design changes and every later slice with 
   *verify:* A12 (a run ended 25 hours ago is gone with everything under it, one
   ended 23 hours ago is not, the deck survives); the downloaded CSV matches the
   tallies.
+  *built, schedule blocked (2026-09-30):* migration
+  `0007_retention_and_export.sql` (applied): `purge_expired()` deletes runs
+  ended or idle over 24h (everything under them cascades; decks stay) and
+  rate-limit windows over an hour old, with a `window_start` index so the prune
+  is index-served; `host_export` gives every activity's full tallies to the
+  run's own host. `GET /api/r/[code]/host/export` serves them as CSV (UTF-8
+  BOM, CRLF, formulas defused per OWASP). The control view's Export section has
+  the CSV link and a PNG of the cloud, drawn on a canvas with the projector's
+  sizing rule (`wordSizeVw`, now shared) and hidden words left out.
+  **Blocked:** `0008_schedule_retention.sql` switches on `pg_cron` and schedules
+  the hourly job. Not applied: it waits for the owner's approval, so nothing
+  deletes anything yet. Its test in `tests/db-retention.test.ts` is a `todo`
+  until then. Proof: `tests/db-retention.test.ts` (A12, idle runs, the ended
+  rule on its own, rate-limit windows, A11 for the purge, `host_export`),
+  `tests/export.test.ts`, and the S8 browser test in `tests/e2e/run.spec.ts`
+  (after ending, the downloaded CSV equals the tallies table cell for cell; the
+  PNG is a 1600×900 PNG). Mutation checks: purge cutoff at 22h and 26h, each
+  rule removed, window cutoff at 58 and 62 minutes, and the CSV's formula
+  guard, hidden flag, newline quoting and counts each turned a test red.
+  Screenshots in `screenshots/s8/`.
 
 ## Going live: just before the first real workshop
 
@@ -336,13 +356,18 @@ The first release ships word cloud and poll only (ADR-007, 2026-09-30).
   adapter-vercel has an `isr` route option. Unverified whether it works on a
   `+server.ts` GET with a 1-second expiry. Worth trying only if the budget gets
   tight.
-- **`pg_cron` is not enabled** on the London database (checked 2026-09-29, S2).
-  S8's hourly clean-up needs it switched on first.
+- **`pg_cron` is not enabled** on the London database (checked 2026-09-29, S2;
+  still off 2026-09-30). Migration 0008 switches it on once the owner approves.
 - **The database A4 test takes about 33s**: every table × 2 roles × 5
   statements, each a round trip to London. Fine for now; batch the probes if
   the suite gets slow.
 - **`rate_limits` only grows**: one row per IP and per run every 10 seconds of
-  activity. S8's hourly clean-up should also delete windows older than an hour.
+  activity. `purge_expired()` (0007) deletes windows older than an hour, once
+  0008 schedules it.
+- **An ended session still says "Answers: open"** on the control view:
+  `host_action`'s `end` changes the status but leaves `item_state` as it was.
+  Phones and the projector go by the status, so nothing accepts answers; it is
+  only a confusing label. Seen in S8.
 - **Each accepted answer updates its run's row** (`version`), so answers to one
   run are written one at a time. Fine at ADR-002's ~2 writes/s; a bottleneck at
   hundreds a second.
