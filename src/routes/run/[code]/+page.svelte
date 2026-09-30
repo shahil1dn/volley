@@ -87,7 +87,7 @@
 <main class="host">
 	<header class="host__top">
 		<div>
-			<p class="label">Room {data.code}{note ? ` · ${note}` : ''}</p>
+			<p class="label">Room {data.code}{room?.hostName ? ` · ${room.hostName} hosting` : ''}{note ? ` · ${note}` : ''}</p>
 			<h1 class="host__question">{missing ? "We can't find that room" : prompt}</h1>
 		</div>
 		<div class="host__join">

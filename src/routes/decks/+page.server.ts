@@ -9,7 +9,7 @@ export const load: PageServerLoad = ({ locals }) => {
 	// hooks.server.ts guards this path; refusing here too fails closed if the
 	// route is ever moved outside the guarded paths.
 	if (!locals.host) error(403, 'Not a host');
-	return { email: locals.host.email };
+	return { email: locals.host.email, name: locals.host.name, isAdmin: locals.host.isAdmin };
 };
 
 export const actions: Actions = {

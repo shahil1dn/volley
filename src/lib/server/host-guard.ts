@@ -5,7 +5,7 @@ import { HOST_SESSION_SECONDS, makeHostSession, readHostSession } from '$lib/ser
 
 const COOKIE = 'volley_host';
 
-export type Host = { userId: string; email: string };
+export type Host = { userId: string; email: string; name: string | null; isAdmin: boolean };
 
 const nowSeconds = () => Math.floor(Date.now() / 1000);
 
@@ -14,8 +14,8 @@ const nowSeconds = () => Math.floor(Date.now() / 1000);
 export async function currentHost(cookies: Cookies): Promise<Host | 'signed_out' | 'not_host'> {
 	const userId = readHostSession(HOST_SESSION_SECRET, cookies.get(COOKIE), nowSeconds());
 	if (!userId) return 'signed_out';
-	const email = await dbCall<string>('host_email', [userId]);
-	return email ? { userId, email } : 'not_host';
+	const profile = await dbCall<Omit<Host, 'userId'>>('host_profile', [userId]);
+	return profile ? { userId, ...profile } : 'not_host';
 }
 
 // Path '/' because host pages and APIs are spread across the app (SPEC routes).

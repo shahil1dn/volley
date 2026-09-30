@@ -10,6 +10,8 @@ export type RoomState = {
 	opensAt: string | null;
 	closesAt: string | null;
 	serverNow: number;
+	// The host's display name, for the projector's "… hosting" line; null if unset.
+	hostName: string | null;
 	item: { type: string; settings: Record<string, unknown> } | null;
 	tallies: [string, number][];
 	// A Q&A item's main list: [id, text, votes], most votes first.

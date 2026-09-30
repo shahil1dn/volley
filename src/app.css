@@ -43,6 +43,9 @@ p { margin: 0; }
   border: 1px solid var(--line); border-radius: var(--radius-input); background: var(--paper);
 }
 .field input:focus-visible, .field textarea:focus-visible, .field select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+/* A value that can't be changed, shown as text but kept as a field so password
+   managers still read it. */
+.field input.field__static { border-color: transparent; background: transparent; padding-left: 0; }
 .btn {
   display: inline-block; border: 0; cursor: pointer; text-decoration: none; text-align: center;
   padding: 15px 24px; border-radius: var(--radius-pill);
@@ -157,6 +160,6 @@ h2 { font-family: var(--font-body); font-size: 18px; font-weight: 600; color: va
 .control__actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
 .control__words { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .control__words li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); color: var(--ink); }
-.control__words .btn { padding: 8px 18px; }
+.control__words .btn { padding: 8px 18px; white-space: nowrap; }
 .control__buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .control__word--hidden > span { text-decoration: line-through; color: var(--smoke); }

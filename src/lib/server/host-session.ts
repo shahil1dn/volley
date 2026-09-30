@@ -38,6 +38,7 @@ export function hashEmail(secret: string, email: string): string {
 // future host APIs belong under /api/host or /api/r/[code]/host.
 export function hostArea(pathname: string): 'page' | 'api' | null {
 	if (pathname === '/decks' || pathname.startsWith('/decks/')) return 'page';
+	if (pathname === '/hosts' || pathname.startsWith('/hosts/')) return 'page';
 	if (/^\/run\/[^/]+\/control(\/|$)/.test(pathname)) return 'page';
 	if (pathname === '/api/host' || pathname.startsWith('/api/host/')) return 'api';
 	if (/^\/api\/r\/[^/]+\/host(\/|$)/.test(pathname)) return 'api';

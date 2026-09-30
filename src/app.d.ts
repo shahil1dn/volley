@@ -3,7 +3,7 @@ declare global {
 	namespace App {
 		interface Locals {
 			// Set by hooks.server.ts on host pages and APIs only.
-			host?: { userId: string; email: string };
+			host?: { userId: string; email: string; name: string | null; isAdmin: boolean };
 		}
 	}
 }
