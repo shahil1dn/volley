@@ -1,4 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "sveltekit-1"
+  "framework": "sveltekit-1",
+  "crons": [{ "path": "/api/cron/keep-alive", "schedule": "0 9 * * *" }]
 }

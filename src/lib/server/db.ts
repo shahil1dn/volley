@@ -23,6 +23,7 @@ const STATEMENTS = {
 	host_view: 'select public.host_view($1, $2) as result',
 	host_export: 'select public.host_export($1, $2) as result',
 	host_email: 'select email as result from public.hosts where user_id = $1',
+	keep_alive: 'select 1 as result',
 } as const;
 
 let pool: pg.Pool | undefined;
