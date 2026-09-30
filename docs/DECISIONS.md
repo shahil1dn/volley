@@ -289,7 +289,7 @@ CA" (80:70:25:AD:…:E6:CA:FA). Trust-on-first-use is closed.
 
 ## ADR-007: The first release ships word cloud and poll; no quiz (2026-09-30)
 
-Owner decision.
+Owner decision. *Amended by ADR-008: Q&A joins v1.*
 
 - **The first release has two activities, word cloud and multiple-choice poll.**
   These are Mentimeter's core. The timed quiz moves to "later, or a community
