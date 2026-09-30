@@ -471,7 +471,9 @@ Also: one gate command (build, typecheck, all tests, exit code intact, A17).
   found two things, left for the theming work: (1) the column is vertically
   centred, so the label and question jump about 110px between states; pin it
   near the top. (2) After sending, a faded Send button outweighs what you sent;
-  show "your words" as a clear line under the question.
+  show "your words" as a clear line under the question. **Both fixed in
+  Milestone 4 step 1** (2026-09-30): the phone column starts at the top under a
+  fixed header, and what you sent sits straight under the question.
 - **`PARTICIPANT_SECRET` must be added to Vercel before the next deploy.** It is
   read through `$env/static/private`, so a build without it fails. It's only in
   `.env.local` so far; adding it to Vercel needs the owner's OK.

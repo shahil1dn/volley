@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { normaliseWord } from '$lib/words';
+	import Brand from '$lib/Brand.svelte';
+	import { brand } from '$lib/brand';
 	import {
 		isNewer,
 		loadSent,
@@ -189,11 +191,11 @@
 </script>
 
 <svelte:head>
-	<title>Room {code}</title>
+	<title>Room {code} · {brand.name}</title>
 </svelte:head>
 
 <main class="phone" data-clock-offset={clockOffsetMs}>
-	<p class="label">Room {code}</p>
+	<header class="masthead"><Brand /><p class="label">Room {code}</p></header>
 
 	{#if missing}
 		<h1>We can't find that room</h1>
@@ -252,6 +254,13 @@
 		</form>
 	{:else if accepting && mine.left > 0}
 		<h1>{prompt}</h1>
+		<p class="sent" aria-live="polite">
+			{#if mine.words.length === 0}
+				You can send up to {mine.left}.
+			{:else}
+				Sent: <strong>{mine.words.join(', ')}</strong>. {mine.left} left.
+			{/if}
+		</p>
 		<form class="stack" onsubmit={send}>
 			<label class="field">
 				<input
@@ -266,22 +275,15 @@
 			</label>
 			<button class="btn btn--block" disabled={busy || !draft.trim()}>{busy ? 'Sending…' : 'Send'}</button>
 			{#if notice}<p class="error" role="alert">{notice}</p>{/if}
-			<p class="hint" aria-live="polite">
-				{#if mine.words.length === 0}
-					You can send up to {mine.left}.
-				{:else}
-					Sent: {mine.words.join(', ')}. {mine.left} left.
-				{/if}
-			</p>
 		</form>
 	{:else if accepting}
 		<h1>{prompt}</h1>
-		<p class="hint phone__foot" aria-live="polite">
+		<p class="sent" aria-live="polite">
 			{#if isPoll}
-				{mine.words.length > 0 ? `You voted: ${mine.words[0]}.` : "You've already voted on this one."} Results are on the big screen.
+				{#if mine.words.length > 0}You voted: <strong>{mine.words[0]}</strong>.{:else}You've already voted on this one.{/if} Results are on the big screen.
 			{:else}
 				{MESSAGES.limit}
-				{#if mine.words.length > 0}Yours ({mine.words.join(', ')}) are on the big screen.{/if}
+				{#if mine.words.length > 0}Yours (<strong>{mine.words.join(', ')}</strong>) are on the big screen.{/if}
 			{/if}
 		</p>
 	{:else if room.status === 'frozen'}

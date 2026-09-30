@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { cloudPng } from '$lib/cloud-png';
+	import Brand from '$lib/Brand.svelte';
+	import { brand } from '$lib/brand';
 
 	let { data } = $props();
 
@@ -89,11 +91,11 @@
 </script>
 
 <svelte:head>
-	<title>Control · {data.code}</title>
+	<title>Control · {data.code} · {brand.name}</title>
 </svelte:head>
 
 <main class="control">
-	<p class="label">Room {data.code} · control</p>
+	<header class="masthead"><Brand /><p class="label">Room {data.code} · control</p></header>
 	{#if missing}
 		<h1>We can't find that session</h1>
 	{:else if !view}

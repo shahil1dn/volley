@@ -88,6 +88,26 @@ test('a host signs in, reaches their decks and signs out; the session is httpOnl
 	await expect(page).toHaveURL(`${BASE}/`);
 });
 
+// Found through a flaky poll test: the page's start-up reset a type chosen
+// before it finished loading, so a quick host on slow Wi-Fi got a word cloud.
+test('an activity type chosen before the page finishes loading is kept', async ({ page }) => {
+	await signIn(page, hostEmail, hostPassword);
+	await page.waitForURL('**/decks');
+	await page.context().route(/\.(js|ts|svelte)(\?|$)/, async (route) => {
+		await new Promise((resolve) => setTimeout(resolve, 300));
+		await route.continue();
+	});
+	await page.goto('/decks', { waitUntil: 'commit' });
+	await page.getByLabel('Activity 1 type').selectOption({ label: 'Poll' });
+	await page.waitForLoadState('networkidle');
+	// Settled, so a late reset would already have happened.
+	await page.waitForTimeout(1000);
+	await expect(page.getByLabel('Activity 1 type')).toHaveValue('poll');
+	await expect(page.getByLabel('Activity 2 type'), 'the defaults still apply').toHaveValue('');
+	await page.goto('/decks');
+	await expect(page.getByLabel('Activity 1 type'), 'the defaults still apply').toHaveValue('word_cloud');
+});
+
 test('a wrong password gets a plain message and no session', async ({ page }) => {
 	await signIn(page, hostEmail, 'not-the-password');
 	await expect(page.getByRole('alert')).toHaveText('Email or password is incorrect.');

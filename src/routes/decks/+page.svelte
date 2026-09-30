@@ -1,4 +1,7 @@
 <script lang="ts">
+	import Brand from '$lib/Brand.svelte';
+	import { brand } from '$lib/brand';
+
 	let { data, form } = $props();
 
 	const TYPES = [
@@ -11,22 +14,24 @@
 </script>
 
 <svelte:head>
-	<title>Start a session</title>
+	<title>Start a session · {brand.name}</title>
 </svelte:head>
 
 <main class="phone">
-	<p class="label">Signed in as {data.email}</p>
+	<header class="masthead"><Brand /><p class="label">Signed in as {data.email}</p></header>
 	<h1>Start a session</h1>
 	<p class="hint">Up to 3 activities, in order, under one room code. Saved decks arrive in Milestone 3.</p>
 	<form method="POST" action="?/startSession" class="stack">
 		{#each slots as slot, i (i)}
-			<fieldset class="stack">
-				<legend class="label">Activity {i + 1}</legend>
+			<fieldset class="activity">
+				<legend>Activity {i + 1}</legend>
 				<label class="field">
 					<span class="hint">Activity {i + 1} type</span>
-					<select name="type{i}" value={slot.type}>
-						{#if i > 0}<option value="">None</option>{/if}
-						{#each TYPES as [value, name] (value)}<option {value}>{name}</option>{/each}
+					<!-- `selected` on the option, not `value` on the select: `value` is applied
+					     when the page finishes loading and undid a choice made before then. -->
+					<select name="type{i}">
+						{#if i > 0}<option value="" selected={slot.type === ''}>None</option>{/if}
+						{#each TYPES as [value, name] (value)}<option {value} selected={slot.type === value}>{name}</option>{/each}
 					</select>
 				</label>
 				<label class="field">

@@ -28,6 +28,13 @@ npm run add-host someone@example.com
 
 It prints a new password once; pass it to the host.
 
+## Name, colours and logo
+
+All three live in `src/lib/brand.ts`: the name (shown on every screen and in
+tab titles), an accent, text and background colour, and an optional logo file
+in `static/`. They are built in, so redeploy after changing them. `npm test`
+fails, naming the pair, if a colour would make text unreadable (WCAG AA).
+
 ## Database
 
 Migrations live in `db/migrations/` and apply in filename order. Each is
