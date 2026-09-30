@@ -172,10 +172,7 @@ test('A11: the purge finds expired runs and old windows through indexes', { skip
 	}
 });
 
-// Migration 0008 switches on pg_cron, which waits for the owner's approval.
-// Until it is applied this reports as a todo instead of failing the suite;
-// drop the todo once it is.
-test('SPEC 23: the purge is scheduled hourly', { skip, todo: 'migration 0008 (pg_cron) awaits approval' }, async () => {
+test('SPEC 23: the purge is scheduled hourly', { skip }, async () => {
 	const { rows } = await db.query(`select schedule, command, active from cron.job where jobname = 'volley-purge-expired'`);
 	assert.deepEqual(rows, [{ schedule: '0 * * * *', command: 'select public.purge_expired()', active: true }]);
 });
