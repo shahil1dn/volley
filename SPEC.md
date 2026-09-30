@@ -36,9 +36,13 @@ own copy by telling an AI agent to follow `AGENTS.md`.
 ## In scope
 
 **Hosts**
-1. Password sign-in (Supabase Auth). Host accounts are created only by
-   `npm run add-host <email>`, which needs the database secret key. There is no
-   public sign-up and no email sending.
+1. Password sign-in (Supabase Auth). The first host is created by
+   `npm run add-host <email>` and made an admin with `npm run set-host`, both
+   needing the database secret key. An admin invites further hosts from the
+   Hosts page (ADR-011): a one-time link, valid 7 days, where the invitee
+   chooses their own name and password. The same kind of link resets another
+   host's password. There is no public sign-up and no email sending.
+1a. Each host has a display name; the projector shows "Name hosting".
 2. Login session held in an `httpOnly`, `Secure`, `SameSite=Lax` cookie. Nothing
    sensitive in browser storage.
 3. Decks: a title plus an ordered list of activities, each configured by a form
@@ -123,7 +127,8 @@ own copy by telling an AI agent to follow `AGENTS.md`.
 - A public SDK, loading activities from outside the repo, an activity gallery,
   AI-generated activities.
 - Supabase Realtime or any other live connection.
-- Email sign-in links, password reset by email, public sign-up.
+- Email sign-in links, password reset by email, public sign-up. (Invite and
+  reset links are made by an admin and passed on by hand, ADR-011.)
 - A shared public instance; multi-organisation tenancy.
 - Participant accounts or history.
 - Native apps, offline or local-network mode.
@@ -152,7 +157,7 @@ Each check fails if the behaviour is missing.
 | A3 | DB test: the same `submit_id` sent twice stores one row and returns the same result both times. |
 | A4 | Permission probe with the public key: cannot select, insert, update or delete on any table. |
 | A5 | Unit tests: word normalising and ordering, poll tally; each shown to fail when the logic is broken. |
-| A6 | A host route called without a host session sends a page to sign-in and answers an API with 401; with a non-host account it returns 403. `add-host` is the only way to create a host. |
+| A6 | A host route called without a host session sends a page to sign-in and answers an API with 401; with a non-host account it returns 403. Hosts are created only by `add-host` or an admin's invite link. |
 | A7 | The host cookie is `httpOnly`: `document.cookie` in the browser does not contain it. |
 | A8 | Browser test: 3 phones answer; the projector shows the result within 3s without reload. Hide removes it from the projector within 3s. |
 | A9 | Out of scope for the first release (ADR-007): the quiz. The underlying rule is already tested: secret settings are absent from the state until reveal (S4), and answers after close are refused (S3). |
@@ -168,6 +173,8 @@ Each check fails if the behaviour is missing.
 | A19 | DB test: a hidden question leaves the shared state; an answered one leaves the main list; the state never carries more than 40 questions. |
 | A20 | Retention: the purge removes a run's questions and votes with it. |
 | A21 | Browser test: phones ask and upvote; the projector and the phones show the list in vote order within 3s; hide and "answered" reach them. |
+| A22 | DB test: only an admin can invite, list, remove or cancel; a link works once, not after 7 days, and only for the account with the invited email; an admin can't remove or reset themselves. |
+| A23 | Browser test: an admin invites; the invitee sets a password and is signed in; the projector names them; a reset link replaces the password; removal ends their access at once. |
 
 ## Must verify before the slice that needs it
 
