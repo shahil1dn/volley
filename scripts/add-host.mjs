@@ -1,5 +1,7 @@
-// Creates a host, or resets an existing host's password. The only way to make
-// a host (SPEC 1): no public sign-up, no email sent.
+// Creates a host, or resets an existing host's password, from the terminal:
+// how the first host is made (then `npm run set-host -- <email> --admin`), and
+// how an admin resets their own password. Everyone else is invited from the
+// app's Hosts page (ADR-011). No public sign-up, no email sent.
 //   npm run add-host <email>
 import { randomBytes } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
@@ -33,8 +35,9 @@ try {
 		userId = data.user.id;
 	}
 	await db.query(
-		`insert into public.hosts (user_id, email) values ($1, $2)
-		 on conflict (user_id) do update set email = excluded.email`,
+		// A new password ends every older session (ADR-011).
+		`insert into public.hosts (user_id, email, sessions_valid_after) values ($1, $2, now())
+		 on conflict (user_id) do update set email = excluded.email, sessions_valid_after = now()`,
 		[userId, email],
 	);
 	console.log(`Host ready: ${email} (${existing.rows[0] ? 'password reset' : 'new account'})`);

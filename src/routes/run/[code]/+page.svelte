@@ -93,7 +93,7 @@
 <main class="host">
 	<header class="host__top">
 		<div>
-			<div class="host__meta"><Brand /><p class="label">Room {data.code}{note ? ` · ${note}` : ''}</p></div>
+			<div class="host__meta"><Brand /><p class="label">Room {data.code}{room?.hostName ? ` · ${room.hostName} hosting` : ''}{note ? ` · ${note}` : ''}</p></div>
 			<h1 class="host__question">{missing ? "We can't find that room" : prompt}</h1>
 		</div>
 		{#if ended}

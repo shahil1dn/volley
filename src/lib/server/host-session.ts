@@ -7,7 +7,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export const HOST_SESSION_SECONDS = 12 * 60 * 60;
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function sign(secret: string, message: string): Buffer {
 	return createHmac('sha256', secret).update(message).digest();
@@ -28,6 +28,11 @@ export function readHostSession(secret: string, token: string | undefined, nowSe
 	return given.length === expected.length && timingSafeEqual(given, expected) ? userId : null;
 }
 
+// When a session that readHostSession accepted was issued, in unix seconds.
+export function hostSessionIssuedAt(token: string): number {
+	return Number(token.split('.')[1]) - HOST_SESSION_SECONDS;
+}
+
 // Sign-in attempts are counted per email without storing the address itself.
 export function hashEmail(secret: string, email: string): string {
 	return sign(secret, `email:${email.trim().toLowerCase()}`).toString('base64url');
@@ -38,6 +43,7 @@ export function hashEmail(secret: string, email: string): string {
 // future host APIs belong under /api/host or /api/r/[code]/host.
 export function hostArea(pathname: string): 'page' | 'api' | null {
 	if (pathname === '/decks' || pathname.startsWith('/decks/')) return 'page';
+	if (pathname === '/hosts' || pathname.startsWith('/hosts/')) return 'page';
 	if (/^\/run\/[^/]+\/control(\/|$)/.test(pathname)) return 'page';
 	if (pathname === '/api/host' || pathname.startsWith('/api/host/')) return 'api';
 	if (/^\/api\/r\/[^/]+\/host(\/|$)/.test(pathname)) return 'api';

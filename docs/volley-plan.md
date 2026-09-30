@@ -366,11 +366,28 @@ The first release ships word cloud, poll and Q&A (ADR-007, amended by ADR-008, 2
 
 ## Next: the owner picks one
 
-- **(a) Invite a host.** An admin-only page where the owner adds committee
-  members and workshop leads as hosts, so they get their own logins without
-  the terminal and the pasted production settings. Each host already sees only
-  their own runs (`host_view`, `host_action` and `host_export` check the run's
-  host).
+- [x] **(a) Invite a host** (ADR-011; branch `invite-host`, not merged or
+  deployed yet). `/hosts` for admins: invite by one-time link, reset another
+  host's password by link, remove a host, cancel a link; `/invite/<token>` for
+  the invitee; hosts named on the projector; `npm run set-host`. Migration
+  `0012_host_invites.sql` is applied to the test database only. Proof:
+  `tests/db-hosts.test.ts` (A22), `tests/e2e/hosts.spec.ts` (A23),
+  `tests/invite-token.test.ts`. Mutation checks: the admin check, the expiry,
+  a link used twice, a link spent on another account, an admin removing
+  themself (database); the page's admin gate, signing in after accepting,
+  deleting the Auth account, the projector's name (browser): each turned a
+  test red. Screenshots in `screenshots/hosts/`.
+  *Reviewed (code, security, tests) and fixed* in migration `0013` and the
+  app: Remove's Cancel really cancels; links are claimed before any password
+  is set; a reset ends older sessions (and the guard clears the dead cookie,
+  no redirect loop); admins can't reset or remove admins; removal deletes the
+  host's unused links; a new link stays on screen; the reset greeting uses the
+  database's name. Each fix has a test that failed first, and each rule was
+  mutation-checked. One reviewer claim was false: removed hosts' rows do go
+  (`hosts.user_id` cascades from `auth.users`).
+  **To go live** (each needs the owner's OK): migrate 0012 and 0013 on production;
+  `npm run set-host -- <owner email> --name "…" --admin` against production;
+  merge and deploy.
 - **(b) Milestone 4**, in the order below.
 
 ## Milestone 3: decks

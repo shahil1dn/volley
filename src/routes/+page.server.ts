@@ -38,11 +38,11 @@ export const actions: Actions = {
 		if (error || !data.user) return fail(503, { email, message: 'Sign-in is unavailable. Try again shortly.' });
 		await auth.signOut({ scope: 'local' });
 
-		const hostEmail = await dbCall<string>('host_email', [data.user.id]).catch(() => undefined);
-		if (hostEmail === undefined) return fail(503, { email, message: 'Sign-in is unavailable. Try again shortly.' });
-		if (!hostEmail) return fail(403, { email, message: "That account isn't a host on this Volley." });
+		const profile = await dbCall<{ sessionsValidAfter: number }>('host_profile', [data.user.id]).catch(() => undefined);
+		if (profile === undefined) return fail(503, { email, message: 'Sign-in is unavailable. Try again shortly.' });
+		if (!profile) return fail(403, { email, message: "That account isn't a host on this Volley." });
 
-		startHostSession(cookies, data.user.id);
+		startHostSession(cookies, data.user.id, profile.sessionsValidAfter);
 		redirect(303, '/decks');
 	},
 };

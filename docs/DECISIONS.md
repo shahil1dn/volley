@@ -376,7 +376,55 @@ Owner decision, taken once the app went public.
   `node --env-file=.env.production.local scripts/migrate.mjs --production`,
   then deletes the file. Used this way once for a read-only check.
 
-## ADR-011: Name, colours and logo live in one built-in file (2026-09-30)
+## ADR-011: Admins invite hosts by link (2026-09-30)
+
+Owner decision (option (a) of the plan's "Next: the owner picks one").
+Supersedes SPEC 1's "hosts are created only by `add-host`".
+
+- **Committee members and workshop leads get their own logins without the
+  terminal.** An admin types a name and email on the Hosts page (`/hosts`)
+  and gets a one-time link to send by hand (WhatsApp, etc.). The invitee opens
+  it, chooses their own password and display name, and is signed straight in.
+  Nobody else ever sees the password. No email is sent (SPEC: no email sending).
+- **Links:** 32 random bytes in the path (`/invite/<token>`); only the token's
+  SHA-256 is stored (`host_invites.token_hash`). Valid 7 days, used once, and
+  only for the Auth account with the invited email (`accept_host_invite` checks
+  `auth.users`). A newer link for the same email replaces an older unused one.
+  The page sends `Referrer-Policy: no-referrer` and `no-store`. A token in a
+  path does appear in Vercel's request logs (kept about an hour on Hobby);
+  accepted, because the link is single-use and short-lived, and the logs are
+  the owner's.
+- **Accepting is claim → set password → finish** (migration 0013). The link is
+  locked and marked used before any password is set, so a link cancelled,
+  expired or used by someone else meanwhile changes nothing; if setting the
+  password fails, the claim is released so the link can be tried again.
+- **A reset ends every older session.** `hosts.sessions_valid_after` moves on a
+  reset, an accepted invite and `add-host`; the guard refuses a session cookie
+  issued before it and clears it. New sessions are stamped no earlier than
+  that time, so a clock difference can't refuse the session a reset just made.
+  Existing hosts started at 1970, so nobody was signed out by the change.
+- **Resets:** an admin can make a reset link for another host, but not for
+  another admin. An admin can't reset or remove themselves, or other admins,
+  on the page; the owner's own reset stays
+  `npm run add-host <email>` from the terminal (with the production paste,
+  ADR-010), so the owner keeps their password safe.
+- **Removal** deletes the `hosts` row (the guard checks it on every request, so
+  access ends at once; their decks and runs go with it), their unused links,
+  and then the Auth account, best effort. A reset link for someone no longer a
+  host is dead however they went.
+- **Admins:** a boolean on `hosts`, set by `npm run set-host -- <email> --admin`
+  (which also sets `--name` and never touches the password). Only the owner is
+  an admin for now; making others admin from the page is left out.
+- **Names:** every host has a display name, shown on the projector as
+  "Name hosting" (`get_state.hostName`). Names are shown to the room anyway, so
+  the shared state stays free of anything private.
+- **Every rule lives in the database**, as elsewhere: each SECURITY DEFINER
+  function checks the caller is an admin itself, so a mistake in a route can't
+  widen who may invite. The app now holds Supabase's secret key at runtime
+  (already on Vercel as the store's `SUPABASE_SECRET_KEY`), used only in
+  `src/lib/server/invites.ts` to set passwords and delete accounts.
+
+## ADR-012: Name, colours and logo live in one built-in file (2026-09-30)
 
 Milestone 4 step 1, SPEC 26 and A16.
 

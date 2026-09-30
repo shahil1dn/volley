@@ -49,6 +49,9 @@ a:hover { text-decoration-thickness: 2px; }
 .field input:focus-visible, .field textarea:focus-visible, .field select:focus-visible { outline-offset: 0; border-color: var(--accent); }
 .field input::placeholder, .field textarea::placeholder { color: var(--muted); }
 .field input[aria-invalid="true"] { border-color: var(--error); }
+/* A value that can't be changed, shown as text but kept as a field so password
+   managers still read it. */
+.field input.field__static { border-color: transparent; background: transparent; padding-left: 0; }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; min-height: var(--tap);
@@ -183,6 +186,6 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 .control__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
 .control__words { list-style: none; margin: 0; padding: 0; display: grid; }
 .control__words li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); color: var(--ink); }
-.control__words .btn { padding: 8px 16px; }
+.control__words .btn { padding: 8px 16px; white-space: nowrap; }
 .control__buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .control__word--hidden > span { text-decoration: line-through; color: var(--muted); }

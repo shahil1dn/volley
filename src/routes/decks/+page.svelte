@@ -18,7 +18,7 @@
 </svelte:head>
 
 <main class="phone">
-	<header class="masthead"><Brand /><p class="label">Signed in as {data.email}</p></header>
+	<header class="masthead"><Brand /><p class="label">Signed in as {data.name ?? data.email}{#if data.isAdmin} · <a href="/hosts">Manage hosts</a>{/if}</p></header>
 	<h1>Start a session</h1>
 	<p class="hint">Up to 3 activities, in order, under one room code. Saved decks arrive in Milestone 3.</p>
 	<form method="POST" action="?/startSession" class="stack">
