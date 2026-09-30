@@ -128,6 +128,17 @@ test('a reset link replaces the password; the old one stops working', async ({ b
 	await fresh.waitForURL('**/decks');
 });
 
+test('pressing Cancel on the remove prompt removes nobody', async () => {
+	await ownerPage.goto('/hosts');
+	ownerPage.once('dialog', (dialog) => dialog.dismiss());
+	await ownerPage.getByRole('button', { name: 'Remove: Sam' }).click();
+	await ownerPage.waitForTimeout(1500);
+	await ownerPage.reload();
+	await expect(ownerPage.getByRole('button', { name: 'Remove: Sam' }), 'Sam is still a host').toBeVisible();
+	const { rows } = await db.query('select count(*)::int as n from public.hosts where email = $1', [samEmail]);
+	expect(rows[0].n).toBe(1);
+});
+
 test('removing a host ends their access at once', async ({ browser }) => {
 	const sam = await newVisitor(browser);
 	await signIn(sam, samEmail, 'second-password-456');
