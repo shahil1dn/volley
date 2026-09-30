@@ -38,24 +38,32 @@ export const actions: Actions = {
 		const name = String(form.get('name') ?? '').trim();
 		const password = String(form.get('password') ?? '');
 
-		const invite = await peek(params.token);
-		if (invite.status !== 'ok' || !invite.email) return fail(400, { name, message: REFUSED[invite.status] ?? REFUSED.invalid });
+		if (!TOKEN_PATTERN.test(params.token)) return fail(400, { name, message: REFUSED.invalid });
 		if (name.length < 1 || name.length > 40) return fail(400, { name, message: 'Enter your name, up to 40 characters.' });
 		const problem = passwordProblem(password);
 		if (problem) return fail(400, { name, message: problem });
 
-		const account = await setPassword(invite.email, password);
+		// Claimed (locked and marked used) before any password is set, so a link
+		// cancelled or used by someone else meanwhile changes nothing.
+		const claimed = await dbCall<{ status: string; id?: string; email?: string }>('claim_host_invite', [hashToken(params.token)]);
+		if (!claimed) error(500, 'Could not use the link');
+		if (claimed.status !== 'ok' || !claimed.id || !claimed.email) {
+			return fail(400, { name, message: REFUSED[claimed.status] ?? REFUSED.invalid });
+		}
+
+		const account = await setPassword(claimed.email, password);
 		if ('error' in account) {
+			// Nothing changed, so the link can be tried again.
+			await dbCall('release_host_invite', [claimed.id]);
 			const message = account.error === 'weak_password' ? 'Choose a stronger password.' : 'That didn’t work. Try again in a moment.';
 			return fail(account.error === 'weak_password' ? 400 : 503, { name, message });
 		}
 
-		// Checks the link again, locked, and that the account is the invited one.
-		const accepted = await dbCall<{ status: string }>('accept_host_invite', [hashToken(params.token), account.userId, name]);
-		if (!accepted) error(500, 'Could not use the link');
-		if (accepted.status !== 'ok') return fail(400, { name, message: REFUSED[accepted.status] ?? REFUSED.invalid });
+		const finished = await dbCall<{ status: string; sessionsValidAfter?: number }>('finish_host_invite', [claimed.id, account.userId, name]);
+		if (!finished) error(500, 'Could not use the link');
+		if (finished.status !== 'ok') return fail(400, { name, message: REFUSED[finished.status] ?? REFUSED.invalid });
 
-		startHostSession(cookies, account.userId);
+		startHostSession(cookies, account.userId, finished.sessionsValidAfter ?? 0);
 		redirect(303, '/decks');
 	},
 };

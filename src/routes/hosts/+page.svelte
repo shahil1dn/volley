@@ -1,8 +1,29 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import type { SubmitFunction } from '@sveltejs/kit';
 
 	let { data, form } = $props();
+	type Link = { url: string; name: string; email: string; purpose: 'invite' | 'reset'; expiresAt?: string };
+	// A new link is shown once, so it stays on screen until the next link
+	// replaces it, whatever else is pressed meanwhile.
+	let link = $state<Link | null>(null);
 	let copied = $state(false);
+
+	const keepLink: SubmitFunction = () => async ({ result, update }) => {
+		if (result.type === 'success' && result.data?.link) {
+			link = result.data.link as Link;
+			copied = false;
+		}
+		await update();
+	};
+
+	// Asked inside enhance, whose cancel() stops the request; an onsubmit
+	// preventDefault doesn't, because enhance submits by fetch regardless.
+	const confirmRemove =
+		(who: string): SubmitFunction =>
+		({ cancel }) => {
+			if (!confirm(`Remove ${who} as a host? They can't sign in any more, and their sessions are deleted.`)) cancel();
+		};
 
 	const day = (iso: string) =>
 		new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' });
@@ -16,9 +37,6 @@
 		}
 	}
 
-	function confirmRemove(event: SubmitEvent, who: string) {
-		if (!confirm(`Remove ${who} as a host? They can't sign in any more, and their sessions are deleted.`)) event.preventDefault();
-	}
 </script>
 
 <svelte:head>
@@ -30,22 +48,22 @@
 	<h1>Hosts</h1>
 	<p class="hint">Hosts can start sessions. Invite someone and send them the link: they choose their own password.</p>
 
-	{#if form?.link}
+	{#if link}
 		<section class="stack" aria-live="polite">
-			<h2>{form.link.purpose === 'invite' ? `Invite link for ${form.link.name}` : `Password reset link for ${form.link.name}`}</h2>
+			<h2>{link.purpose === 'invite' ? `Invite link for ${link.name}` : `Password reset link for ${link.name}`}</h2>
 			<p class="hint">
-				Send this to {form.link.email}. It works once and expires on {day(form.link.expiresAt ?? '')}. It won't be shown again.
+				Send this to {link.email}. It works once and expires on {day(link.expiresAt ?? '')}. It won't be shown again.
 			</p>
 			<label class="field">
 				<span class="hint">Link</span>
-				<input readonly value={form.link.url} onfocus={(event) => event.currentTarget.select()} />
+				<input readonly value={link.url} onfocus={(event) => event.currentTarget.select()} />
 			</label>
-			<button type="button" class="btn" onclick={() => copy(form.link?.url ?? '')}>{copied ? 'Copied' : 'Copy link'}</button>
+			<button type="button" class="btn" onclick={() => copy(link?.url ?? '')}>{copied ? 'Copied' : 'Copy link'}</button>
 		</section>
 	{/if}
 
 	<h2>Invite a host</h2>
-	<form method="POST" action="?/invite" class="stack" use:enhance={() => { copied = false; return ({ update }) => update(); }}>
+	<form method="POST" action="?/invite" class="stack" use:enhance={keepLink}>
 		<label class="field">
 			<span class="hint">Name, as shown on the big screen</span>
 			<input name="name" maxlength="40" required autocomplete="off" defaultValue={form?.purpose === 'invite' ? (form?.name ?? '') : ''} />
@@ -66,14 +84,14 @@
 					{host.name ?? host.email}
 					<span class="hint">{[host.name ? host.email : '', host.isYou ? 'you' : '', host.isAdmin ? 'admin' : ''].filter(Boolean).join(' · ')}</span>
 				</span>
-				{#if !host.isYou}
+				<!-- Admins, you included, are managed from the terminal (ADR-011). -->
+				{#if !host.isYou && !host.isAdmin}
 					<div class="control__buttons">
-						<form method="POST" action="?/reset" use:enhance={() => { copied = false; return ({ update }) => update(); }}>
+						<form method="POST" action="?/reset" use:enhance={keepLink}>
 							<input type="hidden" name="email" value={host.email} />
-							<input type="hidden" name="name" value={host.name ?? host.email} />
 							<button class="btn btn--quiet" aria-label="Reset password: {host.name ?? host.email}">Reset password</button>
 						</form>
-						<form method="POST" action="?/remove" use:enhance onsubmit={(event) => confirmRemove(event, host.name ?? host.email)}>
+						<form method="POST" action="?/remove" use:enhance={confirmRemove(host.name ?? host.email)}>
 							<input type="hidden" name="userId" value={host.userId} />
 							<button class="btn btn--quiet" aria-label="Remove: {host.name ?? host.email}">Remove</button>
 						</form>

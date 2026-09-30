@@ -7,7 +7,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export const HOST_SESSION_SECONDS = 12 * 60 * 60;
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function sign(secret: string, message: string): Buffer {
 	return createHmac('sha256', secret).update(message).digest();
@@ -26,6 +26,11 @@ export function readHostSession(secret: string, token: string | undefined, nowSe
 	const expected = sign(secret, `host:${userId}:${expiresText}`);
 	const given = Buffer.from(signature, 'base64url');
 	return given.length === expected.length && timingSafeEqual(given, expected) ? userId : null;
+}
+
+// When a session that readHostSession accepted was issued, in unix seconds.
+export function hostSessionIssuedAt(token: string): number {
+	return Number(token.split('.')[1]) - HOST_SESSION_SECONDS;
 }
 
 // Sign-in attempts are counted per email without storing the address itself.

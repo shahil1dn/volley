@@ -1,5 +1,5 @@
 import type { Handle } from '@sveltejs/kit';
-import { currentHost } from '$lib/server/host-guard';
+import { clearedHostCookie, currentHost } from '$lib/server/host-guard';
 import { hostArea } from '$lib/server/host-session';
 
 // The one place hosts are checked (A6). Runs before routing, so a host path is
@@ -10,9 +10,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const host = await currentHost(event.cookies);
 	if (host === 'signed_out') {
+		const clear = { 'set-cookie': clearedHostCookie(event.cookies) };
 		return area === 'api'
-			? Response.json({ status: 'signed_out' }, { status: 401 })
-			: new Response(null, { status: 303, headers: { location: '/' } });
+			? Response.json({ status: 'signed_out' }, { status: 401, headers: clear })
+			: new Response(null, { status: 303, headers: { location: '/', ...clear } });
 	}
 	if (host === 'not_host') {
 		return area === 'api'

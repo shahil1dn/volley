@@ -44,10 +44,14 @@ async function newVisitor(browser: Browser, options = {}): Promise<Page> {
 	return (await browser.newContext({ baseURL: BASE, ...options })).newPage();
 }
 
+// Runs an action that makes a link and returns the new one. A previous link
+// stays on screen, so wait for the box to change before reading it.
 async function linkFor(owner: Page, action: () => Promise<void>): Promise<string> {
-	await action();
 	const link = owner.getByRole('textbox', { name: 'Link', exact: true });
+	const previous = (await link.count()) > 0 ? await link.inputValue() : '';
+	await action();
 	await expect(link).toBeVisible();
+	await expect(link).not.toHaveValue(previous);
 	return link.inputValue();
 }
 
@@ -62,6 +66,16 @@ test('an admin reaches Hosts from their sessions page and creates an invite link
 	await ownerPage.getByRole('link', { name: 'Manage hosts' }).click();
 	await expect(ownerPage.getByRole('heading', { name: 'Hosts', exact: true })).toBeVisible();
 	await expect(ownerPage.getByRole('button', { name: /^Remove: Owner/ }), 'no removing yourself').toHaveCount(0);
+
+	// A link shown once must survive other buttons being pressed meanwhile.
+	await linkFor(ownerPage, async () => {
+		await ownerPage.getByLabel('Name, as shown on the big screen').fill('Temp');
+		await ownerPage.getByLabel('Email').fill(`temp-${samEmail}`);
+		await ownerPage.getByRole('button', { name: 'Create invite link' }).click();
+	});
+	await ownerPage.getByRole('button', { name: 'Cancel link: Temp' }).click();
+	await expect(ownerPage.getByRole('button', { name: 'Cancel link: Temp' })).toHaveCount(0);
+	await expect(ownerPage.getByRole('heading', { name: 'Invite link for Temp' }), 'still on screen').toBeVisible();
 
 	inviteLink = await linkFor(ownerPage, async () => {
 		await ownerPage.getByLabel('Name, as shown on the big screen').fill('Sam');
@@ -109,7 +123,11 @@ test("the projector names the host: 'Sam hosting'", async ({ browser }) => {
 	await expect(projector.getByText(`Room ${code} · Sam hosting`)).toBeVisible();
 });
 
-test('a reset link replaces the password; the old one stops working', async ({ browser }) => {
+test('a reset link replaces the password, ends the old sessions, and the old password stops working', async ({ browser }) => {
+	const oldSession = await newVisitor(browser);
+	await signIn(oldSession, samEmail, 'first-password-123');
+	await oldSession.waitForURL('**/decks');
+
 	await ownerPage.goto('/hosts');
 	const resetLink = await linkFor(ownerPage, () => ownerPage.getByRole('button', { name: 'Reset password: Sam' }).click());
 	await expect(ownerPage.getByRole('heading', { name: 'Password reset link for Sam' })).toBeVisible();
@@ -120,6 +138,11 @@ test('a reset link replaces the password; the old one stops working', async ({ b
 	await sam.getByLabel(/New password/).fill('second-password-456');
 	await sam.getByRole('button', { name: 'Save new password' }).click();
 	await sam.waitForURL('**/decks');
+	await expect(sam.getByText('Signed in as Sam'), 'the session the reset just made works').toBeVisible();
+
+	await oldSession.goto('/decks');
+	await expect(oldSession, 'signed out, and not bounced in a loop').toHaveURL(`${BASE}/`);
+	await expect(oldSession.getByRole('heading', { name: 'Host sign-in' })).toBeVisible();
 
 	const fresh = await newVisitor(browser);
 	await signIn(fresh, samEmail, 'first-password-123');

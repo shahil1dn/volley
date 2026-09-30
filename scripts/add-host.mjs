@@ -35,8 +35,9 @@ try {
 		userId = data.user.id;
 	}
 	await db.query(
-		`insert into public.hosts (user_id, email) values ($1, $2)
-		 on conflict (user_id) do update set email = excluded.email`,
+		// A new password ends every older session (ADR-011).
+		`insert into public.hosts (user_id, email, sessions_valid_after) values ($1, $2, now())
+		 on conflict (user_id) do update set email = excluded.email, sessions_valid_after = now()`,
 		[userId, email],
 	);
 	console.log(`Host ready: ${email} (${existing.rows[0] ? 'password reset' : 'new account'})`);
