@@ -1,0 +1,8 @@
+# CLI deploys upload the folder and don't read .gitignore; Vercel already
+# skips .env.local, node_modules and .vercel. Keep local-only files out too.
+.env*
+.claude
+.svelte-kit
+screenshots
+test-results
+playwright-report
