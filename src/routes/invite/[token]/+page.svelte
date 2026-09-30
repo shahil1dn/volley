@@ -1,4 +1,7 @@
 <script lang="ts">
+	import Brand from '$lib/Brand.svelte';
+	import { brand } from '$lib/brand';
+
 	let { data, form } = $props();
 	let showPassword = $state(false);
 
@@ -12,12 +15,12 @@
 </script>
 
 <svelte:head>
-	<title>{isReset ? 'New password' : 'Host invite'}</title>
+	<title>{isReset ? 'New password' : 'Host invite'} · {brand.name}</title>
 	<meta name="referrer" content="no-referrer" />
 </svelte:head>
 
 <main class="phone">
-	<p class="label">Volley</p>
+	<header class="masthead"><Brand /></header>
 	{#if invite.status === 'ok'}
 		<h1>{isReset ? 'Choose a new password' : 'You’re invited to host'}</h1>
 		<p class="hint">

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import Brand from '$lib/Brand.svelte';
+	import { brand } from '$lib/brand';
 	import type { SubmitFunction } from '@sveltejs/kit';
 
 	let { data, form } = $props();
@@ -40,11 +42,11 @@
 </script>
 
 <svelte:head>
-	<title>Hosts</title>
+	<title>Hosts · {brand.name}</title>
 </svelte:head>
 
 <main class="control">
-	<p class="label"><a href="/decks">← Back to sessions</a></p>
+	<header class="masthead"><Brand /><p class="label"><a href="/decks">← Back to sessions</a></p></header>
 	<h1>Hosts</h1>
 	<p class="hint">Hosts can start sessions. Invite someone and send them the link: they choose their own password.</p>
 
