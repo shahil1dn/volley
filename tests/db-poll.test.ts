@@ -1,4 +1,4 @@
-// The poll (Milestone 2, ADR-007): start_test_poll, and submit_answer's poll
+// The poll (Milestone 2, ADR-007): a session's poll item, and submit_answer's poll
 // rules. Every test is rolled back except the concurrency one, which needs
 // separate connections and cleans up after itself.
 import { randomUUID } from 'node:crypto';
@@ -18,8 +18,10 @@ after(async () => {
 
 const OPTIONS = ['Tea', 'Coffee', 'Neither'];
 
+// A session of one poll.
 async function startPoll(client: pg.Client, hostId: string, prompt: string, options: string[]) {
-	return (await client.query('select public.start_test_poll($1, $2, $3) as result', [hostId, prompt, options])).rows[0].result;
+	const items = JSON.stringify([{ type: 'poll', prompt, options }]);
+	return (await client.query('select public.start_session($1, $2) as result', [hostId, items])).rows[0].result;
 }
 
 // A host with a live poll whose one question is open.
@@ -44,7 +46,7 @@ async function tallies(client: pg.Client, runId: string) {
 	return Object.fromEntries(rows.map((row) => [row.key, row.count]));
 }
 
-test('start_test_poll makes a poll with every option at zero', { skip }, async () => {
+test('a poll starts with every option at zero', { skip }, async () => {
 	await inRolledBackTransaction(db, async () => {
 		const poll = await openPoll(db, [' Tea ', 'Coffee', 'Neither']);
 		const item = await db.query(
@@ -56,7 +58,7 @@ test('start_test_poll makes a poll with every option at zero', { skip }, async (
 	});
 });
 
-test('start_test_poll refuses a non-host, a blank question and bad option lists', { skip }, async () => {
+test('a poll is refused for a non-host, a blank question and bad option lists', { skip }, async () => {
 	await inRolledBackTransaction(db, async () => {
 		const host = await makeRun(db);
 		assert.equal((await startPoll(db, randomUUID(), 'Q?', OPTIONS)).status, 'not_host');

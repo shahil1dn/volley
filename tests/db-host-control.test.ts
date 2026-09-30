@@ -1,4 +1,4 @@
-// Host control (S7): start_test_run, host_action's state machine
+// Host control (S7): starting a session, host_action's state machine
 // (ARCHITECTURE §4), moderation, and host_view. Every test is rolled back.
 import { randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
@@ -27,12 +27,17 @@ async function addItem(run: TestRun, position: number) {
 	await db.query(`insert into public.deck_items (deck_id, position, type) values ($1, $2, 'word_cloud')`, [run.deckId, position]);
 }
 
-test('start_test_run makes a lobby run of a one-item word cloud for that host', { skip }, async () => {
+async function startWordCloud(hostId: string, prompt: string) {
+	const items = JSON.stringify([{ type: 'word_cloud', prompt }]);
+	return (await db.query('select public.start_session($1, $2) as result', [hostId, items])).rows[0].result;
+}
+
+test('a session starts as a lobby run of its word cloud, for that host', { skip }, async () => {
 	await inRolledBackTransaction(db, async () => {
 		const host = await makeRun(db);
-		const { rows } = await db.query('select public.start_test_run($1, $2) as result', [host.userId, '  One word for AI?  ']);
-		assert.equal(rows[0].result.status, 'ok');
-		const code = rows[0].result.code;
+		const started = await startWordCloud(host.userId, '  One word for AI?  ');
+		assert.equal(started.status, 'ok');
+		const code = started.code;
 		assert.match(code, /^[A-HJ-NP-Z2-9]{5}$/);
 		const run = await db.query(
 			`select r.status, r.item_state, d.host_id, i.type, i.settings
@@ -46,11 +51,10 @@ test('start_test_run makes a lobby run of a one-item word cloud for that host', 
 	});
 });
 
-test('start_test_run refuses a non-host and a blank or overlong prompt', { skip }, async () => {
+test('a session is refused for a non-host and a blank or overlong question', { skip }, async () => {
 	await inRolledBackTransaction(db, async () => {
 		const host = await makeRun(db);
-		const start = async (hostId: string, prompt: string) =>
-			(await db.query('select public.start_test_run($1, $2) as result', [hostId, prompt])).rows[0].result.status;
+		const start = async (hostId: string, prompt: string) => (await startWordCloud(hostId, prompt)).status;
 		assert.equal(await start(randomUUID(), 'Hello?'), 'not_host');
 		assert.equal(await start(host.userId, '   '), 'invalid');
 		assert.equal(await start(host.userId, 'x'.repeat(141)), 'invalid');
