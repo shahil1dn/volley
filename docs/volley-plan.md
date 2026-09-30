@@ -337,6 +337,23 @@ The first release ships word cloud and poll only (ADR-007, 2026-09-30).
   functions in the contract; they are per-type branches in `answer_key`,
   `answer_limit` and `create_run`'s seeding. A contract would have two
   halves, and `new-activity` would scaffold both.
+- [x] **Q&A and sessions** (ADR-008, for the first workshop). *done
+  (2026-09-30):* migration `0010_qna_and_sessions.sql` (applied with the
+  owner's approval): `questions` and `question_votes`, asked through
+  `submit_answer` (1–280 characters, 5 each) and voted through
+  `vote_question`, which sets or clears a vote so a retry can't double count.
+  The shared state carries the top 40 visible, unanswered questions; hide and
+  "answered" go through `host_action` by question id; the host view and CSV
+  carry every question. `start_session` builds up to 3 activities in order
+  under one room code, and `/decks` is now that form. Proof:
+  `tests/db-qna.test.ts` (A18–A20, sort, cap, refusals, 10 concurrent upvotes
+  count once, A11 at 5,000 questions), the A21 browser test in
+  `tests/e2e/run.spec.ts` (word cloud, then Next into Q&A on the same phones;
+  asks, upvotes, undo, hide, answered and the CSV). Mutation checks: a vote
+  counted when unchanged, hidden or answered questions kept in the state, a
+  hidden question still taking votes, newest first on ties, the cap raised,
+  and the phone always sending "up": each turned a test red. Screenshots in
+  `screenshots/qna/`.
 - **Out of scope for v1: the timed quiz**, now "later, or a community
   contribution" (ADR-007). The nickname decision recorded on 2026-09-29 goes
   with it, so joining stays fully anonymous. The groundwork already built stays,
@@ -516,3 +533,11 @@ The first release ships word cloud and poll only (ADR-007, 2026-09-30).
 - **The phone keeps a chosen poll option when the question changes.** Only
   matters once decks have two polls in a row (Milestone 3); nothing is sent
   until Vote is pressed.
+- **Drop `start_test_run` and `start_test_poll` after the next deploy.** The
+  app now starts sessions with `start_session`, but the deployed production
+  build still calls the old two, so 0010 kept them. Once a deploy lands, a
+  migration drops them and `tests/db-host-control.test.ts` and
+  `tests/db-poll.test.ts` move to `start_session`.
+- **The projector's Q&A count tops out at 40**, because it counts the shared
+  state's list, which is capped. Fine for a workshop; a true count would need
+  one more field in the state.
