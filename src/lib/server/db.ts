@@ -1,6 +1,7 @@
 import { attachDatabasePool } from '@vercel/functions';
 import pg from 'pg';
 import { POSTGRES_URL } from '$env/static/private';
+import { retryColdConnect } from '$lib/server/cold-connect';
 import { SUPABASE_ROOT_CA } from '$lib/server/supabase-ca';
 
 // Every server-side database call goes through here, over a direct Postgres
@@ -57,6 +58,6 @@ function getPool(): pg.Pool {
 // Runs one of the statements above and returns its single result, or null
 // when there is no row or the function returned null.
 export async function dbCall<T>(statement: keyof typeof STATEMENTS, params: unknown[]): Promise<T | null> {
-	const { rows } = await getPool().query(STATEMENTS[statement], params);
+	const { rows } = await retryColdConnect(() => getPool().query(STATEMENTS[statement], params));
 	return (rows[0]?.result ?? null) as T | null;
 }
