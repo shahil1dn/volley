@@ -76,6 +76,13 @@ After S8 comes **"Going live"**, just before the first real workshop:
 
 ## 4. What will bite
 
+- **Production is the London project `qeheedlsskaurqshmueb`; tests use
+  `volley-test-db` (`gzwzfjukswcifikbsufm`)** (ADR-010). Any write to
+  production, migrations included, needs Shahil's OK. `.env.local` holds only
+  the test project. `npm test`, the browser tests and `migrate` refuse
+  production; `migrate --production` is the deliberate way in.
+- **The test project allows public sign-up** (Supabase's default). Production
+  has it off. Nothing deployed uses the test project's keys.
 - **Test commands never pipe a verdict into `tail`.** Redirect to a file and
   capture `$?`. The Stop hook blocks claims made without a command run in the
   same turn.

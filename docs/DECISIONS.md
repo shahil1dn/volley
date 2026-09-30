@@ -236,6 +236,13 @@ phones × 3 words within ~5s:
 (`scripts/load/burst-preview-200.json`, `…-200-direct.json`.) No error-level
 or pool-error log lines during the runs.
 
+**Later (2026-09-30, ADR-010):** the connection strings in `.env.local` are
+now the separate test project's. Production's live only on Vercel, and
+`scripts/migrate.mjs` refuses production without `--production`. The pool also
+retries once when a *new* connection times out
+(`src/lib/server/cold-connect.ts`): after a few idle minutes the pooler took
+3.3s to accept its first connection, just over the 3s limit.
+
 **Details**
 - One `pg.Pool` per function instance, created lazily, **max 3 connections**.
   Fluid compute runs many requests on one instance, and a call holds a
@@ -330,3 +337,31 @@ Owner decision. Amends ADR-007.
 Owner decision. Volley is released under the MIT licence, as SPEC 30 and the
 Constraints already assumed. The `LICENSE` file is added once the owner confirms
 the name on the copyright line.
+
+## ADR-010: A separate test database; production changes need the owner's OK (2026-09-30)
+
+Owner decision, taken once the app went public.
+
+- **The London project `aib-live-db` (ref `qeheedlsskaurqshmueb`) is
+  production.** Applying a migration to it, or running anything that writes to
+  it (the database test suite included), needs the owner's approval, asked in
+  the session that does it.
+- **Tests use their own free Supabase project**, `volley-test-db` (ref
+  `gzwzfjukswcifikbsufm`, London), created through the Vercel Marketplace and
+  connected to no Vercel project. It is built from `db/migrations/` alone, so it
+  also proves the migrations rebuild the schema from nothing. Supabase
+  branching needs the Pro plan, so it isn't used. The free plan allows two
+  active free projects per person, and these two use both.
+- **`.env.local` holds the test project's values only.** Production's database
+  settings live only on Vercel.
+- **Machines, not memory, keep tests off production.** `npm test` preloads
+  `tests/refuse-production.ts`, and `playwright.config.ts` checks before the
+  dev server starts. Either refuses to run if any setting mentions production's
+  ref. `migrate` refuses production unless given `--production`.
+  `tests/production-guard.test.ts` proves each of these, and each was
+  mutation-checked.
+- **To migrate production** (with approval): pull its settings into a
+  temporary file (`vercel env pull .env.production.local --environment=production`,
+  untested so far), run
+  `node --env-file=.env.production.local scripts/migrate.mjs --production`,
+  then delete the file.
