@@ -329,7 +329,8 @@ test('A21: the workshop flow: a word cloud, then Q&A with asks, upvotes, hide an
 	await ask(phones[1], 'Is AI safe?');
 	const upvote = (phone: Page, question: string) => phone.getByRole('button', { name: `Upvote “${question}”` });
 	for (const phone of [phones[2], phones[0]]) {
-		await upvote(phone, 'Is AI safe?').click({ timeout: 5000 });
+		// Phones poll every 3s behind a 1s cache, so a new question can take a few seconds to reach them.
+		await upvote(phone, 'Is AI safe?').click({ timeout: 10_000 });
 		await expect(upvote(phone, 'Is AI safe?')).toHaveAttribute('aria-pressed', 'true');
 	}
 
