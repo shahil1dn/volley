@@ -67,7 +67,7 @@ test('a host signs in, reaches their decks and signs out; the session is httpOnl
 
 	await signIn(page, hostEmail, hostPassword);
 	await page.waitForURL('**/decks');
-	await expect(page.getByRole('heading', { name: 'Your decks' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Start a session' })).toBeVisible();
 	await expect(page.getByText(`Signed in as ${hostEmail}`)).toBeVisible();
 
 	expect(await page.evaluate(() => document.cookie)).not.toContain('volley_host');

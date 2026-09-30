@@ -12,6 +12,8 @@
 		itemState: string;
 		item: { type: string; settings: Record<string, unknown> } | null;
 		tallies: [string, number, boolean][];
+		// Q&A: [id, text, votes, hidden, answered], the main list first.
+		questions: [number, string, number, boolean, boolean][];
 	};
 
 	const POLL_MS = 2000;
@@ -31,6 +33,7 @@
 	// the end (submit_answer checks the status), so say so.
 	const answers = $derived(ended ? 'closed' : view?.itemState);
 	const isPoll = $derived(view?.item?.type === 'poll');
+	const isQna = $derived(view?.item?.type === 'qna');
 	const prompt = $derived(typeof view?.item?.settings.prompt === 'string' ? view.item.settings.prompt : '');
 	// What the projector shows: hidden words stay out of the image too.
 	const visible = $derived((view?.tallies ?? []).filter(([, , hidden]) => !hidden).map(([word, count]): [string, number] => [word, count]));
@@ -122,27 +125,50 @@
 		</div>
 		{#if notice}<p class="error" role="alert">{notice}</p>{/if}
 
-		<h2>{isPoll ? 'Votes' : 'Words'}</h2>
-		{#if view.tallies.length === 0}
-			<p class="hint">No answers yet.</p>
+		{#if isQna}
+			<h2>Questions</h2>
+			{#if view.questions.length === 0}
+				<p class="hint">No questions yet.</p>
+			{:else}
+				<ul class="control__words">
+					{#each view.questions as [id, text, votes, hidden, answered] (id)}
+						<li class:control__word--hidden={hidden}>
+							<span>{text} <span class="hint">× {votes}{hidden ? ', hidden' : ''}{answered ? ', answered' : ''}</span></span>
+							<div class="control__buttons">
+								<button class="btn btn--quiet" disabled={busy || ended} onclick={() => act(answered ? 'unanswer' : 'answer', String(id))} aria-label="{answered ? 'Back to list:' : 'Mark answered:'} “{text}”">
+									{answered ? 'Back to list' : 'Mark answered'}
+								</button>
+								<button class="btn btn--quiet" disabled={busy || ended} onclick={() => act(hidden ? 'unhide' : 'hide', String(id))} aria-label="{hidden ? 'Unhide' : 'Hide'} “{text}”">
+									{hidden ? 'Unhide' : 'Hide'}
+								</button>
+							</div>
+						</li>
+					{/each}
+				</ul>
+			{/if}
 		{:else}
-			<ul class="control__words">
-				{#each view.tallies as [word, count, hidden] (word)}
-					<li class:control__word--hidden={hidden}>
-						<span>{word} <span class="hint">× {count}{hidden ? ', hidden' : ''}</span></span>
-						<button class="btn btn--quiet" disabled={busy || ended} onclick={() => act(hidden ? 'unhide' : 'hide', word)} aria-label="{hidden ? 'Unhide' : 'Hide'} “{word}”">
-							{hidden ? 'Unhide' : 'Hide'}
-						</button>
-					</li>
-				{/each}
-			</ul>
+			<h2>{isPoll ? 'Votes' : 'Words'}</h2>
+			{#if view.tallies.length === 0}
+				<p class="hint">No answers yet.</p>
+			{:else}
+				<ul class="control__words">
+					{#each view.tallies as [word, count, hidden] (word)}
+						<li class:control__word--hidden={hidden}>
+							<span>{word} <span class="hint">× {count}{hidden ? ', hidden' : ''}</span></span>
+							<button class="btn btn--quiet" disabled={busy || ended} onclick={() => act(hidden ? 'unhide' : 'hide', word)} aria-label="{hidden ? 'Unhide' : 'Hide'} “{word}”">
+								{hidden ? 'Unhide' : 'Hide'}
+							</button>
+						</li>
+					{/each}
+				</ul>
+			{/if}
 		{/if}
 
 		<h2>Export</h2>
 		<p class="hint">Everyone's answers are deleted 24 hours after the session ends. Download what you need before then.</p>
 		<div class="control__actions">
 			<a class="btn btn--quiet" href="/api/r/{data.code}/host/export" download>Download results (CSV)</a>
-			{#if !isPoll}
+			{#if view.item?.type === 'word_cloud'}
 				<button class="btn btn--quiet" disabled={visible.length === 0} onclick={downloadPng}>Download word cloud (PNG)</button>
 			{/if}
 		</div>

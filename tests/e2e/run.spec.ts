@@ -8,7 +8,7 @@ import { createClient } from '@supabase/supabase-js';
 import type pg from 'pg';
 import { connectAsOwner } from '../../scripts/pg-connect.ts';
 import { makeRun, submit, type TestRun } from '../db-helpers.ts';
-import { addHost, BASE, signIn } from './helpers.ts';
+import { addHost, BASE, signIn, startSession } from './helpers.ts';
 
 const PHONE = { viewport: { width: 375, height: 812 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
 const SCREENS = 'screenshots/s7';
@@ -67,10 +67,7 @@ test('A8: phones answer and the projector follows; hide, freeze and end reach ev
 	const control = await laptop.newPage();
 	await signIn(control, hostEmail, hostPassword);
 	await control.waitForURL('**/decks');
-	await control.getByLabel('Question', { exact: true }).fill(PROMPT);
-	await control.getByRole('button', { name: 'Start a test run' }).click();
-	await control.waitForURL(/\/run\/[A-Z0-9]{5}\/control$/);
-	const code = /\/run\/([A-Z0-9]{5})\/control$/.exec(control.url())?.[1] ?? '';
+	const code = await startSession(control, [{ type: 'Word cloud', question: PROMPT }]);
 	await control.getByRole('button', { name: 'Open answers' }).click();
 	await expect(control.getByText('Session: live. Answers: open.')).toBeVisible();
 
@@ -170,10 +167,7 @@ test('S8: after the session ends, the host downloads a CSV matching the tallies 
 	const control = await laptop.newPage();
 	await signIn(control, hostEmail, hostPassword);
 	await control.waitForURL('**/decks');
-	await control.getByLabel('Question', { exact: true }).fill('Anything, even "odd", words?');
-	await control.getByRole('button', { name: 'Start a test run' }).click();
-	await control.waitForURL(/\/run\/[A-Z0-9]{5}\/control$/);
-	const code = /\/run\/([A-Z0-9]{5})\/control$/.exec(control.url())?.[1] ?? '';
+	const code = await startSession(control, [{ type: 'Word cloud', question: 'Anything, even "odd", words?' }]);
 	await control.getByRole('button', { name: 'Open answers' }).click();
 	await expect(control.getByText('Session: live. Answers: open.')).toBeVisible();
 
@@ -195,7 +189,7 @@ test('S8: after the session ends, the host downloads a CSV matching the tallies 
 	const csv = await readFile(await csvFile.path(), 'utf8');
 	expect(csv.startsWith('\uFEFF'), 'starts with the UTF-8 byte-order mark').toBe(true);
 	const [header, ...rows] = parseCsv(csv.slice(1));
-	expect(header).toEqual(['Activity', 'Type', 'Question', 'Answer', 'Count', 'Hidden']);
+	expect(header).toEqual(['Activity', 'Type', 'Question', 'Answer', 'Count', 'Hidden', 'Answered']);
 
 	const { rows: tallies } = await db.query(
 		`select t.key, t.count, t.hidden from public.tallies t join public.runs r on r.id = t.run_id
@@ -212,6 +206,7 @@ test('S8: after the session ends, the host downloads a CSV matching the tallies 
 			t.key.startsWith('=') ? `'${t.key}` : t.key,
 			String(t.count),
 			t.hidden ? 'yes' : 'no',
+			'',
 		]),
 	);
 
@@ -230,11 +225,7 @@ test('poll: phones vote once each, the bars match the tallies, and hide, freeze,
 	const control = await laptop.newPage();
 	await signIn(control, hostEmail, hostPassword);
 	await control.waitForURL('**/decks');
-	await control.getByLabel('Poll question').fill('Tea or coffee?');
-	await control.getByLabel('Options, one per line (2 to 6)').fill('Tea\nCoffee\n\nNeither\n');
-	await control.getByRole('button', { name: 'Start a test poll' }).click();
-	await control.waitForURL(/\/run\/[A-Z0-9]{5}\/control$/);
-	const code = /\/run\/([A-Z0-9]{5})\/control$/.exec(control.url())?.[1] ?? '';
+	const code = await startSession(control, [{ type: 'Poll', question: 'Tea or coffee?', options: 'Tea\nCoffee\n\nNeither\n' }]);
 	await expect(control.getByRole('heading', { name: 'Votes' })).toBeVisible();
 	await expect(control.getByRole('button', { name: /PNG/ }), 'the PNG export is word-cloud only').toHaveCount(0);
 	await control.getByRole('button', { name: 'Open answers' }).click();
@@ -299,8 +290,76 @@ test('poll: phones vote once each, the bars match the tallies, and hide, freeze,
 	await control.getByRole('link', { name: 'Download results (CSV)' }).click();
 	const [, ...csvRows] = parseCsv((await readFile(await (await csvDownload).path(), 'utf8')).slice(1));
 	expect(csvRows).toEqual([
-		['1', 'poll', 'Tea or coffee?', 'Coffee', '2', 'no'],
-		['1', 'poll', 'Tea or coffee?', 'Tea', '1', 'no'],
-		['1', 'poll', 'Tea or coffee?', 'Neither', '0', 'yes'],
+		['1', 'poll', 'Tea or coffee?', 'Coffee', '2', 'no', ''],
+		['1', 'poll', 'Tea or coffee?', 'Tea', '1', 'no', ''],
+		['1', 'poll', 'Tea or coffee?', 'Neither', '0', 'yes', ''],
+	]);
+});
+
+test('A21: the workshop flow: a word cloud, then Q&A with asks, upvotes, hide and answered', async ({ browser }) => {
+	const laptop = await browser.newContext({ baseURL: BASE, viewport: { width: 1280, height: 720 }, acceptDownloads: true });
+	const control = await laptop.newPage();
+	await signIn(control, hostEmail, hostPassword);
+	await control.waitForURL('**/decks');
+	const code = await startSession(control, [
+		{ type: 'Word cloud', question: 'One word for AI?' },
+		{ type: 'Q&A', question: 'Ask us anything' },
+	]);
+	await control.getByRole('button', { name: 'Open answers' }).click();
+	await expect(control.getByText('Activity 1 of 2')).toBeVisible();
+
+	const projector = await laptop.newPage();
+	await projector.goto(`/run/${code}`);
+	const phones = await Promise.all([1, 2, 3].map(() => newPhone(browser)));
+	for (const phone of phones) await phone.goto(`/j/${code}`);
+	await sendWord(phones[0], 'robots');
+	await expect(projector.getByRole('list', { name: 'Word cloud' }).getByText('robots')).toBeVisible({ timeout: 3000 });
+
+	// Same room, same phones: the host moves on and the Q&A arrives on every screen.
+	await control.getByRole('button', { name: 'Next' }).click();
+	await control.getByRole('button', { name: 'Open answers' }).click();
+	await expect(control.getByText('Answers: open. Activity 2 of 2.')).toBeVisible();
+	for (const phone of phones) await expect(phone.getByRole('heading', { name: 'Ask us anything' })).toBeVisible({ timeout: 5000 });
+
+	async function ask(phone: Page, question: string) {
+		await phone.getByLabel('Your question (anonymous)').fill(question);
+		await phone.getByRole('button', { name: 'Ask' }).click();
+	}
+	await ask(phones[0], 'What is RAG?');
+	await ask(phones[1], 'Is AI safe?');
+	const upvote = (phone: Page, question: string) => phone.getByRole('button', { name: `Upvote “${question}”` });
+	for (const phone of [phones[2], phones[0]]) {
+		await upvote(phone, 'Is AI safe?').click({ timeout: 5000 });
+		await expect(upvote(phone, 'Is AI safe?')).toHaveAttribute('aria-pressed', 'true');
+	}
+
+	// Most votes first, on the projector and the phones, within 3 seconds.
+	const top = projector.getByRole('list', { name: 'Top questions' }).getByRole('listitem');
+	await expect(top).toHaveText(['Is AI safe? 2 votes', 'What is RAG? 0 votes'], { timeout: 3000 });
+	await expect(phones[1].locator('.question')).toHaveText([/^Is AI safe\?\s*2 votes/, /^What is RAG\?\s*0 votes/], { timeout: 5000 });
+	await projector.screenshot({ path: 'screenshots/qna/projector.png' });
+	await phones[1].screenshot({ path: 'screenshots/qna/phone.png' });
+
+	// Undo, by the same button.
+	await upvote(phones[0], 'Is AI safe?').click();
+	await expect(upvote(phones[0], 'Is AI safe?')).toHaveAttribute('aria-pressed', 'false');
+	await expect(top).toHaveText(['Is AI safe? 1 vote', 'What is RAG? 0 votes'], { timeout: 3000 });
+
+	await control.getByRole('button', { name: 'Hide “What is RAG?”' }).click();
+	await expect(top).toHaveText(['Is AI safe? 1 vote'], { timeout: 3000 });
+	await expect(phones[2].getByText('What is RAG?')).toHaveCount(0, { timeout: 5000 });
+
+	await control.getByRole('button', { name: 'Mark answered: “Is AI safe?”' }).click();
+	await expect(projector.getByText('Questions will appear here as they come in.')).toBeVisible({ timeout: 3000 });
+	await expect(phones[2].getByText('No questions yet. Ask the first one.')).toBeVisible({ timeout: 5000 });
+	await control.screenshot({ path: 'screenshots/qna/control.png', fullPage: true });
+
+	const csvDownload = control.waitForEvent('download');
+	await control.getByRole('link', { name: 'Download results (CSV)' }).click();
+	const [, ...csvRows] = parseCsv((await readFile(await (await csvDownload).path(), 'utf8')).slice(1));
+	expect(csvRows).toEqual([
+		['1', 'word_cloud', 'One word for AI?', 'robots', '1', 'no', ''],
+		['2', 'qna', 'Ask us anything', 'Is AI safe?', '1', 'no', 'yes'],
+		['2', 'qna', 'Ask us anything', 'What is RAG?', '0', 'yes', 'no'],
 	]);
 });

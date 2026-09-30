@@ -1,41 +1,46 @@
 <script lang="ts">
 	let { data, form } = $props();
+
+	const TYPES = [
+		['word_cloud', 'Word cloud'],
+		['poll', 'Poll'],
+		['qna', 'Q&A'],
+	] as const;
+	// The first activity defaults to a word cloud; the others start empty.
+	const slots = Array.from({ length: 3 }, (_, i) => form?.slots?.[i] ?? { type: i === 0 ? 'word_cloud' : '', prompt: '', options: '' });
 </script>
 
 <svelte:head>
-	<title>Your decks</title>
+	<title>Start a session</title>
 </svelte:head>
 
 <main class="phone">
 	<p class="label">Signed in as {data.email}</p>
-	<h1>Your decks</h1>
-	<p class="hint">Decks arrive in Milestone 3. For now, start a one-question word cloud or poll.</p>
-	<form method="POST" action="?/startRun" class="stack">
-		<label class="field">
-			<span class="hint">Question</span>
-			<input name="prompt" maxlength="140" required defaultValue={form?.prompt ?? ''} placeholder="One word for AI?" />
-		</label>
-		<button class="btn btn--block">Start a test run</button>
+	<h1>Start a session</h1>
+	<p class="hint">Up to 3 activities, in order, under one room code. Saved decks arrive in Milestone 3.</p>
+	<form method="POST" action="?/startSession" class="stack">
+		{#each slots as slot, i (i)}
+			<fieldset class="stack">
+				<legend class="label">Activity {i + 1}</legend>
+				<label class="field">
+					<span class="hint">Activity {i + 1} type</span>
+					<select name="type{i}" value={slot.type}>
+						{#if i > 0}<option value="">None</option>{/if}
+						{#each TYPES as [value, name] (value)}<option {value}>{name}</option>{/each}
+					</select>
+				</label>
+				<label class="field">
+					<span class="hint">Activity {i + 1} question</span>
+					<input name="prompt{i}" maxlength="140" defaultValue={slot.prompt} />
+				</label>
+				<label class="field">
+					<span class="hint">Activity {i + 1} poll options, one per line (polls only)</span>
+					<textarea name="options{i}" rows="3" defaultValue={slot.options}></textarea>
+				</label>
+			</fieldset>
+		{/each}
+		<button class="btn btn--block">Start session</button>
 		{#if form?.message}<p class="error" role="alert">{form.message}</p>{/if}
-	</form>
-	<form method="POST" action="?/startPoll" class="stack">
-		<label class="field">
-			<span class="hint">Poll question</span>
-			<input name="prompt" maxlength="140" required defaultValue={form?.pollPrompt ?? ''} placeholder="Tea or coffee?" />
-		</label>
-		<label class="field">
-			<span class="hint">Options, one per line (2 to 6)</span>
-			<textarea
-				name="options"
-				rows="4"
-				required
-				defaultValue={form?.optionsText ?? ''}
-				aria-invalid={form?.pollMessage ? 'true' : undefined}
-				aria-describedby={form?.pollMessage ? 'poll-problem' : undefined}
-			></textarea>
-		</label>
-		<button class="btn btn--block">Start a test poll</button>
-		{#if form?.pollMessage}<p class="error" id="poll-problem" role="alert">{form.pollMessage}</p>{/if}
 	</form>
 	<form method="POST" action="?/signOut" class="stack">
 		<button class="btn btn--block btn--quiet">Sign out</button>

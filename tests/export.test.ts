@@ -16,21 +16,24 @@ test('csvCell quotes commas, quotes and line breaks, and defuses formulas', () =
 	assert.equal(csvCell('=hyperlink("x")'), `"'=hyperlink(""x"")"`);
 });
 
-test('resultsCsv: one row per answer per activity, BOM first, CRLF lines', () => {
+test('resultsCsv: one row per answer or question per activity, BOM first, CRLF lines', () => {
 	const csv = resultsCsv({
 		code: 'ABCDE',
 		items: [
-			{ position: 0, type: 'word_cloud', prompt: 'One word, please?', tallies: [['beta', 2, false], ['rude', 1, true]] },
-			{ position: 1, type: 'word_cloud', prompt: null, tallies: [] },
-			{ position: 2, type: 'word_cloud', prompt: 'Last', tallies: [['z', 4, false]] },
+			{ position: 0, type: 'word_cloud', prompt: 'One word, please?', tallies: [['beta', 2, false], ['rude', 1, true]], questions: [] },
+			{ position: 1, type: 'word_cloud', prompt: null, tallies: [], questions: [] },
+			{ position: 2, type: 'word_cloud', prompt: 'Last', tallies: [['z', 4, false]], questions: [] },
+			{ position: 3, type: 'qna', prompt: 'Ask', tallies: [], questions: [['Why?', 3, false, true], ['Rude', 0, true, false]] },
 		],
 	});
 	assert.equal(
 		csv,
-		'\uFEFFActivity,Type,Question,Answer,Count,Hidden\r\n' +
-			'1,word_cloud,"One word, please?",beta,2,no\r\n' +
-			'1,word_cloud,"One word, please?",rude,1,yes\r\n' +
-			'3,word_cloud,Last,z,4,no\r\n',
+		'\uFEFFActivity,Type,Question,Answer,Count,Hidden,Answered\r\n' +
+			'1,word_cloud,"One word, please?",beta,2,no,\r\n' +
+			'1,word_cloud,"One word, please?",rude,1,yes,\r\n' +
+			'3,word_cloud,Last,z,4,no,\r\n' +
+			'4,qna,Ask,Why?,3,no,yes\r\n' +
+			'4,qna,Ask,Rude,0,yes,no\r\n',
 	);
 });
 

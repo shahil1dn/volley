@@ -21,7 +21,13 @@
 	const isPoll = $derived(room?.item?.type === 'poll');
 	const bars = $derived(isPoll ? pollBars(room?.item?.settings.options, words) : []);
 	const mostVotes = $derived(Math.max(1, ...bars.map((bar) => bar.votes)));
-	const answerNoun = $derived(isPoll ? (answers === 1 ? 'vote' : 'votes') : answers === 1 ? 'answer' : 'answers');
+	const isQna = $derived(room?.item?.type === 'qna');
+	// The projector shows the top of the main list; phones see all of it.
+	const topQuestions = $derived((room?.questions ?? []).slice(0, 6));
+	const count = $derived(isQna ? (room?.questions ?? []).length : answers);
+	const countNoun = $derived(
+		isQna ? (count === 1 ? 'question' : 'questions') : isPoll ? (count === 1 ? 'vote' : 'votes') : count === 1 ? 'answer' : 'answers',
+	);
 	const prompt = $derived(typeof room?.item?.settings.prompt === 'string' ? room.item.settings.prompt : '');
 	const note = $derived(
 		room?.status === 'ended' ? 'Session ended'
@@ -90,7 +96,7 @@
 				<p class="host__joinText">Scan, or go to</p>
 				<p class="host__url">{data.joinUrl.replace(/^https?:\/\//, '')}</p>
 				<p class="host__code">{data.code}</p>
-				<p class="host__count" aria-live="polite">{answers} {answerNoun}</p>
+				<p class="host__count" aria-live="polite">{count} {countNoun}</p>
 			</div>
 		</div>
 	</header>
@@ -105,6 +111,16 @@
 				</li>
 			{/each}
 		</ol>
+	{:else if isQna}
+		{#if topQuestions.length === 0}
+			<p class="cloud__empty">Questions will appear here as they come in.</p>
+		{:else}
+			<ol class="qna" aria-label="Top questions">
+				{#each topQuestions as [id, text, votes] (id)}
+					<li class="qna__row"><span>{text}</span> <span class="qna__votes">{votes} {votes === 1 ? 'vote' : 'votes'}</span></li>
+				{/each}
+			</ol>
+		{/if}
 	{:else if words.length === 0}
 		<p class="cloud__empty">Answers will appear here as they come in.</p>
 	{:else}

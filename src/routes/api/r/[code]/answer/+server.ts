@@ -63,7 +63,25 @@ export const POST: RequestHandler = async ({ params, cookies, request, getClient
 		return json({ status: 'bad_request' }, { status: 415 });
 	}
 	const body: unknown = await request.json().catch(() => null);
-	const { submitId, value } = (body ?? {}) as { submitId?: unknown; value?: unknown };
+	const { submitId, value, questionId, up } = (body ?? {}) as { submitId?: unknown; value?: unknown; questionId?: unknown; up?: unknown };
+
+	// An upvote on a Q&A question, or taking one back. Sent here rather than to
+	// a route of its own because the participant cookie is scoped to this path.
+	if (questionId !== undefined) {
+		if (!Number.isSafeInteger(questionId) || (questionId as number) < 1 || typeof up !== 'boolean') {
+			return json({ status: 'bad_request' }, { status: 400 });
+		}
+		const voted = await dbCall<{ status: string; voted?: boolean; votes?: number }>('vote_question', [
+			code,
+			participantId,
+			questionId,
+			up,
+			hashClientIp(PARTICIPANT_SECRET, getClientAddress()),
+		]);
+		if (!voted) error(500, 'Could not save the vote');
+		return json(voted, { status: HTTP_STATUS[voted.status] ?? 500 });
+	}
+
 	if (typeof submitId !== 'string' || !UUID_PATTERN.test(submitId) || typeof value !== 'string' || value.length > MAX_RAW_VALUE) {
 		return json({ status: 'bad_request' }, { status: 400 });
 	}

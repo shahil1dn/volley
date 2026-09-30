@@ -12,6 +12,8 @@ export type RoomState = {
 	serverNow: number;
 	item: { type: string; settings: Record<string, unknown> } | null;
 	tallies: [string, number][];
+	// A Q&A item's main list: [id, text, votes], most votes first.
+	questions: [number, string, number][];
 	players: [string, number][];
 };
 
@@ -34,6 +36,7 @@ export const MESSAGES: Record<string, string> = {
 	frozen: 'The host has paused answers for a moment.',
 	rate_limited: 'Lots of answers are arriving at once. Wait a few seconds, then send again.',
 	invalid: 'Answers need 1 to 25 characters.',
+	questionInvalid: 'Questions need 1 to 280 characters.',
 	network: "That didn't send. Check your connection and send again. Your answer is kept.",
 };
 
@@ -64,6 +67,25 @@ export function loadSent(code: string): SentByItem {
 export function saveSent(code: string, sent: SentByItem) {
 	try {
 		localStorage.setItem(`volley:${code}`, JSON.stringify(sent));
+	} catch {
+		// Nothing to do: see loadSent.
+	}
+}
+
+// Which Q&A questions this phone has upvoted, kept like SentByItem. If it's
+// lost, pressing Upvote again is harmless: the server sets the vote, so it
+// never counts twice.
+export function loadUpvoted(code: string): number[] {
+	try {
+		return JSON.parse(localStorage.getItem(`volley:${code}:upvoted`) ?? '[]');
+	} catch {
+		return [];
+	}
+}
+
+export function saveUpvoted(code: string, ids: number[]) {
+	try {
+		localStorage.setItem(`volley:${code}:upvoted`, JSON.stringify(ids));
 	} catch {
 		// Nothing to do: see loadSent.
 	}

@@ -18,3 +18,18 @@ export async function signIn(page: Page, email: string, password: string) {
 	await page.getByLabel('Password').fill(password);
 	await page.getByRole('button', { name: 'Sign in' }).click();
 }
+
+export type Activity = { type: 'Word cloud' | 'Poll' | 'Q&A'; question: string; options?: string };
+
+// Fills the /decks session form (up to 3 activities, in order) and starts it.
+// Returns the room code from the control view it lands on.
+export async function startSession(page: Page, activities: Activity[]): Promise<string> {
+	for (const [i, activity] of activities.entries()) {
+		await page.getByLabel(`Activity ${i + 1} type`).selectOption({ label: activity.type });
+		await page.getByLabel(`Activity ${i + 1} question`).fill(activity.question);
+		if (activity.options) await page.getByLabel(`Activity ${i + 1} poll options`).fill(activity.options);
+	}
+	await page.getByRole('button', { name: 'Start session' }).click();
+	await page.waitForURL(/\/run\/[A-Z0-9]{5}\/control$/);
+	return /\/run\/([A-Z0-9]{5})\/control$/.exec(page.url())?.[1] ?? '';
+}

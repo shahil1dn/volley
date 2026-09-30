@@ -5,9 +5,11 @@
 	import {
 		isNewer,
 		loadSent,
+		loadUpvoted,
 		MESSAGES,
 		newSubmitId,
 		saveSent,
+		saveUpvoted,
 		serverClockOffset,
 		type RoomState,
 		type SentByItem,
@@ -33,6 +35,9 @@
 	let choice = $state('');
 	let busy = $state(false);
 	let notice = $state('');
+	// Q&A: the questions this phone has upvoted, and those with a vote in flight.
+	let upvoted = $state<number[]>([]);
+	let voting = $state<number[]>([]);
 	// The answer being sent, kept with its id until the server has decided on it,
 	// so pressing Send again after a failure retries the same submit (SPEC 12).
 	let pending: { submitId: string; value: string } | null = null;
@@ -41,10 +46,12 @@
 	const position = $derived(room?.currentPosition ?? 0);
 	const prompt = $derived(typeof item?.settings.prompt === 'string' ? item.settings.prompt : 'Share a word or short phrase');
 	const isPoll = $derived(item?.type === 'poll');
+	const isQna = $derived(item?.type === 'qna');
+	const questions = $derived(room?.questions ?? []);
 	const options = $derived(isPoll && Array.isArray(item?.settings.options) ? item.settings.options.map(String) : []);
 	const allowed = $derived(Number(item?.settings.answersPerPerson ?? DEFAULT_ANSWERS));
 	const mine = $derived(sent[position] ?? { words: [], left: allowed });
-	const accepting = $derived(room?.status === 'live' && room.itemState === 'open' && (item?.type === 'word_cloud' || isPoll));
+	const accepting = $derived(room?.status === 'live' && room.itemState === 'open' && (item?.type === 'word_cloud' || isPoll || isQna));
 
 	async function poll() {
 		try {
@@ -68,22 +75,26 @@
 		await fetch(answerUrl, { cache: 'no-store' }).catch(() => undefined);
 	}
 
-	function post(answer: { submitId: string; value: string }) {
+	// An answer ({submitId, value}) or an upvote ({questionId, up}). Both are safe
+	// to send again: an answer by its submit id, an upvote because it sets a vote.
+	type Outcome = { status: string; left?: number; voted?: boolean };
+
+	function post(body: object) {
 		return fetch(answerUrl, {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify(answer),
+			body: JSON.stringify(body),
 		});
 	}
 
-	async function submitWithRetries(answer: { submitId: string; value: string }): Promise<{ status: string; left?: number }> {
+	async function submitWithRetries(body: object): Promise<Outcome> {
 		for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
 			if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt - 1]));
 			try {
-				let response = await post(answer);
+				let response = await post(body);
 				if (response.status === 401) {
 					await join();
-					response = await post(answer);
+					response = await post(body);
 				}
 				if (response.status >= 500) continue;
 				return await response.json();
@@ -115,7 +126,7 @@
 			pending = null;
 			return result.status === 'ok';
 		}
-		notice = MESSAGES[result.status] ?? MESSAGES.network;
+		notice = (isQna && result.status === 'invalid' ? MESSAGES.questionInvalid : MESSAGES[result.status]) ?? MESSAGES.network;
 		// Refused for good: the next Send is a new answer. After a network failure or
 		// a busy room, the same answer keeps its id.
 		if (result.status !== 'network' && result.status !== 'rate_limited') pending = null;
@@ -133,6 +144,31 @@
 		if (await deliver(value, value)) draft = '';
 	}
 
+	async function ask(event: SubmitEvent) {
+		event.preventDefault();
+		const value = draft.trim();
+		if (busy || !value) return;
+		if ([...value].length > 280) {
+			notice = MESSAGES.questionInvalid;
+			return;
+		}
+		if (await deliver(value, value)) draft = '';
+	}
+
+	async function upvote(id: number) {
+		if (voting.includes(id)) return;
+		voting = [...voting, id];
+		notice = '';
+		const result = await submitWithRetries({ questionId: id, up: !upvoted.includes(id) });
+		voting = voting.filter((other) => other !== id);
+		if (result.status !== 'ok') {
+			notice = MESSAGES[result.status] ?? MESSAGES.network;
+			return;
+		}
+		upvoted = result.voted ? [...new Set([...upvoted, id])] : upvoted.filter((other) => other !== id);
+		saveUpvoted(code, upvoted);
+	}
+
 	async function vote(event: SubmitEvent) {
 		event.preventDefault();
 		if (busy || choice === '') return;
@@ -141,6 +177,7 @@
 
 	onMount(() => {
 		sent = loadSent(code);
+		upvoted = loadUpvoted(code);
 		join();
 		poll();
 		const timer = setInterval(() => {
@@ -166,6 +203,42 @@
 	{:else if room.status === 'ended'}
 		<h1>That's a wrap</h1>
 		<p class="hint">This session has ended. Thanks for joining in.</p>
+	{:else if accepting && isQna}
+		<h1>{prompt}</h1>
+		{#if mine.left > 0}
+			<form class="stack" onsubmit={ask}>
+				<label class="field">
+					<span class="hint">Your question (anonymous)</span>
+					<textarea bind:value={draft} rows="3" maxlength="400" enterkeyhint="send"></textarea>
+				</label>
+				<button class="btn btn--block" disabled={busy || !draft.trim()}>{busy ? 'Sending…' : 'Ask'}</button>
+			</form>
+		{:else}
+			<p class="hint">You've asked as many questions as this allows. You can still upvote.</p>
+		{/if}
+		{#if notice}<p class="error" role="alert">{notice}</p>{/if}
+		<h2>Questions</h2>
+		{#if questions.length === 0}
+			<p class="hint">No questions yet. Ask the first one.</p>
+		{:else}
+			<ol class="questions">
+				{#each questions as [id, text, votes] (id)}
+					<li class="question">
+						<span>{text}</span>
+						<span class="question__votes">{votes} {votes === 1 ? 'vote' : 'votes'}</span>
+						<button
+							class="btn btn--quiet"
+							aria-pressed={upvoted.includes(id)}
+							aria-label="Upvote “{text}”"
+							disabled={voting.includes(id)}
+							onclick={() => upvote(id)}
+						>
+							Upvote
+						</button>
+					</li>
+				{/each}
+			</ol>
+		{/if}
 	{:else if accepting && isPoll && mine.left > 0}
 		<h1 id="poll-question">{prompt}</h1>
 		<form class="stack" onsubmit={vote}>

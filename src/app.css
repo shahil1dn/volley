@@ -38,11 +38,11 @@ p { margin: 0; }
 
 /* ---------- controls ---------- */
 .field { display: block; }
-.field input, .field textarea {
+.field input, .field textarea, .field select {
   width: 100%; resize: vertical; padding: 14px 16px; font: 16px var(--font-body); color: var(--ink);
   border: 1px solid var(--line); border-radius: var(--radius-input); background: var(--paper);
 }
-.field input:focus-visible, .field textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.field input:focus-visible, .field textarea:focus-visible, .field select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
 .btn {
   display: inline-block; border: 0; cursor: pointer; text-decoration: none; text-align: center;
   padding: 15px 24px; border-radius: var(--radius-pill);
@@ -61,6 +61,7 @@ p { margin: 0; }
 }
 .phone h1 { font-size: clamp(26px, 7vw, 40px); margin: 14px 0 12px; }
 .stack { display: grid; gap: 14px; margin-top: 28px; }
+fieldset.stack { border: 0; padding: 0; min-width: 0; }
 .phone__foot { margin-top: 28px; }
 
 .btn--quiet { background: var(--paper); color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
@@ -124,6 +125,25 @@ h2 { font-family: var(--font-body); font-size: 18px; font-weight: 600; color: va
 .choice input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
 .choice:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+/* Q&A on the phone: each question with its votes and an upvote toggle. */
+.questions { list-style: none; margin: 0; padding: 0; display: grid; }
+.question {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center;
+  padding: 12px 0; border-bottom: 1px solid var(--line); color: var(--ink); overflow-wrap: anywhere;
+}
+.question__votes { grid-column: 1; color: var(--smoke); font-size: 14px; }
+.question .btn { grid-column: 2; grid-row: 1 / span 2; padding: 10px 16px; }
+.question .btn[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+
+/* Q&A on the projector: the top questions, most votes first. */
+.qna { min-height: 0; overflow: hidden; list-style: none; margin: 0; padding: 0 2vw; display: grid; align-content: start; gap: clamp(10px, 2vh, 24px); }
+.qna__row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: baseline;
+  font-size: clamp(20px, 2.2vw, 40px); color: var(--ink); padding-bottom: clamp(8px, 1.4vh, 16px);
+  border-bottom: 1px solid var(--line); overflow-wrap: anywhere;
+}
+.qna__votes { font-weight: 600; white-space: nowrap; }
+
 @keyframes pop { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .cloud__word { animation: none; }
@@ -138,4 +158,5 @@ h2 { font-family: var(--font-body); font-size: 18px; font-weight: 600; color: va
 .control__words { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .control__words li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); color: var(--ink); }
 .control__words .btn { padding: 8px 18px; }
+.control__buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .control__word--hidden > span { text-decoration: line-through; color: var(--smoke); }
