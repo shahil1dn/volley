@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { isNewer, type RoomState } from '$lib/room-client';
+	import { pollBars } from '$lib/poll';
 	import { centreOut, wordSizeVw } from '$lib/words';
 
 	let { data } = $props();
@@ -17,6 +18,10 @@
 	const words = $derived(room?.tallies ?? []);
 	const biggest = $derived(words[0]?.[1] ?? 1);
 	const answers = $derived(words.reduce((sum, [, count]) => sum + count, 0));
+	const isPoll = $derived(room?.item?.type === 'poll');
+	const bars = $derived(isPoll ? pollBars(room?.item?.settings.options, words) : []);
+	const mostVotes = $derived(Math.max(1, ...bars.map((bar) => bar.votes)));
+	const answerNoun = $derived(isPoll ? (answers === 1 ? 'vote' : 'votes') : answers === 1 ? 'answer' : 'answers');
 	const prompt = $derived(typeof room?.item?.settings.prompt === 'string' ? room.item.settings.prompt : '');
 	const note = $derived(
 		room?.status === 'ended' ? 'Session ended'
@@ -85,12 +90,22 @@
 				<p class="host__joinText">Scan, or go to</p>
 				<p class="host__url">{data.joinUrl.replace(/^https?:\/\//, '')}</p>
 				<p class="host__code">{data.code}</p>
-				<p class="host__count" aria-live="polite">{answers} {answers === 1 ? 'answer' : 'answers'}</p>
+				<p class="host__count" aria-live="polite">{answers} {answerNoun}</p>
 			</div>
 		</div>
 	</header>
 
-	{#if words.length === 0}
+	{#if isPoll}
+		<ol class="poll" aria-label="Poll results">
+			{#each bars as bar (bar.label)}
+				<li class="poll__row">
+					<span>{bar.label}</span>
+					<span class="poll__count">{bar.votes} {bar.votes === 1 ? 'vote' : 'votes'}</span>
+					<span class="poll__track" aria-hidden="true"><span class="poll__bar" style:width="{(bar.votes / mostVotes) * 100}%"></span></span>
+				</li>
+			{/each}
+		</ol>
+	{:else if words.length === 0}
 		<p class="cloud__empty">Answers will appear here as they come in.</p>
 	{:else}
 		<ul class="cloud" aria-label="Word cloud" bind:this={cloud}>

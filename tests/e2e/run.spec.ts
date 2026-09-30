@@ -67,7 +67,7 @@ test('A8: phones answer and the projector follows; hide, freeze and end reach ev
 	const control = await laptop.newPage();
 	await signIn(control, hostEmail, hostPassword);
 	await control.waitForURL('**/decks');
-	await control.getByLabel('Question').fill(PROMPT);
+	await control.getByLabel('Question', { exact: true }).fill(PROMPT);
 	await control.getByRole('button', { name: 'Start a test run' }).click();
 	await control.waitForURL(/\/run\/[A-Z0-9]{5}\/control$/);
 	const code = /\/run\/([A-Z0-9]{5})\/control$/.exec(control.url())?.[1] ?? '';
@@ -170,7 +170,7 @@ test('S8: after the session ends, the host downloads a CSV matching the tallies 
 	const control = await laptop.newPage();
 	await signIn(control, hostEmail, hostPassword);
 	await control.waitForURL('**/decks');
-	await control.getByLabel('Question').fill('Anything, even "odd", words?');
+	await control.getByLabel('Question', { exact: true }).fill('Anything, even "odd", words?');
 	await control.getByRole('button', { name: 'Start a test run' }).click();
 	await control.waitForURL(/\/run\/[A-Z0-9]{5}\/control$/);
 	const code = /\/run\/([A-Z0-9]{5})\/control$/.exec(control.url())?.[1] ?? '';
@@ -223,4 +223,84 @@ test('S8: after the session ends, the host downloads a CSV matching the tallies 
 	expect([...png.subarray(0, 8)], 'PNG signature').toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 	expect([png.readUInt32BE(16), png.readUInt32BE(20)], 'width and height').toEqual([1600, 900]);
 	await pngFile.saveAs('screenshots/s8/word-cloud-export.png');
+});
+
+test('poll: phones vote once each, the bars match the tallies, and hide, freeze, end and CSV work', async ({ browser }) => {
+	const laptop = await browser.newContext({ baseURL: BASE, viewport: { width: 1280, height: 720 }, acceptDownloads: true });
+	const control = await laptop.newPage();
+	await signIn(control, hostEmail, hostPassword);
+	await control.waitForURL('**/decks');
+	await control.getByLabel('Poll question').fill('Tea or coffee?');
+	await control.getByLabel('Options, one per line (2 to 6)').fill('Tea\nCoffee\n\nNeither\n');
+	await control.getByRole('button', { name: 'Start a test poll' }).click();
+	await control.waitForURL(/\/run\/[A-Z0-9]{5}\/control$/);
+	const code = /\/run\/([A-Z0-9]{5})\/control$/.exec(control.url())?.[1] ?? '';
+	await expect(control.getByRole('heading', { name: 'Votes' })).toBeVisible();
+	await expect(control.getByRole('button', { name: /PNG/ }), 'the PNG export is word-cloud only').toHaveCount(0);
+	await control.getByRole('button', { name: 'Open answers' }).click();
+	await expect(control.getByText('Session: live. Answers: open.')).toBeVisible();
+
+	const projector = await laptop.newPage();
+	await projector.goto(`/run/${code}`);
+	const results = projector.getByRole('list', { name: 'Poll results' });
+	await expect(results.getByRole('listitem')).toHaveCount(3);
+
+	const phones = await Promise.all([1, 2, 3].map(() => newPhone(browser)));
+	for (const [i, choice] of ['Coffee', 'Coffee', 'Tea'].entries()) {
+		const phone = phones[i];
+		await phone.goto(`/j/${code}`);
+		if (i === 0) {
+			await expect(phone.getByRole('radio')).toHaveCount(3);
+			await phone.screenshot({ path: 'screenshots/poll/phone-before-voting.png' });
+		}
+		await phone.getByRole('radio', { name: choice }).check();
+		await phone.getByRole('button', { name: 'Vote' }).click();
+		await expect(phone.getByText(`You voted: ${choice}.`)).toBeVisible();
+	}
+	// A reload remembers the vote and offers no second one.
+	await phones[0].reload();
+	await expect(phones[0].getByText('You voted: Coffee.')).toBeVisible();
+	await expect(phones[0].getByRole('button', { name: 'Vote' })).toHaveCount(0);
+
+	// Within 3 seconds, the bars read exactly what the tallies hold, in the host's order.
+	const { rows: tallies } = await db.query(
+		`select t.key, t.count from public.tallies t join public.runs r on r.id = t.run_id where r.code = $1`,
+		[code],
+	);
+	expect(Object.fromEntries(tallies.map((t) => [t.key, t.count]))).toEqual({ Tea: 1, Coffee: 2, Neither: 0 });
+	const expectedBars = ['Tea', 'Coffee', 'Neither'].map((label) => {
+		const votes = tallies.find((t) => t.key === label).count;
+		return `${label} ${votes} ${votes === 1 ? 'vote' : 'votes'}`;
+	});
+	await expect(results.getByRole('listitem')).toHaveText(expectedBars, { timeout: 3000 });
+	await expect(projector.getByText('3 votes')).toBeVisible();
+	// Bar lengths too, once the 400ms grow has settled: the most-voted option
+	// fills its track and the rest are in proportion to it.
+	await projector.waitForTimeout(600);
+	const fill = await projector.locator('.poll__track').evaluateAll((tracks) =>
+		tracks.map((track) => Math.round((track.firstElementChild!.getBoundingClientRect().width / track.getBoundingClientRect().width) * 100)),
+	);
+	expect(fill).toEqual([50, 100, 0]);
+	await projector.screenshot({ path: 'screenshots/poll/projector-3-votes.png' });
+
+	await control.getByRole('button', { name: 'Hide “Neither”' }).click();
+	await expect(results.getByRole('listitem')).toHaveCount(2, { timeout: 3000 });
+	await expect(results.getByText('Neither')).toHaveCount(0);
+
+	await control.getByRole('button', { name: 'Freeze input' }).click();
+	for (const phone of phones) await expect(phone.getByRole('heading', { name: 'Answers are paused' })).toBeVisible({ timeout: 5000 });
+
+	control.once('dialog', (dialog) => dialog.accept());
+	await control.getByRole('button', { name: 'End session' }).click();
+	for (const phone of phones) await expect(phone.getByRole('heading', { name: "That's a wrap" })).toBeVisible({ timeout: 5000 });
+	await expect(projector.getByText('Session ended')).toBeVisible({ timeout: 3000 });
+
+	const csvDownload = control.waitForEvent('download');
+	await control.getByRole('link', { name: 'Download results (CSV)' }).click();
+	const [, ...csvRows] = parseCsv((await readFile(await (await csvDownload).path(), 'utf8')).slice(1));
+	expect(csvRows).toEqual([
+		['1', 'poll', 'Tea or coffee?', 'Coffee', '2', 'no'],
+		['1', 'poll', 'Tea or coffee?', 'Tea', '1', 'no'],
+		['1', 'poll', 'Tea or coffee?', 'Neither', '0', 'yes'],
+	]);
 });

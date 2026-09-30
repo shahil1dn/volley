@@ -20,6 +20,7 @@ const STATEMENTS = {
 	submit_answer: 'select public.submit_answer($1, $2, $3, $4, $5) as result',
 	allow_sign_in: 'select public.allow_sign_in($1, $2) as result',
 	start_test_run: 'select public.start_test_run($1, $2) as result',
+	start_test_poll: 'select public.start_test_poll($1, $2, $3) as result',
 	host_action: 'select public.host_action($1, $2, $3, $4) as result',
 	host_view: 'select public.host_view($1, $2) as result',
 	host_export: 'select public.host_export($1, $2) as result',

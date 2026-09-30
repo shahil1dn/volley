@@ -29,6 +29,8 @@
 	let clockOffsetMs = $state(0);
 	let sent = $state<SentByItem>({});
 	let draft = $state('');
+	// The chosen poll option's position, as the server expects it.
+	let choice = $state('');
 	let busy = $state(false);
 	let notice = $state('');
 	// The answer being sent, kept with its id until the server has decided on it,
@@ -38,9 +40,11 @@
 	const item = $derived(room?.item ?? null);
 	const position = $derived(room?.currentPosition ?? 0);
 	const prompt = $derived(typeof item?.settings.prompt === 'string' ? item.settings.prompt : 'Share a word or short phrase');
+	const isPoll = $derived(item?.type === 'poll');
+	const options = $derived(isPoll && Array.isArray(item?.settings.options) ? item.settings.options.map(String) : []);
 	const allowed = $derived(Number(item?.settings.answersPerPerson ?? DEFAULT_ANSWERS));
 	const mine = $derived(sent[position] ?? { words: [], left: allowed });
-	const accepting = $derived(room?.status === 'live' && room.itemState === 'open' && item?.type === 'word_cloud');
+	const accepting = $derived(room?.status === 'live' && room.itemState === 'open' && (item?.type === 'word_cloud' || isPoll));
 
 	async function poll() {
 		try {
@@ -96,14 +100,9 @@
 		saveSent(code, $state.snapshot(sent));
 	}
 
-	async function send(event: SubmitEvent) {
-		event.preventDefault();
-		const value = draft.trim();
-		if (busy || !value) return;
-		if (normaliseWord(value) === null) {
-			notice = MESSAGES.invalid;
-			return;
-		}
+	// Sends one answer (a word, or a poll option's position) and records what the
+	// phone shows for it. True when the server accepted it.
+	async function deliver(value: string, shown: string): Promise<boolean> {
 		if (pending?.value !== value) pending = { submitId: newSubmitId(), value };
 
 		busy = true;
@@ -112,15 +111,32 @@
 		busy = false;
 
 		if (result.status === 'ok' || result.status === 'limit') {
-			record(result.status === 'ok' ? value : null, result.left ?? 0);
+			record(result.status === 'ok' ? shown : null, result.left ?? 0);
 			pending = null;
-			if (result.status === 'ok') draft = '';
-			return;
+			return result.status === 'ok';
 		}
 		notice = MESSAGES[result.status] ?? MESSAGES.network;
 		// Refused for good: the next Send is a new answer. After a network failure or
 		// a busy room, the same answer keeps its id.
 		if (result.status !== 'network' && result.status !== 'rate_limited') pending = null;
+		return false;
+	}
+
+	async function send(event: SubmitEvent) {
+		event.preventDefault();
+		const value = draft.trim();
+		if (busy || !value) return;
+		if (normaliseWord(value) === null) {
+			notice = MESSAGES.invalid;
+			return;
+		}
+		if (await deliver(value, value)) draft = '';
+	}
+
+	async function vote(event: SubmitEvent) {
+		event.preventDefault();
+		if (busy || choice === '') return;
+		await deliver(choice, options[Number(choice)] ?? '');
 	}
 
 	onMount(() => {
@@ -150,6 +166,17 @@
 	{:else if room.status === 'ended'}
 		<h1>That's a wrap</h1>
 		<p class="hint">This session has ended. Thanks for joining in.</p>
+	{:else if accepting && isPoll && mine.left > 0}
+		<h1 id="poll-question">{prompt}</h1>
+		<form class="stack" onsubmit={vote}>
+			<fieldset class="choices" aria-labelledby="poll-question">
+				{#each options as option, i (i)}
+					<label class="choice"><input type="radio" name="choice" value={String(i)} bind:group={choice} />{option}</label>
+				{/each}
+			</fieldset>
+			<button class="btn btn--block" disabled={busy || choice === ''}>{busy ? 'Sending…' : 'Vote'}</button>
+			{#if notice}<p class="error" role="alert">{notice}</p>{/if}
+		</form>
 	{:else if accepting && mine.left > 0}
 		<h1>{prompt}</h1>
 		<form class="stack" onsubmit={send}>
@@ -177,8 +204,12 @@
 	{:else if accepting}
 		<h1>{prompt}</h1>
 		<p class="hint phone__foot" aria-live="polite">
-			{MESSAGES.limit}
-			{#if mine.words.length > 0}Yours ({mine.words.join(', ')}) are on the big screen.{/if}
+			{#if isPoll}
+				{mine.words.length > 0 ? `You voted: ${mine.words[0]}.` : "You've already voted on this one."} Results are on the big screen.
+			{:else}
+				{MESSAGES.limit}
+				{#if mine.words.length > 0}Yours ({mine.words.join(', ')}) are on the big screen.{/if}
+			{/if}
 		</p>
 	{:else if room.status === 'frozen'}
 		<h1>Answers are paused</h1>

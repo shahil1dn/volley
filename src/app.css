@@ -38,11 +38,11 @@ p { margin: 0; }
 
 /* ---------- controls ---------- */
 .field { display: block; }
-.field input {
-  width: 100%; padding: 14px 16px; font: 16px var(--font-body); color: var(--ink);
+.field input, .field textarea {
+  width: 100%; resize: vertical; padding: 14px 16px; font: 16px var(--font-body); color: var(--ink);
   border: 1px solid var(--line); border-radius: var(--radius-input); background: var(--paper);
 }
-.field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.field input:focus-visible, .field textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
 .btn {
   display: inline-block; border: 0; cursor: pointer; text-decoration: none; text-align: center;
   padding: 15px 24px; border-radius: var(--radius-pill);
@@ -105,9 +105,29 @@ h2 { font-family: var(--font-body); font-size: 18px; font-weight: 600; color: va
 .cloud__word--top { color: var(--accent); }
 .cloud__word--quiet { color: var(--smoke); }
 .cloud__empty { place-self: center; text-align: center; color: var(--smoke); font-size: clamp(18px, 1.6vw, 26px); }
+/* Poll bars: one row per option, in the host's order. */
+.poll {
+  min-height: 0; overflow: hidden; list-style: none; margin: 0; padding: 0 2vw;
+  display: grid; align-content: center; gap: clamp(12px, 2.4vh, 32px);
+}
+.poll__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; font-size: clamp(20px, 2.4vw, 44px); color: var(--ink); font-weight: 500; }
+.poll__count { font-weight: 600; }
+.poll__track { grid-column: 1 / -1; height: clamp(14px, 2.2vh, 32px); background: var(--line); border-radius: var(--radius-pill); overflow: hidden; }
+.poll__bar { display: block; height: 100%; background: var(--accent); transition: width 400ms ease; }
+
+/* Poll choices on the phone: the whole row is the tap target. */
+.choices { border: 0; margin: 0; padding: 0; display: grid; gap: 10px; }
+.choice {
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px; font-size: 18px; color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--radius-input); cursor: pointer;
+}
+.choice input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+.choice:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 @keyframes pop { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .cloud__word { animation: none; }
+  .poll__bar { transition: none; }
 }
 
 /* ---------- host control ---------- */

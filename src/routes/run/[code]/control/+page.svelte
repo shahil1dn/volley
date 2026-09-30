@@ -30,6 +30,7 @@
 	// Ending leaves the item's own state as it was, but nothing is accepted after
 	// the end (submit_answer checks the status), so say so.
 	const answers = $derived(ended ? 'closed' : view?.itemState);
+	const isPoll = $derived(view?.item?.type === 'poll');
 	const prompt = $derived(typeof view?.item?.settings.prompt === 'string' ? view.item.settings.prompt : '');
 	// What the projector shows: hidden words stay out of the image too.
 	const visible = $derived((view?.tallies ?? []).filter(([, , hidden]) => !hidden).map(([word, count]): [string, number] => [word, count]));
@@ -121,7 +122,7 @@
 		</div>
 		{#if notice}<p class="error" role="alert">{notice}</p>{/if}
 
-		<h2>Words</h2>
+		<h2>{isPoll ? 'Votes' : 'Words'}</h2>
 		{#if view.tallies.length === 0}
 			<p class="hint">No answers yet.</p>
 		{:else}
@@ -141,7 +142,9 @@
 		<p class="hint">Everyone's answers are deleted 24 hours after the session ends. Download what you need before then.</p>
 		<div class="control__actions">
 			<a class="btn btn--quiet" href="/api/r/{data.code}/host/export" download>Download results (CSV)</a>
-			<button class="btn btn--quiet" disabled={visible.length === 0} onclick={downloadPng}>Download word cloud (PNG)</button>
+			{#if !isPoll}
+				<button class="btn btn--quiet" disabled={visible.length === 0} onclick={downloadPng}>Download word cloud (PNG)</button>
+			{/if}
 		</div>
 	{/if}
 </main>
