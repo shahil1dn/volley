@@ -1,7 +1,14 @@
 // Applies db/migrations/*.sql in filename order, each once. Safe to re-run.
-//   node --env-file=.env.local scripts/migrate.mjs
+//   node --env-file=.env.local scripts/migrate.mjs                  (the test project)
+//   node --env-file=<production env> scripts/migrate.mjs --production
+// Production takes the flag on purpose, and the owner's OK first (2026-09-30).
 import { readdir, readFile } from 'node:fs/promises';
 import { connectAsOwner } from './pg-connect.ts';
+import { refuseProduction } from './production-guard.ts';
+
+if (!process.argv.includes('--production')) {
+	refuseProduction(process.env, 'migrate', 'Add --production to migrate production, with the owner\'s approval.');
+}
 
 const migrationsDir = new URL('../db/migrations/', import.meta.url);
 const files = (await readdir(migrationsDir)).filter((name) => name.endsWith('.sql')).sort();

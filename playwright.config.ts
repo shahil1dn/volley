@@ -1,4 +1,9 @@
 import { defineConfig } from '@playwright/test';
+import { refuseProduction } from './scripts/production-guard.ts';
+
+// Before anything starts, the dev server included: its database is the one in
+// .env.local, and that must never be production.
+refuseProduction(process.env, 'the browser tests');
 
 // Browser tests drive real phones against a dev server on its own port, so they
 // never collide with one already running on 5173. One worker: the tests share
