@@ -1,15 +1,16 @@
 # Volley build plan
 
-From `SPEC.md` (acceptance checks A1–A17) and `docs/ARCHITECTURE.md`. Four
+From `SPEC.md` (acceptance checks A1–A21) and `docs/ARCHITECTURE.md`. Four
 milestones. Only Milestone 1 is sliced in detail; the rest are sliced when
 Milestone 1 lands, because what it proves may change them.
 
 Each slice leaves the app working and ends with its proof. Tick a slice with
 the commit and the command output that proved it.
 
-**How the database is tested.** Database tests run against the London dev
-database, each inside a transaction that is rolled back, using Node's test
-runner and `pg`. No second database is needed.
+**How the database is tested.** Database tests run against the separate test
+project `volley-test-db` (ADR-010), most inside a transaction that is rolled
+back, using Node's test runner and `pg`. `npm test` and the browser tests
+refuse to run if any setting points at production.
 
 ## Milestone 1: one word cloud, end to end, hardened
 
@@ -267,9 +268,10 @@ polling. If it does not, the delivery design changes and every later slice with 
 Moved out of Milestone 1 on 2026-09-29. Vercel calls cron jobs on "your
 project's production deployment URL" (Vercel cron docs), and the owner doesn't
 want a public production app yet. So the keep-alive can't run until going
-live, which must happen before the first real workshop anyway.
+live, which must happen before the first real workshop anyway. **Went live
+2026-09-30**; the owner's dry run on the live site passed the same day.
 
-- [ ] **Keep-alive** (was S2b). Supabase free projects
+- [ ] **Keep-alive** (was S2b; built and deployed, first scheduled run not yet checked). Supabase free projects
   pause after 7 days without activity, and workshops are fortnightly. The repo
   isn't on GitHub, so the keep-alive is a Vercel Cron Job in `vercel.json`
   calling a route that runs one tiny query, secured with `CRON_SECRET` (Vercel
@@ -306,7 +308,7 @@ live, which must happen before the first real workshop anyway.
 
 ## Milestone 2: poll, then the shared template
 
-The first release ships word cloud and poll only (ADR-007, 2026-09-30).
+The first release ships word cloud, poll and Q&A (ADR-007, amended by ADR-008, 2026-09-30).
 
 - [x] **Poll activity** (one vote per participant, live bars). *done
   (2026-09-30):* migration `0009_poll.sql`: `submit_answer` asks
@@ -362,6 +364,15 @@ The first release ships word cloud and poll only (ADR-007, 2026-09-30).
   reveal (S4), the phone's clock offset (S5), and the `players` table with its
   index (no migration dropped).
 
+## Next: the owner picks one
+
+- **(a) Invite a host.** An admin-only page where the owner adds committee
+  members and workshop leads as hosts, so they get their own logins without
+  the terminal and the pasted production settings. Each host already sees only
+  their own runs (`host_view`, `host_action` and `host_export` check the run's
+  host).
+- **(b) Milestone 4**, in the order below.
+
 ## Milestone 3: decks
 
 - Deck list and deck editor with forms generated from each activity's settings
@@ -369,14 +380,24 @@ The first release ships word cloud and poll only (ADR-007, 2026-09-30).
 
 ## Milestone 4: ready for strangers
 
-- Settings for name, colours and logo; remove AI Builders from `src/` (A16).
-- `npm run setup` and `npm run doctor` (A14).
-- `AGENTS.md`; Deploy button with the `stores` parameter (must-verify 4).
-- Full load test: 200 phones for 10 minutes, measured numbers replace the
-  estimates in ARCHITECTURE §10 (A10).
-- Supabase Security Advisor clean (A13).
-- One gate command: build, typecheck, all tests, exit code intact (A17).
-- A fresh AI agent sets up a copy from `AGENTS.md` alone (A15).
+In this order (owner, 2026-09-30):
+
+1. A generic default theme and settings for name, colours and logo; remove AI
+   Builders from `src/` (A16).
+2. `npm run setup` and `npm run doctor` (A14), built to remove the snags met
+   going live: the store's `NEXT_PUBLIC_…` names against SvelteKit's
+   `PUBLIC_…`; the pooler URL; the pinned CA; migrations and `pg_cron`; the
+   first host; preview-only deployment protection so the cron gets through;
+   generating the secrets.
+3. `AGENTS.md`, a Deploy button with the `stores` parameter (must-verify 4),
+   and a fresh AI agent setting up a copy from `AGENTS.md` alone (A15).
+4. A 10-minute, 200-phone load test, with measured numbers replacing the
+   estimates in ARCHITECTURE §10 (A10), and the Supabase Security Advisor clean
+   (A13).
+5. The folder rename to `volley` and a public GitHub repository (needs the
+   owner's OK).
+
+Also: one gate command (build, typecheck, all tests, exit code intact, A17).
 
 ## Found along the way
 
