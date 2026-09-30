@@ -308,10 +308,35 @@ live, which must happen before the first real workshop anyway.
 
 The first release ships word cloud and poll only (ADR-007, 2026-09-30).
 
-- Poll activity (one vote per participant, live bars).
+- [x] **Poll activity** (one vote per participant, live bars). *done
+  (2026-09-30):* migration `0009_poll.sql`: `submit_answer` asks
+  `answer_key` what a value counts as (a word cloud's cleaned word; a poll
+  option's text, from the position the phone sends) and `answer_limit` how
+  many a person may send (poll: 1); every other rule stays shared.
+  `create_run` starts each poll option at zero, so the shared state lists
+  every visible option and a hidden one drops out, with no new state field or
+  polling path. `start_test_poll` and a "Start a test poll" form on `/decks`
+  until decks arrive. Phone: radio options and a Vote button, sharing the
+  word cloud's send path. Projector: a bar per visible option in the host's
+  order, scaled to the leader. CSV covers polls; PNG stays word-cloud only.
+  Proof: `tests/db-poll.test.ts` (one vote each, 10 concurrent votes count
+  once, a retried submit counts once, bad positions refused, hidden option
+  leaves the state), `tests/poll.test.ts`, and the poll browser test in
+  `tests/e2e/run.spec.ts` (3 phones vote; the bars' text and lengths match
+  the tallies table; hide, freeze, end and the CSV). Mutation checks: vote
+  limit 2, any digits accepted as a position, options not started at zero,
+  bars in vote order, bars scaled to the total: each turned a test red.
+  Screenshots in `screenshots/poll/`.
 - Extract `defineActivity` from the word cloud and poll; `npm run
   new-activity`. Proves A5. The contract stays internal until a third
-  activity proves it (ADR-007).
+  activity proves it (ADR-007). *Assessed after the poll (not extracted):*
+  the shape is half obvious and half forced. Obvious, in TypeScript: the
+  settings form, the phone view, the projector view and the words for an
+  answer ("answers" or "votes"). Forced: the rules. SPEC 17–18 keep them
+  inside Postgres, so "validate" and "tally rule" can't be TypeScript
+  functions in the contract; they are per-type branches in `answer_key`,
+  `answer_limit` and `create_run`'s seeding. A contract would have two
+  halves, and `new-activity` would scaffold both.
 - **Out of scope for v1: the timed quiz**, now "later, or a community
   contribution" (ADR-007). The nickname decision recorded on 2026-09-29 goes
   with it, so joining stays fully anonymous. The groundwork already built stays,
@@ -485,6 +510,9 @@ The first release ships word cloud and poll only (ADR-007, 2026-09-30).
   after a quiet spell failed. `src/lib/server/cold-connect.ts` retries that one
   error once. The live cold case didn't recur when re-tried after 6.5 idle
   minutes, so the retry is proven by unit and mutation tests only.
-- **`/join` (enter a code) was never built.** SPEC lists it beside `/j/[code]`,
-  but no slice made it, so it answers 404. The projector shows the full join
-  address and the code, and the QR goes to `/j/[code]`.
+- **`/join` (enter a code)** was missing until 2026-09-30; now built: a GET
+  form that forgives case, spaces and dashes and shows an error tied to the
+  field (`tests/e2e/join.spec.ts`). Not deployed yet.
+- **The phone keeps a chosen poll option when the question changes.** Only
+  matters once decks have two polls in a row (Milestone 3); nothing is sent
+  until Vote is pressed.
