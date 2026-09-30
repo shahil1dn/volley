@@ -25,7 +25,7 @@ A rebuild of this repository (`~/Documents/projects/menti-pilot`, to be renamed
 ## Objective
 
 A society committee member signs in, builds a deck of a few activities (word
-cloud and multiple-choice poll; a timed quiz is out of scope for v1, ADR-007)
+cloud, multiple-choice poll and anonymous Q&A with upvotes, ADR-008; a timed quiz is out of scope for v1, ADR-007)
 and runs it from a laptop on a
 projector. Up to 200 people join by QR code with no account and answer from any
 phone. Results appear on the projector within about 2 seconds, the host can hide
@@ -52,6 +52,10 @@ own copy by telling an AI agent to follow `AGENTS.md`.
 6. Word cloud: up to N answers per participant (host sets N, 1–5, default 3);
    answers trimmed, lower-cased, spaces collapsed, 1–25 characters.
 7. Poll: 2–6 options, one vote per participant.
+7a. Q&A (ADR-008): participants ask questions anonymously (1–280 characters,
+    up to 5 each) and upvote any question once, with undo. Sorted by votes,
+    then oldest first. The host hides questions and marks them answered;
+    answered questions leave the main list.
 8. **Out of scope for the first release (ADR-007):** the timed quiz, with its
    scheduled start, server-clock countdown, speed bands, nickname leaderboard
    and correct-answer reveal. It is left for later or for a community
@@ -113,7 +117,7 @@ own copy by telling an AI agent to follow `AGENTS.md`.
 
 ## Out of scope
 
-- Q&A, ranking, scales, open text, images.
+- Ranking, scales, open text, images.
 - Starter packs, deck import/export, sharing decks between copies.
 - Per-host theming beyond the copy-wide name, colours and logo.
 - A public SDK, loading activities from outside the repo, an activity gallery,
@@ -160,6 +164,10 @@ Each check fails if the behaviour is missing.
 | A15 | A fresh AI agent with only `AGENTS.md` and new accounts reaches a working copy; the steps it had to hand to a human are listed. |
 | A16 | `grep` for "AI Builders" in `src/` finds nothing outside the default settings. |
 | A17 | Build, typecheck and all tests pass in one command with the exit code intact. |
+| A18 | DB test: a participant's second upvote on a question counts once; taking it back removes it; a retried upvote does not double count. |
+| A19 | DB test: a hidden question leaves the shared state; an answered one leaves the main list; the state never carries more than 40 questions. |
+| A20 | Retention: the purge removes a run's questions and votes with it. |
+| A21 | Browser test: phones ask and upvote; the projector and the phones show the list in vote order within 3s; hide and "answered" reach them. |
 
 ## Must verify before the slice that needs it
 

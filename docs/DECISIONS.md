@@ -299,3 +299,34 @@ Owner decision.
   third activity. With two in v1, `defineActivity` is extracted from word cloud
   and poll and stays internal until a third activity (possibly the quiz) proves
   it.
+
+## ADR-008: Q&A joins v1, for the first workshop (2026-09-30)
+
+Owner decision. Amends ADR-007.
+
+- **v1 is word cloud, poll and Q&A.** The first workshop runs its lesson from
+  Google Slides or PowerPoint (nothing to build), then a word cloud, then
+  anonymous Q&A with upvotes. Q&A moves from "Out of scope" to "In scope".
+- **Q&A, as built:** anyone in the room asks a question anonymously (1–280
+  characters, up to 5 each, the same rate limits as answers). Each participant
+  can upvote any question once and take it back. The list sorts by votes, then
+  oldest first. The host can hide a question and mark it answered; answered
+  questions leave the main list.
+- **Same architecture, no exceptions.** Asking goes through `submit_answer`
+  (a `qna` item's answer is a question). Voting is a new SECURITY DEFINER
+  function, `vote_question`, reached through the existing answer route, so the
+  participant cookie and its path don't change. An upvote *sets* a vote rather
+  than toggling it, so a retried request can't double count or undo itself, and
+  no submit id is needed. The shared cached state carries the top 40 visible,
+  unanswered questions: bounded, and nothing personal.
+- **The host builds a session of up to 3 activities in order** (type, question,
+  and options for a poll) on `/decks`, replacing the two one-question test
+  forms. The smallest step toward Milestone 3's deck editor, not the editor.
+- **The activity contract** now has a third activity. `defineActivity` is still
+  not extracted; see the plan's Milestone 2 note on its two halves.
+
+## ADR-009: MIT licence (2026-09-30)
+
+Owner decision. Volley is released under the MIT licence, as SPEC 30 and the
+Constraints already assumed. The `LICENSE` file is added once the owner confirms
+the name on the copyright line.
