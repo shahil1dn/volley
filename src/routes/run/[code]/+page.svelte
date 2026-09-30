@@ -3,6 +3,8 @@
 	import { isNewer, type RoomState } from '$lib/room-client';
 	import { pollBars } from '$lib/poll';
 	import { centreOut, wordSizeVw } from '$lib/words';
+	import Brand from '$lib/Brand.svelte';
+	import { brand } from '$lib/brand';
 
 	let { data } = $props();
 
@@ -17,6 +19,8 @@
 
 	const words = $derived(room?.tallies ?? []);
 	const biggest = $derived(words[0]?.[1] ?? 1);
+	// Tallies arrive most first, so the last is the fewest.
+	const fewest = $derived(words.at(-1)?.[1] ?? 1);
 	const answers = $derived(words.reduce((sum, [, count]) => sum + count, 0));
 	const isPoll = $derived(room?.item?.type === 'poll');
 	const bars = $derived(isPoll ? pollBars(room?.item?.settings.options, words) : []);
@@ -29,8 +33,10 @@
 		isQna ? (count === 1 ? 'question' : 'questions') : isPoll ? (count === 1 ? 'vote' : 'votes') : count === 1 ? 'answer' : 'answers',
 	);
 	const prompt = $derived(typeof room?.item?.settings.prompt === 'string' ? room.item.settings.prompt : '');
+	// Ended takes over the join box instead, so nobody scans into a finished room.
+	const ended = $derived(room?.status === 'ended');
 	const note = $derived(
-		room?.status === 'ended' ? 'Session ended'
+		ended ? ''
 		: room?.status === 'frozen' ? 'Answers paused'
 		: room?.status === 'lobby' ? 'Starting soon'
 		: room?.itemState === 'closed' ? 'Answers closed'
@@ -81,24 +87,31 @@
 </script>
 
 <svelte:head>
-	<title>Room {data.code}</title>
+	<title>Room {data.code} · {brand.name}</title>
 </svelte:head>
 
 <main class="host">
 	<header class="host__top">
 		<div>
-			<p class="label">Room {data.code}{note ? ` · ${note}` : ''}</p>
+			<div class="host__meta"><Brand /><p class="label">Room {data.code}{note ? ` · ${note}` : ''}</p></div>
 			<h1 class="host__question">{missing ? "We can't find that room" : prompt}</h1>
 		</div>
-		<div class="host__join">
-			<div class="host__qr" role="img" aria-label="QR code to join at {data.joinUrl}">{@html data.qrSvg}</div>
-			<div>
-				<p class="host__joinText">Scan, or go to</p>
-				<p class="host__url">{data.joinUrl.replace(/^https?:\/\//, '')}</p>
-				<p class="host__code">{data.code}</p>
-				<p class="host__count" aria-live="polite">{count} {countNoun}</p>
+		{#if ended}
+			<div class="host__join host__join--ended">
+				<p class="host__ended">Session ended</p>
+				<p class="host__count">{count} {countNoun}</p>
 			</div>
-		</div>
+		{:else}
+			<div class="host__join">
+				<div class="host__qr" role="img" aria-label="QR code to join at {data.joinUrl}">{@html data.qrSvg}</div>
+				<div>
+					<p class="host__joinText">Scan, or go to</p>
+					<p class="host__url">{data.joinUrl.replace(/^https?:\/\//, '')}</p>
+					<p class="host__code">{data.code}</p>
+					<p class="host__count" aria-live="polite">{count} {countNoun}</p>
+				</div>
+			</div>
+		{/if}
 	</header>
 
 	{#if isPoll}
@@ -129,7 +142,7 @@
 				<li
 					class="cloud__word"
 					class:cloud__word--top={count === biggest}
-					class:cloud__word--quiet={count !== biggest && word.length % 2 === 1}
+					class:cloud__word--quiet={count === fewest && count !== biggest}
 					style:font-size="calc(var(--fit, 1) * {wordSizeVw(count, biggest, words.length)}vw)"
 				>
 					{word}

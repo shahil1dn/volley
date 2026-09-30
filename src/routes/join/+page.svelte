@@ -1,4 +1,7 @@
 <script lang="ts">
+	import Brand from '$lib/Brand.svelte';
+	import { brand } from '$lib/brand';
+
 	let { data } = $props();
 
 	const PROBLEMS = {
@@ -8,10 +11,11 @@
 </script>
 
 <svelte:head>
-	<title>Join a session</title>
+	<title>Join a session · {brand.name}</title>
 </svelte:head>
 
 <main class="phone">
+	<header class="masthead"><Brand /></header>
 	<h1>Join a session</h1>
 	<form method="GET" class="stack">
 		<label class="field">

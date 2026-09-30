@@ -1,13 +1,16 @@
 <script lang="ts">
+	import Brand from '$lib/Brand.svelte';
+	import { brand } from '$lib/brand';
+
 	let { form } = $props();
 </script>
 
 <svelte:head>
-	<title>Host sign-in</title>
+	<title>Host sign-in · {brand.name}</title>
 </svelte:head>
 
 <main class="phone">
-	<p class="label">Volley</p>
+	<header class="masthead"><Brand /></header>
 	<h1>Host sign-in</h1>
 	<form method="POST" class="stack">
 		<label class="field">

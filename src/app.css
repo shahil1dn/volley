@@ -1,23 +1,12 @@
-/* Carried over from the prototype's phone form, which passed a vibe audit: the
-   society's type and palette, so the phone reads as part of the society rather
-   than a borrowed tool. Name, colours and logo become settings in Milestone 4. */
-@font-face { font-family: "Zarathustra"; src: url("/fonts/zarathustra.otf") format("opentype"); font-display: swap; }
-@font-face { font-family: "Switzer"; src: url("/fonts/switzer-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
-@font-face { font-family: "Switzer"; src: url("/fonts/switzer-500.woff2") format("woff2"); font-weight: 500; font-display: swap; }
-@font-face { font-family: "Switzer"; src: url("/fonts/switzer-600.woff2") format("woff2"); font-weight: 600; font-display: swap; }
-
+/* The default look: neutral, so any copy's own name, colours and logo lead.
+   Colours come from src/lib/brand.ts (injected by +layout.svelte as --accent,
+   --ink, --muted, --border, --line, --surface, --paper, --error, --on-accent).
+   System fonts: nothing to download or license, and native on every phone.
+   Spacing sticks to 4/8/12/16/24/32/48/64. */
 :root {
-  --accent: #4a2352;
-  --ink: #1e1622;
-  --graphite: #443b47;
-  --smoke: #5f5666;
-  --line: #e4e4e4;
-  --paper: #ffffff;
-  --error: #9b1c1c;
-  --font-display: "Zarathustra", Georgia, serif;
-  --font-body: "Switzer", "Helvetica Neue", Arial, sans-serif;
-  --radius-input: 16px;
-  --radius-pill: 50px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --radius: 12px;
+  --tap: 44px;
 }
 
 * { box-sizing: border-box; }
@@ -25,69 +14,103 @@ html, body { margin: 0; }
 body {
   min-height: 100svh;
   background: var(--paper);
-  color: var(--graphite);
-  font: 16px/1.5 var(--font-body);
+  color: var(--ink);
+  font: 16px/1.5 var(--font);
+  -webkit-font-smoothing: antialiased;
 }
-h1 { font-family: var(--font-display); font-weight: 400; color: var(--ink); margin: 0; line-height: 1.1; }
+h1 { font-weight: 700; letter-spacing: -0.015em; color: var(--ink); margin: 0; line-height: 1.2; text-wrap: balance; }
+h2 { font-size: 18px; font-weight: 600; color: var(--ink); margin: 32px 0 12px; }
 p { margin: 0; }
+a { color: var(--ink); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
-.label {
-  font-size: 12px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase;
-  color: var(--accent);
+.label { font-size: 14px; font-weight: 500; color: var(--muted); }
+.hint { color: var(--muted); font-size: 14px; }
+.error { color: var(--error); font-size: 14px; font-weight: 500; }
+
+/* ---------- brand ---------- */
+.brand { font-weight: 700; font-size: 16px; color: var(--ink); }
+.brand--logo { display: block; height: 32px; width: auto; }
+/* The strip at the top of every phone-sized screen: the brand, then where you are. */
+.masthead {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  min-height: 48px; padding-bottom: 12px; border-bottom: 1px solid var(--line);
 }
+.masthead > * { flex: none; }
+.masthead .label { flex: 0 1 auto; min-width: 0; text-align: right; overflow-wrap: anywhere; }
 
 /* ---------- controls ---------- */
-.field { display: block; }
+.field { display: grid; gap: 4px; }
 .field input, .field textarea, .field select {
-  width: 100%; resize: vertical; padding: 14px 16px; font: 16px var(--font-body); color: var(--ink);
-  border: 1px solid var(--line); border-radius: var(--radius-input); background: var(--paper);
+  width: 100%; min-height: var(--tap); resize: vertical; padding: 12px 16px; font: 16px/1.4 var(--font); color: var(--ink);
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--paper);
 }
-.field input:focus-visible, .field textarea:focus-visible, .field select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.field input:focus-visible, .field textarea:focus-visible, .field select:focus-visible { outline-offset: 0; border-color: var(--accent); }
+.field input::placeholder, .field textarea::placeholder { color: var(--muted); }
+.field input[aria-invalid="true"] { border-color: var(--error); }
+
 .btn {
-  display: inline-block; border: 0; cursor: pointer; text-decoration: none; text-align: center;
-  padding: 15px 24px; border-radius: var(--radius-pill);
-  background: var(--accent); color: var(--paper); font: 600 16px var(--font-body);
+  display: inline-flex; align-items: center; justify-content: center; min-height: var(--tap);
+  border: 0; cursor: pointer; text-decoration: none; text-align: center;
+  padding: 12px 20px; border-radius: var(--radius);
+  background: var(--accent); color: var(--on-accent); font: 600 16px/1.2 var(--font);
 }
-.btn:disabled { opacity: 0.5; cursor: default; }
-.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.btn--block { display: block; width: 100%; }
-.error { color: var(--error); font-size: 14px; }
-.hint { color: var(--smoke); font-size: 14px; }
+.btn:hover:not(:disabled) { filter: brightness(1.1); }
+/* Secondary: outlined in the neutral border, so the one filled button on a
+   screen is the obvious next step. */
+.btn--quiet { background: var(--paper); color: var(--ink); box-shadow: inset 0 0 0 1px var(--border); }
+.btn--quiet:hover:not(:disabled) { filter: none; background: var(--surface); }
+/* Disabled reads as "not yet", not as a faded version of the main action. */
+.btn:disabled { background: var(--surface); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); cursor: default; }
+.btn--block { display: flex; width: 100%; }
 
-/* ---------- the phone: one centred column ---------- */
-.phone {
-  min-height: 100svh; display: grid; align-content: center;
-  width: 100%; max-width: 420px; margin: 0 auto; padding: 40px 16px;
-}
-.phone h1 { font-size: clamp(26px, 7vw, 40px); margin: 14px 0 12px; }
-.stack { display: grid; gap: 14px; margin-top: 28px; }
-fieldset.stack { border: 0; padding: 0; min-width: 0; }
-.phone__foot { margin-top: 28px; }
+/* ---------- the phone: one column, pinned to the top so content never jumps ---------- */
+.phone { width: 100%; max-width: 440px; margin: 0 auto; padding: 16px 16px 48px; }
+.phone h1 { font-size: clamp(26px, 7vw, 32px); margin: 32px 0 0; }
+.phone h1 + .hint, .phone h1 + .sent { margin-top: 12px; }
+.stack { display: grid; gap: 16px; margin-top: 24px; }
+fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
+.phone__foot { margin-top: 24px; }
+/* What this phone has sent, straight under the question. */
+.sent { color: var(--ink); font-size: 16px; }
+.sent strong { font-weight: 600; }
 
-.btn--quiet { background: var(--paper); color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
-h2 { font-family: var(--font-body); font-size: 18px; font-weight: 600; color: var(--ink); margin: 32px 0 12px; }
+/* ---------- start a session ---------- */
+.activity { display: grid; gap: 12px; min-width: 0; margin: 0; padding: 24px 0 0; border: 0; border-top: 1px solid var(--line); }
+.activity legend { float: left; width: 100%; padding: 0; font-size: 16px; font-weight: 600; color: var(--ink); }
+.activity legend + * { clear: left; }
 
-/* ---------- projector (ported from the prototype) ---------- */
+/* ---------- projector ---------- */
 /* Built for a projector: the question and the way in stay fixed at the top,
-   and the cloud takes every pixel left over. Locked to the screen, because a
-   projector can't scroll. */
+   and the results take every pixel left over. Locked to the screen, because a
+   projector can't scroll. Text is sized in vw so it scales with the screen. */
 .host {
   height: 100svh; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr);
-  padding: clamp(20px, 3vw, 48px); gap: clamp(16px, 2vw, 32px);
+  padding: clamp(16px, 3vw, 48px); gap: clamp(16px, 2.5vw, 48px);
 }
-.host__top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 24px 32px; }
-.host__question { font-size: clamp(32px, 4.4vw, 72px); max-width: 22ch; margin-top: 12px; }
+.host__top { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: clamp(16px, 3vw, 48px); }
+/* A narrow window (a laptop split-screen, a phone): the join box goes under the question. */
+@media (max-width: 720px) { .host__top { grid-template-columns: minmax(0, 1fr); } }
+.host__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.host .brand { font-size: clamp(16px, 1.6vw, 28px); }
+.host .brand--logo { height: clamp(28px, 3vw, 56px); }
+.host .label { font-size: clamp(16px, 1.5vw, 28px); }
+.host__question { font-size: clamp(28px, 4.2vw, 76px); margin-top: clamp(8px, 1.2vw, 20px); }
 .host__join {
-  flex: none; display: flex; align-items: center; gap: 18px;
-  padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-input);
+  display: flex; align-items: center; gap: clamp(12px, 1.4vw, 24px);
+  padding: clamp(12px, 1.2vw, 20px); background: var(--surface); border-radius: var(--radius);
 }
 /* Sized for the back of a lecture theatre, not a laptop. */
-.host__qr { width: clamp(120px, 11vw, 240px); line-height: 0; }
+/* White behind the code whatever the paper colour: scanners want dark on light. */
+.host__qr { width: clamp(120px, 16vw, 320px); line-height: 0; padding: 8px; background: #fff; border-radius: 8px; }
 .host__qr svg { display: block; width: 100%; height: auto; }
-.host__joinText { font-size: clamp(16px, 1.3vw, 24px); color: var(--smoke); }
-.host__url { font-size: clamp(18px, 1.7vw, 32px); color: var(--ink); font-weight: 500; }
-.host__code { font-size: clamp(32px, 3.2vw, 60px); font-weight: 600; letter-spacing: 0.12em; color: var(--accent); }
-.host__count { font-size: clamp(16px, 1.3vw, 24px); color: var(--ink); font-weight: 500; }
+.host__joinText { font-size: clamp(16px, 1.9vw, 34px); color: var(--muted); }
+.host__url { font-size: clamp(18px, 2.1vw, 40px); color: var(--ink); font-weight: 600; }
+.host__code { font-size: clamp(32px, 4.4vw, 84px); font-weight: 700; letter-spacing: 0.08em; color: var(--ink); line-height: 1.1; margin: 4px 0; font-variant-numeric: tabular-nums; }
+.host__join--ended { display: grid; gap: 4px; }
+.host__ended { font-size: clamp(28px, 3.6vw, 68px); font-weight: 700; color: var(--ink); line-height: 1.1; }
+.host__count { font-size: clamp(16px, 1.9vw, 34px); color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
 
 .cloud {
   min-height: 0; overflow: hidden;
@@ -95,54 +118,57 @@ h2 { font-family: var(--font-body); font-size: 18px; font-weight: 600; color: va
   gap: 0.2em 0.55em; padding: 2vw; list-style: none; margin: 0;
 }
 .cloud__word {
-  font-family: var(--font-body); font-weight: 600; line-height: 1.05; color: var(--ink);
+  font-weight: 700; line-height: 1.05; color: var(--ink); letter-spacing: -0.01em;
   /* Sizes are set per word and shrunk together by --fit. No transition on
      font-size: the fit measures the final size straight away. */
   max-width: 100%; overflow-wrap: anywhere;
   animation: pop 420ms ease both;
 }
-/* The most popular answer takes the accent; the rest alternate by word, so a
-   word keeps its colour as the cloud reshuffles around it. */
+/* Colour follows rank: the most popular answer takes the accent, the words
+   with the fewest answers go grey, and everything between stays ink. */
 .cloud__word--top { color: var(--accent); }
-.cloud__word--quiet { color: var(--smoke); }
-.cloud__empty { place-self: center; text-align: center; color: var(--smoke); font-size: clamp(18px, 1.6vw, 26px); }
+.cloud__word--quiet { color: var(--muted); }
+.cloud__empty { place-self: center; text-align: center; color: var(--muted); font-size: clamp(18px, 2vw, 36px); }
 /* Poll bars: one row per option, in the host's order. */
 .poll {
   min-height: 0; overflow: hidden; list-style: none; margin: 0; padding: 0 2vw;
   display: grid; align-content: center; gap: clamp(12px, 2.4vh, 32px);
 }
-.poll__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; font-size: clamp(20px, 2.4vw, 44px); color: var(--ink); font-weight: 500; }
-.poll__count { font-weight: 600; }
-.poll__track { grid-column: 1 / -1; height: clamp(14px, 2.2vh, 32px); background: var(--line); border-radius: var(--radius-pill); overflow: hidden; }
-.poll__bar { display: block; height: 100%; background: var(--accent); transition: width 400ms ease; }
+.poll__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; font-size: clamp(20px, 2.4vw, 44px); color: var(--ink); font-weight: 500; }
+.poll__count { font-weight: 700; font-variant-numeric: tabular-nums; }
+.poll__track { grid-column: 1 / -1; height: clamp(16px, 2.6vh, 36px); background: var(--line); border-radius: 6px; overflow: hidden; }
+.poll__bar { display: block; height: 100%; background: var(--accent); border-radius: 6px; transition: width 400ms ease; }
 
 /* Poll choices on the phone: the whole row is the tap target. */
-.choices { border: 0; margin: 0; padding: 0; display: grid; gap: 10px; }
+.choices { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
 .choice {
-  display: flex; align-items: center; gap: 12px; padding: 14px 16px; font-size: 18px; color: var(--ink);
-  border: 1px solid var(--line); border-radius: var(--radius-input); cursor: pointer;
+  display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 12px 16px; font-size: 18px; color: var(--ink);
+  border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer;
 }
-.choice input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
-.choice:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
+.choice:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.choice input { flex: none; width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+.choice input:focus-visible { outline: none; }
+.choice:has(input:focus-visible) { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 /* Q&A on the phone: each question with its votes and an upvote toggle. */
 .questions { list-style: none; margin: 0; padding: 0; display: grid; }
 .question {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; align-items: center;
   padding: 12px 0; border-bottom: 1px solid var(--line); color: var(--ink); overflow-wrap: anywhere;
 }
-.question__votes { grid-column: 1; color: var(--smoke); font-size: 14px; }
-.question .btn { grid-column: 2; grid-row: 1 / span 2; padding: 10px 16px; }
-.question .btn[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.question__votes { grid-column: 1; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.question .btn { grid-column: 2; grid-row: 1 / span 2; padding: 8px 16px; }
+.question .btn[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); box-shadow: none; }
 
 /* Q&A on the projector: the top questions, most votes first. */
-.qna { min-height: 0; overflow: hidden; list-style: none; margin: 0; padding: 0 2vw; display: grid; align-content: start; gap: clamp(10px, 2vh, 24px); }
+.qna { min-height: 0; overflow: hidden; list-style: none; margin: 0; padding: 0 2vw; display: grid; align-content: start; gap: clamp(8px, 2vh, 24px); }
 .qna__row {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: baseline;
   font-size: clamp(20px, 2.2vw, 40px); color: var(--ink); padding-bottom: clamp(8px, 1.4vh, 16px);
   border-bottom: 1px solid var(--line); overflow-wrap: anywhere;
 }
-.qna__votes { font-weight: 600; white-space: nowrap; }
+.qna__votes { font-weight: 700; white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
+.qna__row:first-child .qna__votes { color: var(--accent); }
 
 @keyframes pop { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
@@ -151,12 +177,12 @@ h2 { font-family: var(--font-body); font-size: 18px; font-weight: 600; color: va
 }
 
 /* ---------- host control ---------- */
-.control { max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
-.control h1 { font-size: clamp(26px, 5vw, 40px); margin: 14px 0 12px; }
+.control { max-width: 760px; margin: 0 auto; padding: 16px 16px 64px; }
+.control h1 { font-size: clamp(26px, 5vw, 36px); margin: 32px 0 0; }
 .control .hint { margin-top: 8px; }
-.control__actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
-.control__words { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.control__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+.control__words { list-style: none; margin: 0; padding: 0; display: grid; }
 .control__words li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); color: var(--ink); }
-.control__words .btn { padding: 8px 18px; }
+.control__words .btn { padding: 8px 16px; }
 .control__buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
-.control__word--hidden > span { text-decoration: line-through; color: var(--smoke); }
+.control__word--hidden > span { text-decoration: line-through; color: var(--muted); }
