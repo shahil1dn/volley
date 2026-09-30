@@ -112,6 +112,7 @@ test('without a session, host pages send you to sign in and host APIs answer 401
 	await expect(page).toHaveURL(`${BASE}/`);
 	await expect(page.getByRole('heading', { name: 'Host sign-in' })).toBeVisible();
 	expect((await page.request.get(HOST_API)).status()).toBe(401);
+	expect((await page.request.get('/api/r/ABCDE/host/export')).status()).toBe(401);
 	expect((await page.request.get('/run/ABCDE/control', { maxRedirects: 0 })).status()).toBe(303);
 });
 

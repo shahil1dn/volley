@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { cloudPng } from '$lib/cloud-png';
 
 	let { data } = $props();
 
@@ -27,6 +28,8 @@
 	const live = $derived(view?.status === 'live');
 	const ended = $derived(view?.status === 'ended');
 	const prompt = $derived(typeof view?.item?.settings.prompt === 'string' ? view.item.settings.prompt : '');
+	// What the projector shows: hidden words stay out of the image too.
+	const visible = $derived((view?.tallies ?? []).filter(([, , hidden]) => !hidden).map(([word, count]): [string, number] => [word, count]));
 
 	async function refresh() {
 		try {
@@ -54,6 +57,21 @@
 		}
 		await refresh();
 		busy = false;
+	}
+
+	async function downloadPng() {
+		notice = '';
+		try {
+			const url = URL.createObjectURL(await cloudPng(prompt, visible));
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = `volley-${data.code}-word-cloud.png`;
+			link.click();
+			// Freed later, not at once: some browsers start the download after click() returns.
+			setTimeout(() => URL.revokeObjectURL(url), 10_000);
+		} catch {
+			notice = 'Could not make the image in this browser.';
+		}
 	}
 
 	onMount(() => {
@@ -115,5 +133,12 @@
 				{/each}
 			</ul>
 		{/if}
+
+		<h2>Export</h2>
+		<p class="hint">Everyone's answers are deleted 24 hours after the session ends. Download what you need before then.</p>
+		<div class="control__actions">
+			<a class="btn btn--quiet" href="/api/r/{data.code}/host/export" download>Download results (CSV)</a>
+			<button class="btn btn--quiet" disabled={visible.length === 0} onclick={downloadPng}>Download word cloud (PNG)</button>
+		</div>
 	{/if}
 </main>

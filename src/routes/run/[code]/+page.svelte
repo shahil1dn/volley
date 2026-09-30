@@ -1,15 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { isNewer, type RoomState } from '$lib/room-client';
-	import { centreOut } from '$lib/words';
+	import { centreOut, wordSizeVw } from '$lib/words';
 
 	let { data } = $props();
 
 	const POLL_MS = 1000;
-	// Word sizes in vw, ported from the prototype (measured to fit at 1280×720
-	// and 1024×768). Many distinct words need smaller type to fit one screen.
-	const SMALLEST_VW = 1.4;
-	const largestVw = (distinct: number) => Math.max(3.5, 8 - distinct * 0.08);
 	// Each shrink step, and the floor below which words would be unreadable anyway.
 	const FIT_STEP = 0.9;
 	const MIN_FIT = 0.2;
@@ -20,7 +16,6 @@
 
 	const words = $derived(room?.tallies ?? []);
 	const biggest = $derived(words[0]?.[1] ?? 1);
-	const largest = $derived(largestVw(words.length));
 	const answers = $derived(words.reduce((sum, [, count]) => sum + count, 0));
 	const prompt = $derived(typeof room?.item?.settings.prompt === 'string' ? room.item.settings.prompt : '');
 	const note = $derived(
@@ -104,7 +99,7 @@
 					class="cloud__word"
 					class:cloud__word--top={count === biggest}
 					class:cloud__word--quiet={count !== biggest && word.length % 2 === 1}
-					style:font-size="calc(var(--fit, 1) * {SMALLEST_VW + (largest - SMALLEST_VW) * Math.sqrt(count / biggest)}vw)"
+					style:font-size="calc(var(--fit, 1) * {wordSizeVw(count, biggest, words.length)}vw)"
 				>
 					{word}
 				</li>

@@ -24,6 +24,15 @@ export function countWords(texts: string[]): WordCount[] {
     .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text));
 }
 
+// A word's size in vw, ported from the prototype (measured to fit at 1280×720
+// and 1024×768). Many distinct words need smaller type to fit one screen. The
+// projector and the PNG export both size words with this.
+export function wordSizeVw(count: number, biggest: number, distinct: number): number {
+  const smallest = 1.4;
+  const largest = Math.max(3.5, 8 - distinct * 0.08);
+  return smallest + (largest - smallest) * Math.sqrt(count / biggest);
+}
+
 // Places the biggest word in the middle and alternates the rest outwards, so
 // the cloud has a centre instead of reading like a sorted list.
 export function centreOut<T>(sorted: T[]): T[] {

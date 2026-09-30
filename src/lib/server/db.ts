@@ -21,6 +21,7 @@ const STATEMENTS = {
 	start_test_run: 'select public.start_test_run($1, $2) as result',
 	host_action: 'select public.host_action($1, $2, $3, $4) as result',
 	host_view: 'select public.host_view($1, $2) as result',
+	host_export: 'select public.host_export($1, $2) as result',
 	host_email: 'select email as result from public.hosts where user_id = $1',
 } as const;
 
