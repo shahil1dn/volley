@@ -46,6 +46,7 @@ test('state carries the run, the item and empty lists for a new run', { skip }, 
 			closesAt: null,
 			item: { type: 'word_cloud', settings: { prompt: 'One word for AI?' } },
 			tallies: [],
+			questions: [],
 			players: [],
 		});
 		assert.ok(Math.abs(serverNow - Date.now()) < 60_000, 'serverNow is the database clock in milliseconds');

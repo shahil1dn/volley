@@ -193,8 +193,8 @@ test('host_export gives every activity with its full tallies, hidden words marke
 		assert.deepEqual(await exportFor(run.userId, run.code), {
 			code: run.code,
 			items: [
-				{ position: 0, type: 'word_cloud', prompt: 'One word?', tallies: [['beta', 2, false], ['alpha', 1, false], ['rude', 1, true]] },
-				{ position: 1, type: 'word_cloud', prompt: 'Another?', tallies: [] },
+				{ position: 0, type: 'word_cloud', prompt: 'One word?', tallies: [['beta', 2, false], ['alpha', 1, false], ['rude', 1, true]], questions: [] },
+				{ position: 1, type: 'word_cloud', prompt: 'Another?', tallies: [], questions: [] },
 			],
 		});
 	});
