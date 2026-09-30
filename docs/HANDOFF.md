@@ -1,4 +1,4 @@
-# Handoff (2026-09-30, end of day)
+# Handoff (2026-10-01)
 
 A pointer to now, not a log. Reasons live in `docs/DECISIONS.md`, scope in
 `SPEC.md`, design in `docs/ARCHITECTURE.md`, progress in `docs/volley-plan.md`.
@@ -7,116 +7,121 @@ remote yet.
 
 ## How this project is run
 
-- **Two sessions.** An orchestrator session talks to Shahil in plain English and
-  briefs a build session opened in this folder
-  (`~/Documents/projects/menti-pilot`). Each brief ends with: send results back
-  to the orchestrator session by title, using
+- **An orchestrator session and build sessions.** The orchestrator talks to
+  Shahil in plain English and briefs build sessions in this folder
+  (`~/Documents/projects/menti-pilot`). Every brief ends with a reply clause:
+  send results back to the orchestrator by title and id, using
   `mcp__ccd_session_mgmt__send_message` (`SendMessage` does not cross sessions).
-- **Every claim is checked.** The orchestrator re-runs the receipts below before
-  telling Shahil.
+- **Parallel builds use worktrees**, one per session, under `.claude/worktrees/`
+  on their own branch (`git worktree add .claude/worktrees/<name> -b <name> main`,
+  then copy `.env.local` in and run `npm ci`). The orchestrator merges into
+  `main`. Reserve migration and ADR numbers in each brief: two branches both
+  wrote an ADR-011 on 2026-09-30.
+- **The test lock.** Build sessions share the test database, dev-server port
+  5174 and a 15-client pooler, so every `npm test` / `npm run test:e2e` runs
+  inside `until mkdir /tmp/volley-tests.lock 2>/dev/null; do sleep 10; done; …;
+  rmdir /tmp/volley-tests.lock`.
+- **Every claim is checked.** The orchestrator re-runs the receipts on the
+  merged code before telling Shahil.
 - **Approvals happen in the session that acts.** Production database writes,
   deploys, Vercel or Supabase settings and account actions need Shahil's OK,
   asked there. An approval never travels between sessions.
-- **Standing direction from Shahil: MVP first.** No visual polish; accessibility
-  and breakage still get fixed.
+- **Security-sensitive work gets the 3-reviewer check** (code, security, tests)
+  before it goes live; every finding is verified before acting. On invite-host
+  it caught a real bug that the tests had missed.
 
 ## 1. Where things stand
 
-- **v1 is live at https://aib-live.vercel.app**: word cloud, poll and Q&A
-  (ADR-008), sessions of up to 3 activities under one room code (`/decks`), and
-  `/join` for typing a code. Production deploy
-  `dpl_GgbyG7z7MjnXkCZWHT98dcVgwNAZ`, built from `0995704`; later commits are
-  migration 0011, its tests and docs.
-- **Shahil's dry run on the live site passed** on 2026-09-30 ("all worked!").
-  He has a host login (created with `scripts/add-host.mjs` in his own terminal;
-  the password never entered a transcript).
-- **Two Supabase projects, both London** (ADR-010): production `aib-live-db`
-  (ref `qeheedlsskaurqshmueb`), connected to Vercel's **Production** only; test
-  `volley-test-db` (ref `gzwzfjukswcifikbsufm`), connected to **Preview and
-  Development**. `.env.local` holds only the test project. Both databases are
-  at the same migration; `node --env-file=.env.local scripts/migrate.mjs`
-  prints "Up to date" for the test one.
-- **Rules in force:** any write to production needs Shahil's OK (ADR-010).
-  `npm test`, the browser tests and `migrate` refuse production
+- **Live at https://aib-live.vercel.app** (deploy `dpl_HBqST4UXrWS5Q2Enrrkf4nY4Rfow`,
+  built from `main` at the commit before this handoff):
+  - word cloud, poll and Q&A (ADR-008);
+  - sessions of up to 3 activities under one room code (`/decks`);
+  - `/join` for typing a code;
+  - the new neutral look, with name, colours and logo in `src/lib/brand.ts`
+    (ADR-012);
+  - **admins invite hosts by link** (`/hosts`; ADR-011).
+- **Shahil is an admin** named "Shahil" on production (via `set-host`; his
+  password is unchanged). On 2026-10-01 he was about to invite the society's
+  VP as the first real test of invite links. Unconfirmed.
+- **Two Supabase projects, both London** (ADR-010). Production `aib-live-db`
+  (ref `qeheedlsskaurqshmueb`) is connected to Vercel's **Production** only.
+  Test `volley-test-db` (ref `gzwzfjukswcifikbsufm`) is connected to
+  **Preview and Development**. Both are at the same migration; `.env.local`
+  holds only the test project.
+- **Rules in force:** any write to production needs Shahil's OK. `npm test`,
+  the browser tests and `migrate` refuse production
   (`scripts/production-guard.ts`); `migrate --production` is the deliberate way
   in.
-- **Hourly purge** (`pg_cron`, `volley-purge-expired`) runs on both databases.
-  **Daily keep-alive** (Vercel Cron, `0 9 * * *`) is registered to the
-  production deployment.
-- **MIT licence**, copyright Shahil Rahman (ADR-009).
+- **Keep-alive** (Vercel Cron, daily at `0 9 * * *` UTC) works end to end: a
+  manual Run on 2026-09-30 at 13:28 UTC got 200s.
+- **Hourly purge** (`pg_cron`) runs on both databases.
 - **Receipts**, all against the test project: `npm test`, `npm run test:e2e`,
   `npm run check`, `npm run build`. Redirect each to a file and capture `$?`.
 
 ## 2. What is open
 
-- **The first keep-alive cron run is unchecked.** It was due 09:00–09:59 UTC on
-  2026-09-30. See §3.
-- **The cold-pooler retry hasn't been seen working live.** After a few idle
-  minutes the pooler took 3.3s to accept its first connection, over the pool's
-  3s limit. `src/lib/server/cold-connect.ts` retries that one error once. It is
-  proven by unit and mutation tests only; the live cold case didn't recur when
-  tried.
-- **The A11 index test for the purge may be flaky.** Once in four runs it
-  stayed green with the `rate_limits(window_start)` index dropped; the other
-  three went red. The cause was not found (`tests/db-retention.test.ts`).
-- **The folder rename to `volley`.** It can only happen between sessions, then
-  `vercel link` again. Now step 5 of Milestone 4.
-- **The diagrams artifact** (https://claude.ai/artifact/73x7gxAHiXBawJLvJcK4gj)
-  is stale (it predates ADR-004 onwards). Republish it from
-  `docs/ARCHITECTURE.md`. It is private to Shahil.
-- **The pooler logs in as `postgres`**, which bypasses row-level security. A
-  least-privilege database role is a follow-up (ADR-006).
+- **The VP's invite test.** Ask Shahil how it went: link opened, password set,
+  signed in, and "Name hosting" on the projector.
+- **A scheduled keep-alive run hasn't been seen**, only a manual one. Check the
+  Vercel logs during 09:00–09:59 UTC (Hobby keeps about an hour).
+- **Small design points left by the theme audit:**
+  - Upvote shows its pressed state by fill alone.
+  - The control page's status line is small.
+  - End session is styled like Next (a confirm guards it).
+  - `/decks` shows the poll-options box for every type and still says "Saved
+    decks arrive in Milestone 3".
+  - A long email wraps in the `/decks` header.
+  - The README title still says "AI Builders Live".
+- **The cold-pooler retry** (`src/lib/server/cold-connect.ts`) is proven by
+  tests only; the live cold case hasn't recurred.
+- **The purge's A11 index test may be flaky**: once green with its index
+  dropped, three times red (`tests/db-retention.test.ts`).
+- **The merged worktrees** `.claude/worktrees/invite-host` and `m4-theme` can be
+  removed (`git worktree remove …`, then `git branch -d …`). Both branches are
+  in `main`.
+- **Later:** the folder rename to `volley` (Milestone 4 step 5); the stale
+  diagrams artifact (https://claude.ai/artifact/73x7gxAHiXBawJLvJcK4gj; republish
+  it from ARCHITECTURE); a least-privilege database role (ADR-006).
 
 ## 3. Exact next pickup point
 
-1. **Check the keep-alive run.** In the Vercel dashboard: project `aib-live` →
-   Logs, filtered to path `/api/cron/keep-alive`. Expect one request with a 200
-   during 09:00–09:59 UTC. Hobby keeps logs for about an hour, so if that
-   window has passed with no record, watch the next day's run instead.
-   Without the secret, the route answers 401 (as smoke-tested); a 401 from the
-   cron itself would mean `CRON_SECRET` is wrong in Production.
-2. **Shahil picks the next slice** (`docs/volley-plan.md`, "Next: the owner
-   picks one"):
-   - **(a) Invite a host:** an admin-only page, so committee members and
-     workshop leads get their own logins without the terminal and the pasted
-     production settings. Each host already sees only their own runs.
-   - **(b) Milestone 4, in order:** generic theme and settings → `setup` +
-     `doctor` (removing today's snags) → `AGENTS.md` and a fresh-agent dry run →
-     a 10-minute, 200-phone load test and the Security Advisor → the rename and
-     a public GitHub repository (needs his OK).
+1. Ask Shahil about the VP test (§2), and fix anything it turned up first.
+2. Then **Milestone 4 step 2**: `npm run setup` and `npm run doctor` (A14). The
+   plan lists the snags they must remove: `NEXT_PUBLIC_…` against `PUBLIC_…`
+   names, the pooler URL, the pinned CA, migrations and `pg_cron`, the first
+   host (`add-host` then `set-host --admin`), preview-only protection for the
+   cron, and generating the secrets. Open `docs/volley-plan.md` at "Milestone
+   4" for the full order.
 
 ## 4. What will bite
 
-- **Production's Vercel settings are write-only** (type `sensitive`, since the
-  store was reconnected). Any production write needs Shahil to paste
-  `aib-live-db`'s `.env.local` snippet (Vercel → Storage → `aib-live-db` →
-  `.env.local` tab → Show secret) into `.env.production.local`, which is git-
-  and deploy-ignored. Delete it straight afterwards and check it's gone. The
-  snippet has `PUBLIC_SUPABASE_URL` but not `SUPABASE_URL`; `add-host` needs the
-  latter, with the same value.
-- **`add-host` bypasses the test guard**, by design: it's how production hosts
-  are made. Point it at the right file.
+- **Production's Vercel settings are write-only.** Any production write needs
+  Shahil to paste `aib-live-db`'s `.env.local` snippet (Vercel → Storage →
+  `aib-live-db` → `.env.local` tab → Show secret) into `.env.production.local`.
+  That file is git- and deploy-ignored. Delete it straight afterwards and check
+  it's gone. The snippet lacks `SUPABASE_URL`; `add-host` needs it, with the
+  value of `PUBLIC_SUPABASE_URL`.
+- **`add-host` and `set-host` bypass the test guard** by design: they are how
+  production hosts are made. Point them at the right file. `add-host` resets
+  the password and ends older sessions; `set-host` never touches the password.
+- **A password reset ends sessions**, through `hosts.sessions_valid_after`. New
+  sessions are stamped no earlier than it (ADR-011). Don't issue a host session
+  without passing that value to `startHostSession`.
+- **`use:enhance` ignores `onsubmit`'s preventDefault.** Put confirmations in
+  the enhance callback and call `cancel()`.
+- **The guard's own redirects** don't carry SvelteKit's cookie changes. Set
+  `set-cookie` on them explicitly (`clearedHostCookie`).
 - **The test store names its public settings `NEXT_PUBLIC_…`.**
   `PUBLIC_SUPABASE_URL` and `PUBLIC_SUPABASE_PUBLISHABLE_KEY` were added by hand
-  to Preview and Development; if the test store's keys rotate, update them.
-- **The test project allows public sign-up** (Supabase's default); production
-  has it off. Nothing deployed uses the test project's keys.
-- **Hobby runtime logs last about an hour**, and the log stream stops at 5
-  minutes. Check a cron or count calls during the window, not after.
+  to Preview and Development; update them if the test store's keys rotate.
+- **The test project allows public sign-up**; production has it off.
+- **Hobby runtime logs last about an hour.**
 - **Test commands never pipe a verdict into `tail`.** Redirect to a file and
-  capture `$?`. The Stop hook blocks claims made without a command run in the
-  same turn.
-- **`npm test` runs its files one at a time** (the session pooler allows 15
-  clients) and takes over a minute.
-- **Vercel CLI is v53.** `vercel env add … preview` fails non-interactively
-  (`git_branch_required`); env vars go through the REST API with the CLI's own
-  token. Store connections can't be edited in place: the dashboard offers only
-  Disconnect and Connect Project. Upgrading the CLI needs Shahil's OK.
-- **Previews are protected** (Vercel Authentication, previews only). Load
-  scripts need `VERCEL_AUTOMATION_BYPASS_SECRET` from `.env.local`; previews
-  now write to the test project.
-- **Scripts use `rejectUnauthorized:false`**; the app itself verifies the
-  pinned CA.
-- **Remote Control is on.** Shahil may follow from his phone. Once, a command
-  written next to a question box wasn't seen; put anything he must read or copy
-  inside the question itself.
+  capture `$?`.
+- **`npm test` runs its files one at a time**, and the suites take a few minutes
+  in all.
+- **Vercel CLI is v53.** Env vars go through the REST API with the CLI's own
+  token. Store connections can't be edited in place, only disconnected and
+  reconnected. Upgrading needs Shahil's OK.
+- **Remote Control is on.** Shahil may follow from his phone. Put anything he
+  must read or copy inside the question box itself.

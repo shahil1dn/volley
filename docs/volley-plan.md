@@ -366,8 +366,8 @@ The first release ships word cloud, poll and Q&A (ADR-007, amended by ADR-008, 2
 
 ## Next: the owner picks one
 
-- [x] **(a) Invite a host** (ADR-011; branch `invite-host`, not merged or
-  deployed yet). `/hosts` for admins: invite by one-time link, reset another
+- [x] **(a) Invite a host** (ADR-011; built on branch `invite-host`, merged
+  2026-09-30). `/hosts` for admins: invite by one-time link, reset another
   host's password by link, remove a host, cancel a link; `/invite/<token>` for
   the invitee; hosts named on the projector; `npm run set-host`. Migration
   `0012_host_invites.sql` is applied to the test database only. Proof:
@@ -385,9 +385,9 @@ The first release ships word cloud, poll and Q&A (ADR-007, amended by ADR-008, 2
   database's name. Each fix has a test that failed first, and each rule was
   mutation-checked. One reviewer claim was false: removed hosts' rows do go
   (`hosts.user_id` cascades from `auth.users`).
-  **To go live** (each needs the owner's OK): migrate 0012 and 0013 on production;
-  `npm run set-host -- <owner email> --name "…" --admin` against production;
-  merge and deploy.
+  **Live 2026-10-01** (owner-approved): 0012 and 0013 migrated on production,
+  the owner made admin as "Shahil" with `set-host`, and main deployed
+  (`dpl_HBqST4UXrWS5Q2Enrrkf4nY4Rfow`).
 - **(b) Milestone 4**, in the order below.
 
 ## Milestone 3: decks
@@ -399,8 +399,10 @@ The first release ships word cloud, poll and Q&A (ADR-007, amended by ADR-008, 2
 
 In this order (owner, 2026-09-30):
 
-1. A generic default theme and settings for name, colours and logo; remove AI
-   Builders from `src/` (A16).
+1. [x] A generic default theme and settings for name, colours and logo; remove
+   AI Builders from `src/` (A16). Done on branch `m4-theme` by a second build
+   session, merged 2026-09-30, live 2026-10-01 (ADR-012; `src/lib/brand.ts`,
+   `tests/brand.test.ts`).
 2. `npm run setup` and `npm run doctor` (A14), built to remove the snags met
    going live: the store's `NEXT_PUBLIC_…` names against SvelteKit's
    `PUBLIC_…`; the pooler URL; the pinned CA; migrations and `pg_cron`; the
