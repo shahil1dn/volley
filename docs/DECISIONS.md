@@ -274,6 +274,12 @@ answers let the CDN start more refresh cycles. At this rate the owner's
 worst-case month is ~264k function calls, 26% of Hobby's 1M. Options: accept
 and raise the budget, a 2-second `s-maxage`, or ISR (logged in the plan).
 
+**CA confirmed (2026-09-30).** The pinned root was taken from the live chain,
+so the owner downloaded Supabase's official certificate from the dashboard
+(Database → Settings → SSL Configuration). `openssl x509 -fingerprint -sha256`
+on the download printed the same SHA-256 as the pinned root, "Supabase Root 2021
+CA" (80:70:25:AD:…:E6:CA:FA). Trust-on-first-use is closed.
+
 ## ADR-007: The first release ships word cloud and poll; no quiz (2026-09-30)
 
 Owner decision.
