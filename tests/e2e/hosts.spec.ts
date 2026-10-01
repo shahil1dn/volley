@@ -69,8 +69,8 @@ test('an admin reaches Hosts from their sessions page and creates an invite link
 
 	// A link shown once must survive other buttons being pressed meanwhile.
 	await linkFor(ownerPage, async () => {
-		await ownerPage.getByLabel('Name, as shown on the big screen').fill('Temp');
-		await ownerPage.getByLabel('Email').fill(`temp-${samEmail}`);
+		await ownerPage.getByLabel('Their name, as shown on the big screen').fill('Temp');
+		await ownerPage.getByLabel('Their email').fill(`temp-${samEmail}`);
 		await ownerPage.getByRole('button', { name: 'Create invite link' }).click();
 	});
 	await ownerPage.getByRole('button', { name: 'Cancel link: Temp' }).click();
@@ -78,8 +78,8 @@ test('an admin reaches Hosts from their sessions page and creates an invite link
 	await expect(ownerPage.getByRole('heading', { name: 'Invite link for Temp' }), 'still on screen').toBeVisible();
 
 	inviteLink = await linkFor(ownerPage, async () => {
-		await ownerPage.getByLabel('Name, as shown on the big screen').fill('Sam');
-		await ownerPage.getByLabel('Email').fill(samEmail);
+		await ownerPage.getByLabel('Their name, as shown on the big screen').fill('Sam');
+		await ownerPage.getByLabel('Their email').fill(samEmail);
 		await ownerPage.getByRole('button', { name: 'Create invite link' }).click();
 	});
 	expect(inviteLink).toMatch(new RegExp(`^${BASE}/invite/[A-Za-z0-9_-]{43}$`));
@@ -102,7 +102,13 @@ test('the invitee sets their own password, is signed in, and the link then stops
 	await expect(sam).toHaveURL(inviteLink);
 
 	await sam.getByLabel(/Choose a password/).fill('first-password-123');
+	// SvelteKit refuses a form POST whose Origin isn't the site's own, but only in
+	// production builds; the dev server these tests use skips that check. So
+	// check what the browser sends: a page with Referrer-Policy no-referrer
+	// makes it send "Origin: null", which production refused on 2026-10-01.
+	const posted = sam.waitForRequest((request) => request.method() === 'POST' && request.url().startsWith(inviteLink));
 	await sam.getByRole('button', { name: 'Create my login' }).click();
+	expect((await (await posted).allHeaders()).origin, 'the form post carries the site’s own origin').toBe(BASE);
 	await sam.waitForURL('**/decks');
 	await expect(sam.getByText('Signed in as Sam')).toBeVisible();
 	await expect(sam.getByRole('link', { name: 'Manage hosts' }), 'not an admin').toHaveCount(0);

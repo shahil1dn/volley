@@ -390,7 +390,11 @@ Supersedes SPEC 1's "hosts are created only by `add-host`".
   SHA-256 is stored (`host_invites.token_hash`). Valid 7 days, used once, and
   only for the Auth account with the invited email (`accept_host_invite` checks
   `auth.users`). A newer link for the same email replaces an older unused one.
-  The page sends `Referrer-Policy: no-referrer` and `no-store`. A token in a
+  The page sends `Referrer-Policy: same-origin` and `no-store`. (It first sent
+  `no-referrer`, which makes browsers send `Origin: null` on the page's own form
+  post; SvelteKit's production CSRF check then refused every invite, on
+  2026-10-01. The dev server skips that check, so the browser test now checks
+  the Origin the browser actually sends.) A token in a
   path does appear in Vercel's request logs (kept about an hour on Hobby);
   accepted, because the link is single-use and short-lived, and the logs are
   the owner's.

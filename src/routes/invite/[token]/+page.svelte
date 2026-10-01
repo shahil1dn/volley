@@ -16,7 +16,7 @@
 
 <svelte:head>
 	<title>{isReset ? 'New password' : 'Host invite'} · {brand.name}</title>
-	<meta name="referrer" content="no-referrer" />
+	<meta name="referrer" content="same-origin" />
 </svelte:head>
 
 <main class="phone">

@@ -7,9 +7,12 @@ import type { Actions, PageServerLoad } from './$types';
 
 type Peek = { status: 'ok' | 'used' | 'expired' | 'invalid'; email?: string; name?: string; purpose?: 'invite' | 'reset' };
 
-// The token is in the path, so keep it out of Referer headers and caches.
+// The token is in the path, so keep it out of other sites' Referer headers and
+// out of caches. same-origin, not no-referrer: with no-referrer, browsers send
+// "Origin: null" on the page's own form POST, and SvelteKit's CSRF check
+// refuses it in production (it skips the check in dev).
 function keepPrivate(setHeaders: (headers: Record<string, string>) => void) {
-	setHeaders({ 'referrer-policy': 'no-referrer', 'cache-control': 'no-store' });
+	setHeaders({ 'referrer-policy': 'same-origin', 'cache-control': 'no-store' });
 }
 
 async function peek(token: string): Promise<Peek> {
