@@ -66,13 +66,16 @@
 
 	<h2>Invite a host</h2>
 	<form method="POST" action="?/invite" class="stack" use:enhance={keepLink}>
+		<!-- Someone else's details: browsers offered to autofill the admin's own
+		     name into plain "name"/"email" fields (2026-10-01), so neither the
+		     labels nor the field names look like a personal profile. -->
 		<label class="field">
-			<span class="hint">Name, as shown on the big screen</span>
-			<input name="name" maxlength="40" required autocomplete="off" defaultValue={form?.purpose === 'invite' ? (form?.name ?? '') : ''} />
+			<span class="hint">Their name, as shown on the big screen</span>
+			<input name="inviteeName" maxlength="40" required autocomplete="off" defaultValue={form?.purpose === 'invite' ? (form?.name ?? '') : ''} />
 		</label>
 		<label class="field">
-			<span class="hint">Email</span>
-			<input name="email" type="email" required autocomplete="off" defaultValue={form?.purpose === 'invite' ? (form?.email ?? '') : ''} />
+			<span class="hint">Their email</span>
+			<input name="inviteeEmail" type="email" required autocomplete="off" defaultValue={form?.purpose === 'invite' ? (form?.email ?? '') : ''} />
 		</label>
 		<button class="btn btn--block">Create invite link</button>
 	</form>

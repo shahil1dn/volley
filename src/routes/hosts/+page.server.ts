@@ -40,8 +40,8 @@ export const actions: Actions = {
 	invite: async ({ locals, request, url }) => {
 		if (!locals.host) error(403, 'Not a host');
 		const form = await request.formData();
-		const name = String(form.get('name') ?? '').trim();
-		const email = String(form.get('email') ?? '');
+		const name = String(form.get('inviteeName') ?? '').trim();
+		const email = String(form.get('inviteeEmail') ?? '');
 		return makeLink(locals.host.userId, url.origin, email, name, 'invite');
 	},
 	reset: async ({ locals, request, url }) => {
