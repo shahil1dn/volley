@@ -45,7 +45,7 @@ remote yet.
   two bugs, both fixed and deployed on 2026-10-01: every invite was refused live
   ("Cross-site POST form submissions are forbidden", caused by Referrer-Policy
   no-referrer), and the invite was saved under Shahil's name (browser autofill).
-  Shahil is re-sending Ryan a fresh link; the result is unconfirmed.
+  With a fresh link, Ryan's invite worked end to end (Shahil, 2026-10-01).
 - **Two Supabase projects, both London** (ADR-010). Production `aib-live-db`
   (ref `qeheedlsskaurqshmueb`) is connected to Vercel's **Production** only.
   Test `volley-test-db` (ref `gzwzfjukswcifikbsufm`) is connected to
@@ -63,8 +63,6 @@ remote yet.
 
 ## 2. What is open
 
-- **The VP's invite test.** Ask Shahil how it went: link opened, password set,
-  signed in, and "Name hosting" on the projector.
 - **A scheduled keep-alive run hasn't been seen**, only a manual one. Check the
   Vercel logs during 09:00–09:59 UTC (Hobby keeps about an hour).
 - **Small design points left by the theme audit:**
@@ -88,8 +86,7 @@ remote yet.
 
 ## 3. Exact next pickup point
 
-1. Ask Shahil about the VP test (§2), and fix anything it turned up first.
-2. Then **Milestone 4 step 2**: `npm run setup` and `npm run doctor` (A14). The
+1. **Milestone 4 step 2**: `npm run setup` and `npm run doctor` (A14). The
    plan lists the snags they must remove: `NEXT_PUBLIC_…` against `PUBLIC_…`
    names, the pooler URL, the pinned CA, migrations and `pg_cron`, the first
    host (`add-host` then `set-host --admin`), preview-only protection for the
