@@ -32,8 +32,8 @@ remote yet.
 
 ## 1. Where things stand
 
-- **Live at https://aib-live.vercel.app** (deploy `dpl_HBqST4UXrWS5Q2Enrrkf4nY4Rfow`,
-  built from `main` at the commit before this handoff):
+- **Live at https://aib-live.vercel.app** (deploy `dpl_2mgvPEZ7MNSenLUUjerVxQAjFQif`,
+  built from `main` at `f4ab024`):
   - word cloud, poll and Q&A (ADR-008);
   - sessions of up to 3 activities under one room code (`/decks`);
   - `/join` for typing a code;
@@ -41,8 +41,11 @@ remote yet.
     (ADR-012);
   - **admins invite hosts by link** (`/hosts`; ADR-011).
 - **Shahil is an admin** named "Shahil" on production (via `set-host`; his
-  password is unchanged). On 2026-10-01 he was about to invite the society's
-  VP as the first real test of invite links. Unconfirmed.
+  password is unchanged). The first real invite (the society's VP, Ryan) hit
+  two bugs, both fixed and deployed on 2026-10-01: every invite was refused live
+  ("Cross-site POST form submissions are forbidden", caused by Referrer-Policy
+  no-referrer), and the invite was saved under Shahil's name (browser autofill).
+  Shahil is re-sending Ryan a fresh link; the result is unconfirmed.
 - **Two Supabase projects, both London** (ADR-010). Production `aib-live-db`
   (ref `qeheedlsskaurqshmueb`) is connected to Vercel's **Production** only.
   Test `volley-test-db` (ref `gzwzfjukswcifikbsufm`) is connected to
