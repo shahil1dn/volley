@@ -7,8 +7,11 @@ import type { RequestHandler } from './$types';
 
 const COOKIE = 'volley_participant';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-// Far above the 25-character word limit; anything longer is not a real answer.
-const MAX_RAW_VALUE = 200;
+// A cheap guard before the database, which holds the real limits: 25 characters
+// for a word, 280 for a Q&A question. `.length` counts UTF-16 units and an emoji
+// is two, so the question's limit doubled; it was 200 until a 201-character
+// question was found never to arrive.
+const MAX_RAW_VALUE = 2 * 280;
 
 // Every refusal is a normal outcome the phone explains in plain words, so the
 // body always carries `status`. The HTTP code says what kind of outcome it is:
