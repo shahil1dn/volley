@@ -5,6 +5,8 @@ import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type pg from 'pg';
 import { connectAsOwner } from '../scripts/pg-connect.ts';
+import { MAX_ACTIVITIES } from '../src/lib/session-limits.ts';
+import { parseSessionForm } from '../src/lib/server/session-form.ts';
 import { inRolledBackTransaction, makeRun, scanCounts, skipWithoutDatabase as skip, submit } from './db-helpers.ts';
 
 let db: pg.Client;
@@ -239,7 +241,7 @@ test('start_session refuses bad sessions and leaves no deck behind', { skip }, a
 		const word = { type: 'word_cloud', prompt: 'Q?' };
 		for (const items of [
 			[],
-			[word, word, word, word],
+			Array.from({ length: MAX_ACTIVITIES + 1 }, () => word),
 			{ type: 'qna', prompt: 'Q?' },
 			[{ type: 'quiz', prompt: 'Q?' }],
 			[word, { type: 'qna', prompt: '   ' }],
@@ -252,6 +254,62 @@ test('start_session refuses bad sessions and leaves no deck behind', { skip }, a
 		}
 		const decksAfter = (await db.query('select count(*) from public.decks where host_id = $1', [host.userId])).rows[0].count;
 		assert.equal(decksAfter, decksBefore);
+	});
+});
+
+// The app's cap (MAX_ACTIVITIES) and the database's are written separately, so
+// this starts a session at each edge: a drift in either goes red here.
+test('start_session takes 1 up to MAX_ACTIVITIES activities and refuses 0 and one more', { skip }, async () => {
+	await inRolledBackTransaction(db, async () => {
+		const host = await makeRun(db);
+		const activity = (n: number) => ({ type: 'word_cloud', prompt: `Question ${n}` });
+		for (const count of [1, MAX_ACTIVITIES]) {
+			const result = await startSession(db, host.userId, Array.from({ length: count }, (_, n) => activity(n)));
+			assert.equal(result.status, 'ok', `${count} activities`);
+			const prompts = await db.query(
+				`select i.settings ->> 'prompt' as prompt from public.runs r join public.deck_items i on i.deck_id = r.deck_id
+				 where r.code = $1 order by i.position`,
+				[result.code],
+			);
+			assert.deepEqual(prompts.rows.map((row) => row.prompt), Array.from({ length: count }, (_, n) => `Question ${n}`));
+		}
+		for (const count of [0, MAX_ACTIVITIES + 1]) {
+			assert.equal((await startSession(db, host.userId, Array.from({ length: count }, (_, n) => activity(n)))).status, 'invalid', `${count} activities`);
+		}
+	});
+});
+
+// What the page posts, read by the server, then stored: the options that come
+// out of the database are the ones typed, in the order typed.
+test('a posted session round-trips through the reader and start_session, options included', { skip }, async () => {
+	await inRolledBackTransaction(db, async () => {
+		const host = await makeRun(db);
+		const form = new FormData();
+		const typed = [
+			{ type: 'poll', prompt: 'Tea or coffee?', options: ['Tea', 'Coffee', 'Neither', 'Water'] },
+			{ type: 'word_cloud', prompt: 'One word?', options: ['stray'] },
+			{ type: 'poll', prompt: 'Second poll?', options: ['Yes', 'No'] },
+		];
+		for (const [i, activity] of typed.entries()) {
+			form.append('type', activity.type);
+			form.append('prompt', activity.prompt);
+			for (const option of activity.options) form.append(`options${i}`, option);
+		}
+		const parsed = parseSessionForm(form);
+		assert.equal(parsed.ok, true);
+		if (!parsed.ok) return;
+		const result = await startSession(db, host.userId, parsed.items);
+		assert.equal(result.status, 'ok');
+		const stored = await db.query(
+			`select i.type, i.settings from public.runs r join public.deck_items i on i.deck_id = r.deck_id
+			 where r.code = $1 order by i.position`,
+			[result.code],
+		);
+		assert.deepEqual(stored.rows, [
+			{ type: 'poll', settings: { prompt: 'Tea or coffee?', options: ['Tea', 'Coffee', 'Neither', 'Water'] } },
+			{ type: 'word_cloud', settings: { prompt: 'One word?' } },
+			{ type: 'poll', settings: { prompt: 'Second poll?', options: ['Yes', 'No'] } },
+		]);
 	});
 });
 
