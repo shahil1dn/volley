@@ -1,7 +1,8 @@
-# AI Builders Live
+# Volley
 
-Live word clouds for AI Builders Society sessions: the host asks a question,
-everyone answers from their phone, and the cloud grows on the big screen.
+Live word clouds, polls and Q&A for workshops and talks: the host starts a
+session, everyone answers from their phone, and the results grow on the big
+screen. Name, colours and logo are yours to set (see below).
 
 SvelteKit on Vercel (London), Supabase for the database.
 
