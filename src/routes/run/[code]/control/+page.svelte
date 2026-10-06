@@ -68,7 +68,9 @@
 	// What the projector shows: hidden words stay out of the image too.
 	const visible = $derived((view?.tallies ?? []).filter(([, , hidden]) => !hidden).map(([word, count]): [string, number] => [word, count]));
 
-	async function refresh() {
+	// `fromTimer`: the steady poll, not the refresh an action asks for. Only the poll may clear a
+	// notice, or an action's own message would vanish the moment its refresh returned.
+	async function refresh(fromTimer = false) {
 		try {
 			const response = await fetch(`/api/r/${data.code}/host`, { cache: 'no-store' });
 			signedOut = response.status === 401;
@@ -77,7 +79,7 @@
 			if (response.ok) {
 				view = await response.json();
 				// A notice about a failed action is stale once the connection is back.
-				if (failedPolls > 0) notice = '';
+				if (fromTimer && failedPolls > 0) notice = '';
 				failedPolls = 0;
 			} else if (response.status !== 404 && !signedOut && !notHost) failedPolls++;
 		} catch {
@@ -127,7 +129,7 @@
 
 	onMount(() => {
 		refresh();
-		const timer = setInterval(refresh, POLL_MS);
+		const timer = setInterval(() => refresh(true), POLL_MS);
 		return () => clearInterval(timer);
 	});
 </script>
@@ -160,13 +162,19 @@
 				<div class="status__item"><dt>Answers</dt><dd>{ANSWER_LABELS[answers ?? ''] ?? answers}</dd></div>
 				<div class="status__item"><dt>Activity</dt><dd>{view.currentPosition + 1} of {view.itemCount}</dd></div>
 			</dl>
-			{#if isQna}
-				<button class="btn" disabled={busy || !live} onclick={() => act('question_next', String(view?.shown ?? ''))}>Next question</button>
-			{:else if answers === 'open'}
-				<button class="btn" disabled={busy || ended} onclick={() => act('close')}>Close answers</button>
-			{:else}
-				<button class="btn" disabled={busy || ended || view.status === 'frozen'} onclick={() => act('open')}>Open answers</button>
-			{/if}
+			<div class="control__main">
+				{#if isQna && view.status === 'lobby'}
+					<!-- Nothing can move until the session is live, so the first step is opening answers. -->
+					<button class="btn" disabled={busy} onclick={() => act('open')}>Open answers</button>
+				{:else if isQna}
+					<button class="btn btn--quiet" disabled={busy || !live} onclick={() => act('question_back', String(view?.shown ?? ''))}>Previous question</button>
+					<button class="btn" disabled={busy || !live} onclick={() => act('question_next', String(view?.shown ?? ''))}>Next question</button>
+				{:else if answers === 'open'}
+					<button class="btn" disabled={busy || ended} onclick={() => act('close')}>Close answers</button>
+				{:else}
+					<button class="btn" disabled={busy || ended || view.status === 'frozen'} onclick={() => act('open')}>Open answers</button>
+				{/if}
+			</div>
 		</div>
 		<p class="hint">
 			Projector: <a href="/run/{data.code}" target="_blank" rel="noopener">open the projector view</a>. Phones join at
@@ -174,15 +182,8 @@
 		</p>
 
 		<div class="control__bar">
-			{#if isQna}
-				<div class="control__group" role="group" aria-labelledby="group-question">
-					<span class="label" id="group-question">Question on screen</span>
-					<div class="control__row">
-						<button class="btn btn--quiet" disabled={busy || !live} onclick={() => act('question_back', String(view?.shown ?? ''))}>Previous question</button>
-					</div>
-				</div>
-			{/if}
-			{#if isQna}
+			<!-- Q&A only, and once it is live: before that the bar's Open answers is the one button. -->
+			{#if isQna && view.status !== 'lobby'}
 				<div class="control__group" role="group" aria-labelledby="group-answers">
 					<span class="label" id="group-answers">Answers</span>
 					<div class="control__row">

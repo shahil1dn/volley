@@ -139,9 +139,7 @@ test('on a Q&A session the bar holds Next question, and it puts the next questio
 	const setup = await hostPage(browser, 1280, 800, '/decks');
 	const code = await startSession(setup, [{ type: 'Q&A', question: 'Ask us anything' }]);
 	const control = await hostPage(browser, 1280, 800, `/run/${code}/control`);
-	await expect(control.getByRole('button', { name: 'Next question' }), 'one Next question, in the bar').toHaveCount(1);
-	await expect(control.getByRole('group', { name: 'Status and main action', exact: true }).getByRole('button', { name: 'Next question' })).toBeVisible();
-	await control.getByRole('group', { name: 'Answers', exact: true }).getByRole('button', { name: 'Open answers' }).click();
+	await control.getByRole('group', { name: 'Status and main action', exact: true }).getByRole('button', { name: 'Open answers' }).click();
 	await expect(statusValue(control, 'Session')).toHaveText('Live');
 
 	const phoneContext = await browser.newContext({ baseURL: BASE, viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });
@@ -172,4 +170,47 @@ test('on a phone the bar stays pinned, fits the screen, and keeps the action in 
 	await expect(bar.getByRole('button', { name: 'Open answers' })).toBeInViewport();
 	await bar.getByRole('button', { name: 'Open answers' }).click();
 	await expect(statusValue(control, 'Session')).toHaveText('Live');
+});
+
+test('a Q&A session in the lobby offers Open answers in the bar, which starts it; then the bar holds Previous and Next question', async ({ browser }) => {
+	const setup = await hostPage(browser, 1280, 800, '/decks');
+	const code = await startSession(setup, [{ type: 'Q&A', question: 'Ask us anything' }]);
+	const control = await hostPage(browser, 1280, 800, `/run/${code}/control`);
+	const bar = control.getByRole('group', { name: 'Status and main action', exact: true });
+	const count = (name: string) => control.getByRole('button', { name, exact: true });
+
+	await expect(statusValue(control, 'Session')).toHaveText('Not started');
+	await expect(bar.getByRole('button'), 'in the lobby the bar offers the one thing that works').toHaveText(['Open answers']);
+	await expect(count('Open answers')).toHaveCount(1);
+	await expect(count('Next question')).toHaveCount(0);
+	await expect(count('Previous question')).toHaveCount(0);
+
+	await bar.getByRole('button', { name: 'Open answers' }).click();
+	await expect(statusValue(control, 'Session')).toHaveText('Live');
+	await expect(bar.getByRole('button'), 'live: the pair sits together in the bar').toHaveText(['Previous question', 'Next question']);
+	await expect(count('Next question')).toHaveCount(1);
+	await expect(count('Previous question')).toHaveCount(1);
+	await expect(count('Open answers')).toHaveCount(0);
+	await expect(count('Close answers'), 'the Answers group now has the toggle').toHaveCount(1);
+	await expect(control.getByRole('group', { name: 'Question on screen', exact: true }), 'no empty group left behind').toHaveCount(0);
+
+	await count('Close answers').click();
+	await expect(statusValue(control, 'Answers')).toHaveText('Closed');
+	await expect(count('Open answers'), 'closed again: one Open answers, in the Answers group').toHaveCount(1);
+	await expect(count('Next question')).toHaveCount(1);
+});
+
+test('on a phone the Q&A bar, with Previous and Next question, still fits and stays pinned', async ({ browser }) => {
+	const setup = await hostPage(browser, 1280, 800, '/decks');
+	const code = await startSession(setup, [{ type: 'Q&A', question: 'Ask us anything' }]);
+	const control = await hostPage(browser, 375, 812, `/run/${code}/control`);
+	const bar = control.getByRole('group', { name: 'Status and main action', exact: true });
+	await bar.getByRole('button', { name: 'Open answers' }).click();
+	await expect(bar.getByRole('button', { name: 'Next question' })).toBeVisible();
+	const box = (await bar.boundingBox())!;
+	expect(box.x + box.width, 'no sideways scroll').toBeLessThanOrEqual(375);
+	expect(box.height, 'a compact bar even with two buttons').toBeLessThan(122);
+	await control.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+	await expect(bar.getByRole('button', { name: 'Next question' })).toBeInViewport();
+	await expect(bar.getByRole('button', { name: 'Previous question' })).toBeInViewport();
 });
