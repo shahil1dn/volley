@@ -7,6 +7,7 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import type pg from 'pg';
 import { connectAsOwner } from '../../scripts/pg-connect.ts';
+import { makeHostSession } from '../../src/lib/server/host-session.ts';
 import { addHost, BASE, signIn, startSession } from './helpers.ts';
 
 const admin = createClient(process.env.SUPABASE_URL ?? '', process.env.SUPABASE_SECRET_KEY ?? '', {
@@ -155,6 +156,34 @@ test('a reset link replaces the password, ends the old sessions, and the old pas
 	await expect(fresh.getByText('Email or password is incorrect.')).toBeVisible();
 	await signIn(fresh, samEmail, 'second-password-456');
 	await fresh.waitForURL('**/decks');
+});
+
+// The reset test above only hits the same second by luck. This one builds it:
+// sessions stamped in the reset's own second and one second later, so the
+// boundary is tested every run (ADR-011, "Later" note of 2026-10-06).
+test("a session issued in the reset's own second is refused, one a second later is accepted", async ({ browser }) => {
+	const { rows } = await db.query(
+		`select user_id, floor(extract(epoch from sessions_valid_after))::bigint as reset_second from public.hosts where email = $1`,
+		[samEmail],
+	);
+	const resetSecond = Number(rows[0].reset_second);
+	expect(resetSecond, 'the reset test ran first and stamped Sam').toBeGreaterThan(0);
+
+	const visitWithSessionFrom = async (issuedAt: number) => {
+		const visitor = await newVisitor(browser);
+		const value = makeHostSession(process.env.HOST_SESSION_SECRET ?? '', rows[0].user_id, issuedAt);
+		await visitor.context().addCookies([{ name: 'volley_host', value, url: BASE }]);
+		await visitor.goto('/decks');
+		return visitor;
+	};
+
+	const sameSecond = await visitWithSessionFrom(resetSecond);
+	await expect(sameSecond, 'the reset ended it').toHaveURL(`${BASE}/`);
+	await expect(sameSecond.getByRole('heading', { name: 'Host sign-in' })).toBeVisible();
+
+	const nextSecond = await visitWithSessionFrom(resetSecond + 1);
+	await expect(nextSecond, 'the first second after the reset is valid').toHaveURL(`${BASE}/decks`);
+	await expect(nextSecond.getByText('Signed in as Sam')).toBeVisible();
 });
 
 test('pressing Cancel on the remove prompt removes nobody', async () => {

@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import type pg from 'pg';
 import { connectAsOwner } from '../scripts/pg-connect.ts';
 import { inRolledBackTransaction, makeRun, skipWithoutDatabase as skip } from './db-helpers.ts';
+import { hostSessionIssuedAt, makeHostSession } from '../src/lib/server/host-session.ts';
 
 let db: pg.Client;
 before(async () => {
@@ -217,7 +218,7 @@ test('a reset and an accepted invite end older sessions', { skip }, async () => 
 		const email = (await db.query('select email from public.hosts where user_id = $1', [host])).rows[0].email;
 		await db.query('update auth.users set email = $2 where id = $1', [host, email]);
 		const before = (await call('public.host_profile($1)', [host])).sessionsValidAfter;
-		assert.equal(Number(before), 0, 'existing hosts keep their sessions');
+		assert.equal(Number(before), 1, "existing hosts keep their sessions (the 1970 default, plus the one second)");
 
 		const reset = await invite(admin, email, '', 'reset');
 		assert.equal((await accept(reset.token, host, 'Jo')).status, 'ok');
@@ -229,6 +230,30 @@ test('a reset and an accepted invite end older sessions', { skip }, async () => 
 		const fresh = await authUser('new@example.org');
 		await accept(made.token, fresh, 'New');
 		assert.ok(Number((await call('public.host_profile($1)', [fresh])).sessionsValidAfter) >= now - 120);
+	});
+});
+
+// The guard (host-guard.ts) refuses a session when hostSessionIssuedAt < sessionsValidAfter.
+// Sessions have whole-second stamps, so one made in the reset's own second must
+// still be refused: the reported value is the first second AFTER the reset.
+test("a reset ends a session issued in the same second; the next second's is valid", { skip }, async () => {
+	await inRolledBackTransaction(db, async () => {
+		const admin = await makeAdmin();
+		const { userId: host } = await makeRun(db);
+		const email = (await db.query('select email from public.hosts where user_id = $1', [host])).rows[0].email;
+		await db.query('update auth.users set email = $2 where id = $1', [host, email]);
+		const reset = await invite(admin, email, '', 'reset');
+		const claimed = await claim(reset.token);
+		const finished = await finish(claimed.id, host, 'Jo');
+		const stamp = Number((await db.query('select floor(extract(epoch from sessions_valid_after))::bigint as s from public.hosts where user_id = $1', [host])).rows[0].s);
+
+		const reported = Number((await call('public.host_profile($1)', [host])).sessionsValidAfter);
+		assert.equal(reported, stamp + 1, 'host_profile reports the first whole second after the reset');
+		assert.equal(Number(finished.sessionsValidAfter), stamp + 1, 'finish_host_invite agrees, so the session it starts is valid');
+
+		const refused = (issuedAt: number) => hostSessionIssuedAt(makeHostSession('s', host, issuedAt)) < reported;
+		assert.equal(refused(stamp), true, 'issued in the reset second: refused');
+		assert.equal(refused(stamp + 1), false, 'issued one second later: accepted');
 	});
 });
 

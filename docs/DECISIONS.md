@@ -412,6 +412,15 @@ Supersedes SPEC 1's "hosts are created only by `add-host`".
   issued before it and clears it. New sessions are stamped no earlier than
   that time, so a clock difference can't refuse the session a reset just made.
   Existing hosts started at 1970, so nobody was signed out by the change.
+  **Later (2026-10-06, migration 0016):** a session made in the same whole
+  second as a reset was not refused, because the stamp is whole seconds and
+  the guard refuses only sessions issued *before* it. The database now reports
+  the stamp as the first whole second after the reset (`floor(epoch) + 1`) in
+  `host_profile` and `finish_host_invite`, so a session stamped in the reset's
+  own second is refused and one a second later is accepted. `add-host` needed
+  no change: it stamps `now()`, and everything reads it through `host_profile`.
+  Still true: the guard compares the app server's clock with the database's,
+  so a gap of a second or more between them can shift that boundary.
 - **Resets:** an admin can make a reset link for another host, but not for
   another admin. An admin can't reset or remove themselves, or other admins,
   on the page; the owner's own reset stays
