@@ -9,18 +9,19 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (!area) return resolve(event);
 
 	const host = await currentHost(event.cookies);
+	// A form posted by the page's script (use:enhance) can't follow a redirect to the
+	// sign-in page or read a text reply: it would show either as an error page. Say what
+	// happened in the shape it reads (see guardReply).
+	const enhancedPost = area === 'page' && event.request.method === 'POST' && event.request.headers.get('x-sveltekit-action') === 'true';
 	if (host === 'signed_out') {
 		const clear = { 'set-cookie': clearedHostCookie(event.cookies) };
-		// A form posted by the page's script (use:enhance) can't follow a redirect to the
-		// sign-in page: it would read that page as an error. Say what happened instead.
-		if (area === 'page' && event.request.method === 'POST' && event.request.headers.get('x-sveltekit-action') === 'true') {
-			return Response.json({ type: 'error', error: { message: 'signed_out' } }, { status: 401, headers: clear });
-		}
+		if (enhancedPost) return Response.json({ type: 'error', error: { message: 'signed_out' } }, { status: 401, headers: clear });
 		return area === 'api'
 			? Response.json({ status: 'signed_out' }, { status: 401, headers: clear })
 			: new Response(null, { status: 303, headers: { location: '/', ...clear } });
 	}
 	if (host === 'not_host') {
+		if (enhancedPost) return Response.json({ type: 'error', error: { message: 'not_host' } }, { status: 403 });
 		return area === 'api'
 			? Response.json({ status: 'not_host' }, { status: 403 })
 			: new Response("This account isn't a host on this Volley.", { status: 403, headers: { 'content-type': 'text/plain; charset=utf-8' } });
