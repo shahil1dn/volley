@@ -453,3 +453,40 @@ Milestone 4 step 1, SPEC 26 and A16.
   download or license.
 - **The society's fonts (Zarathustra, Switzer) and plum were removed** from
   the template. They stay in git history for the AI Builders copy.
+
+## ADR-013: The projector shows one Q&A question at a time, chosen by the host (2026-10-06)
+
+Owner decision (Shahil): questions should not appear on the big screen all at
+once; the host walks through them one by one. Migration 0015.
+
+- **One question on screen, the host's choice.** The projector shows that
+  question large, with its votes and a quiet "N more waiting". Before the host
+  puts one up it shows only the count and an "up next" hint, never a list.
+  Phones are unchanged: they still see the whole list and can upvote, plus a
+  small "On screen now" on the question being shown.
+- **Most votes first, read at the moment of choosing.** Next question puts up
+  the top-voted question that has not had its turn. The question on screen does
+  not change while votes shift or better-voted ones arrive; only the next pick
+  reads the latest votes.
+- **Moving on marks the question answered.** The existing `answered` flag fits:
+  an answered question already leaves the phones' list and the waiting count, so
+  what has been discussed stops asking for votes. Previous goes back through the
+  questions in the order they were shown and un-answers nothing; Next after a
+  Previous goes forward through them again before it brings anything new.
+- **Where it lives.** Two columns on `questions`: `shown_seq` (its turn: null
+  until first put up, then 1, 2, 3 within the activity) and `on_screen` (at most
+  one per activity of a run, by a partial unique index). The shared state gains
+  `shown` ([id, text, votes], or null) and `waiting` (counted to 100, read
+  through the existing index); the host view gains the on-screen id and each
+  question's turn. Nothing personal is added; question text was already public.
+- **Safe to retry.** The host's `question_next` / `question_back` go through the
+  existing locked `host_action` and carry the id the host believes is on screen
+  as their key. If that no longer matches (a lost reply pressed again, a second
+  control tab), nothing moves and the reply says `moved: false, reason: stale`,
+  so a repeat can never skip a question. At the ends the same reply says
+  `none_left` or `first`, and the page says so. Hiding the question on screen
+  takes it off at once and unhiding does not put it back. Each Q&A activity
+  keeps its own on-screen question, so switching activity and coming back finds
+  it where it was left.
+- **Not done:** reordering by hand, picking a question out of order, and a
+  "show this one" button per row. Next/Previous is the whole control for now.
