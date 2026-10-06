@@ -32,8 +32,8 @@ remote yet.
 
 ## 1. Where things stand
 
-- **Live at https://aib-live.vercel.app** (deploy `dpl_BgiRPsTgpY5eoKUqwtxqQwfNsBe2`,
-  built from `main` at `8642533` on 2026-10-06):
+- **Live at https://aib-live.vercel.app** (deploy `dpl_Ag1UVbBrpvySv6b82p6N5xN3k2F3`,
+  built from `main` at `aedf8a1` on 2026-10-06):
   - word cloud, poll and Q&A (ADR-008); the projector shows one Q&A question
     at a time, stepped by the host with Next/Previous question (ADR-013);
   - sessions of 1 to 10 activities under one room code (`/decks`, reworked
@@ -43,7 +43,14 @@ remote yet.
     separate End session, an upvote tick and instant vote count, one disabled
     style, and a token guard test against hard-coded colours;
   - a password reset ends sessions issued in the same second (ADR-011 note,
-    migration 0016);
+    migration 0016), and sign-in reads the reset stamp before the password
+    check, using a single lookup for every email;
+  - layouts (Shahil's pick, 2026-10-06): `/decks` has two columns from 960px,
+    with a sticky live "Your session" summary; the control page pins its status
+    and main action to the top (on a Q&A: Open answers, then Previous/Next
+    question);
+  - empty, loading, offline and error states say what is happening, including
+    a branded error page and signed-out / no-longer-a-host messages;
   - `/join` for typing a code;
   - the new neutral look, with name, colours and logo in `src/lib/brand.ts`
     (ADR-012);
@@ -73,13 +80,13 @@ remote yet.
 
 - **A scheduled keep-alive run hasn't been seen**, only a manual one. Check the
   Vercel logs during 09:00–09:59 UTC (Hobby keeps about an hour).
-- **Polish still open:** a desktop two-column layout with a sticky Start (Shahil
-  to choose from a mockup); an audit of the empty, loading and error states. On a
-  phone the control groups stack about 300px deep before the results.
-- **Sign-in race (low, older than 0016):** the sign-in checks the password and
-  only then reads `sessionsValidAfter` (`src/routes/+page.server.ts`). So a
-  sign-in using the old password, landing within the same second as a reset,
-  keeps its session. Fix: read `host_profile` before `signInWithPassword`.
+- **Polish judgement calls left as they are:**
+  - the phone says "Waiting for the next question" both between activities and
+    when answers close;
+  - there's no "Working…" label on slow host actions;
+  - `/join` offline shows the browser's own page;
+  - a host whose session expires mid-typing on `/decks` loses the form;
+  - Mark answered / Hide stack vertically on a 375px control page.
 - **The cold-pooler retry** (`src/lib/server/cold-connect.ts`) is proven by
   tests only; the live cold case hasn't recurred.
 - **The purge's A11 index test may be flaky**: once green with its index
