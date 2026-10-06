@@ -32,12 +32,18 @@ remote yet.
 
 ## 1. Where things stand
 
-- **Live at https://aib-live.vercel.app** (deploy `dpl_53JtP7fRd5gRvjfuXKeebH8xSemr`,
-  built from `main` at `e6dfa18` on 2026-10-06):
-  - word cloud, poll and Q&A (ADR-008);
+- **Live at https://aib-live.vercel.app** (deploy `dpl_BgiRPsTgpY5eoKUqwtxqQwfNsBe2`,
+  built from `main` at `8642533` on 2026-10-06):
+  - word cloud, poll and Q&A (ADR-008); the projector shows one Q&A question
+    at a time, stepped by the host with Next/Previous question (ADR-013);
   - sessions of 1 to 10 activities under one room code (`/decks`, reworked
     2026-10-06: add/remove activities, poll options as separate fields shown
-    only for polls, errors beside each field; migration 0014 on both databases);
+    only for polls, errors beside each field; migration 0014);
+  - polish (2026-10-06): labelled control-page status, grouped controls, a
+    separate End session, an upvote tick and instant vote count, one disabled
+    style, and a token guard test against hard-coded colours;
+  - a password reset ends sessions issued in the same second (ADR-011 note,
+    migration 0016);
   - `/join` for typing a code;
   - the new neutral look, with name, colours and logo in `src/lib/brand.ts`
     (ADR-012);
@@ -67,12 +73,13 @@ remote yet.
 
 - **A scheduled keep-alive run hasn't been seen**, only a manual one. Check the
   Vercel logs during 09:00–09:59 UTC (Hobby keeps about an hour).
-- **Small design points left by the theme audit:**
-  - Upvote shows its pressed state by fill alone.
-  - The control page's status line is small.
-  - End session is styled like Next (a confirm guards it).
-  - A long email wraps in the `/decks` header.
-  - The README title still says "AI Builders Live".
+- **Polish still open:** a desktop two-column layout with a sticky Start (Shahil
+  to choose from a mockup); an audit of the empty, loading and error states. On a
+  phone the control groups stack about 300px deep before the results.
+- **Sign-in race (low, older than 0016):** the sign-in checks the password and
+  only then reads `sessionsValidAfter` (`src/routes/+page.server.ts`). So a
+  sign-in using the old password, landing within the same second as a reset,
+  keeps its session. Fix: read `host_profile` before `signInWithPassword`.
 - **The cold-pooler retry** (`src/lib/server/cold-connect.ts`) is proven by
   tests only; the live cold case hasn't recurred.
 - **The purge's A11 index test may be flaky**: once green with its index
