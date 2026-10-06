@@ -6,6 +6,7 @@ import { expect, test, type Browser, type BrowserContext, type Page } from '@pla
 import { createClient } from '@supabase/supabase-js';
 import type pg from 'pg';
 import { connectAsOwner } from '../../scripts/pg-connect.ts';
+import { spawnSync } from 'node:child_process';
 import { addHost, BASE, signIn, startSession } from './helpers.ts';
 
 const admin = createClient(process.env.SUPABASE_URL ?? '', process.env.SUPABASE_SECRET_KEY ?? '', {
@@ -33,7 +34,7 @@ test.beforeAll(async ({ browser }) => {
 });
 
 test.afterAll(async () => {
-	const { rows } = await db.query('select id from auth.users where email = $1', [hostEmail]);
+	const { rows } = await db.query('select id from auth.users where email = any($1)', [[hostEmail, ...extraEmails]]);
 	for (const { id } of rows) await admin.deleteUser(id);
 	await db.query(
 		`delete from public.rate_limits
@@ -261,4 +262,65 @@ test('an action notice that came from a lost connection goes away when the conne
 	await context.unroute('**/api/r/*/host');
 	await expect(control.getByRole('status')).toHaveCount(0, { timeout: 15_000 });
 	await expect(control.getByText('No connection. Try again.')).toHaveCount(0);
+});
+
+test('a failed action notice survives the refresh that follows it', async ({ browser }) => {
+	const { context, page: control } = await hostWithSession(browser, [{ type: 'Q&A', question: 'Ask us anything' }]);
+	await control.getByRole('button', { name: 'Open answers' }).first().click();
+	await expect(control.getByRole('button', { name: 'Next question' })).toBeEnabled();
+	let aborted = 0;
+	await context.route('**/api/r/*/host', (route) => (route.request().method() === 'GET' && aborted++ === 0 ? route.abort() : route.continue()));
+	await expect.poll(() => aborted, { timeout: 10_000 }).toBeGreaterThan(0);
+	await control.getByRole('button', { name: 'Next question' }).click();
+	await expect(control.getByText('No more questions are waiting.')).toBeVisible();
+	await control.waitForTimeout(500);
+	await expect(control.getByText('No more questions are waiting.'), 'still there after the refresh').toBeVisible();
+});
+
+// Other accounts, so removing a host row here doesn't end the session the other tests share.
+const extraEmails: string[] = [];
+async function ownHost(browser: Browser, options: { admin?: boolean; width?: number }) {
+	const email = `volley-e2e-states-extra-${randomUUID()}@example.com`;
+	extraEmails.push(email);
+	const { password } = addHost(email);
+	if (options.admin) {
+		const made = spawnSync('node', ['--env-file=.env.local', 'scripts/set-host.mjs', email, '--name', 'Extra', '--admin'], { encoding: 'utf8' });
+		if (made.status !== 0) throw new Error(`set-host failed: ${made.stderr}`);
+	}
+	const [context, page] = await visitor(browser, { viewport: { width: options.width ?? 375, height: 812 } });
+	await signIn(page, email, password);
+	await page.waitForURL('**/decks');
+	return { context, page, email };
+}
+
+test('a host who is removed while on /decks and presses Start is told so, not that a second room may exist', async ({ browser }) => {
+	const { page, email } = await ownHost(browser, {});
+	await expect(page.getByRole('button', { name: 'Add activity' })).toBeEnabled();
+	await page.getByLabel('Question', { exact: true }).fill('Typed before removal');
+	await db.query('delete from public.hosts where email = $1', [email]);
+	await page.getByRole('button', { name: 'Start session' }).click();
+	await expect(page.getByRole('alert')).toContainText("You're no longer a host on this Volley");
+	await expect(page.getByRole('alert')).not.toContainText('two rooms');
+	await expect(page.getByLabel('Question', { exact: true })).toHaveValue('Typed before removal');
+});
+
+test('the /hosts forms say so when the admin is signed out or no longer a host, instead of the error page', async ({ browser }) => {
+	const signedOut = await ownHost(browser, { admin: true, width: 1280 });
+	await signedOut.page.goto('/hosts');
+	await signedOut.page.getByLabel('Their name, as shown on the big screen').fill('Pat');
+	await signedOut.page.getByLabel('Their email').fill('pat@example.org');
+	await signedOut.context.clearCookies();
+	await signedOut.page.getByRole('button', { name: 'Create invite link' }).click();
+	await expect(signedOut.page.getByRole('alert')).toContainText("You've been signed out");
+	await expect(signedOut.page.getByRole('link', { name: 'Sign in again' })).toHaveAttribute('href', '/');
+	await expect(signedOut.page.getByRole('heading', { name: 'Hosts', exact: true })).toBeVisible();
+
+	const removed = await ownHost(browser, { admin: true, width: 1280 });
+	await removed.page.goto('/hosts');
+	await removed.page.getByLabel('Their name, as shown on the big screen').fill('Pat');
+	await removed.page.getByLabel('Their email').fill('pat@example.org');
+	await db.query('delete from public.hosts where email = $1', [removed.email]);
+	await removed.page.getByRole('button', { name: 'Create invite link' }).click();
+	await expect(removed.page.getByRole('alert')).toContainText("You're no longer a host on this Volley");
+	await expect(removed.page.getByRole('heading', { name: 'Hosts', exact: true })).toBeVisible();
 });
