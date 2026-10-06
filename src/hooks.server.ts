@@ -11,6 +11,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const host = await currentHost(event.cookies);
 	if (host === 'signed_out') {
 		const clear = { 'set-cookie': clearedHostCookie(event.cookies) };
+		// A form posted by the page's script (use:enhance) can't follow a redirect to the
+		// sign-in page: it would read that page as an error. Say what happened instead.
+		if (area === 'page' && event.request.method === 'POST' && event.request.headers.get('x-sveltekit-action') === 'true') {
+			return Response.json({ type: 'error', error: { message: 'signed_out' } }, { status: 401, headers: clear });
+		}
 		return area === 'api'
 			? Response.json({ status: 'signed_out' }, { status: 401, headers: clear })
 			: new Response(null, { status: 303, headers: { location: '/', ...clear } });

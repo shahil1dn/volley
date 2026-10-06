@@ -39,6 +39,8 @@
 	// svelte-ignore state_referenced_locally
 	let formError = $state(form?.errors?.form);
 	let starting = $state(false);
+	// The host's session ended while they were filling in the form.
+	let signedOut = $state(false);
 
 	// The add and remove buttons need the page's script; until it runs they stay
 	// disabled rather than doing nothing.
@@ -60,10 +62,13 @@
 	const submit: SubmitFunction = () => {
 		starting = true;
 		formError = undefined;
+		signedOut = false;
 		return async ({ result, update }) => {
 			// A dropped connection or a server error: keep the form as typed instead of replacing the page.
 			if (result.type === 'error') {
-				formError = "The session wasn't started. Check your connection and try again; nothing you typed is lost.";
+				signedOut = (result.error as { message?: string } | undefined)?.message === 'signed_out';
+				// The reply may be what was lost, not the request: the session may exist.
+				if (!signedOut) formError = "We couldn't confirm the session started. Check your connection, then press Start again. If the first try did go through, you'll end up with two rooms. What you typed is still here.";
 				starting = false;
 				return;
 			}
@@ -230,6 +235,7 @@
 			<button type="button" class="btn btn--quiet" id="add-activity" disabled={!ready || rows.length >= MAX_ACTIVITIES} onclick={addRow}>Add activity</button>
 			<p class="hint">{rows.length} of {MAX_ACTIVITIES}{#if rows.length >= MAX_ACTIVITIES} · that's the most a session can hold{/if}</p>
 		</div>
+		{#if signedOut}<p class="error" role="alert">You've been signed out, so the session wasn't started. <a href="/" target="_blank" rel="noopener">Sign in again</a> in a new tab, then press Start here; what you typed is still here.</p>{/if}
 		{#if formError}<p class="error" role="alert">{formError}</p>{/if}
 		<button class="btn btn--block" disabled={starting}>{starting ? 'Starting…' : 'Start session'}</button>
 	</form>
