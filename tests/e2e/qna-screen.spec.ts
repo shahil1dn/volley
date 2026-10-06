@@ -66,7 +66,7 @@ test('one question at a time, most votes first, with progress, a highlighted row
 	await upvote(phones[2], 'Is it safe?').click({ timeout: 12_000 });
 	await upvote(phones[1], 'Which model first?').click({ timeout: 12_000 });
 	await expect(projector.getByText('3 questions waiting')).toBeVisible({ timeout: 5000 });
-	await expect(projector.getByText('Up next')).toBeVisible();
+	await expect(projector.getByText('Questions come up one at a time')).toBeVisible();
 	await expect(control.getByText('Nothing on screen · 3 waiting')).toBeVisible();
 	await expect(control.getByRole('button', { name: 'Previous question' })).toBeEnabled();
 

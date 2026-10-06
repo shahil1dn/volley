@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { isNewer, type RoomState } from '$lib/room-client';
+	import { isNewer, waitingCount, type RoomState } from '$lib/room-client';
 	import { pollBars } from '$lib/poll';
 	import { centreOut, wordSizeVw } from '$lib/words';
 	import Brand from '$lib/Brand.svelte';
@@ -12,8 +12,6 @@
 	// Each shrink step, and the floor below which words would be unreadable anyway.
 	const FIT_STEP = 0.9;
 	const MIN_FIT = 0.2;
-	// The state counts waiting questions only up to this many.
-	const WAITING_CAP = 100;
 
 	let room = $state<RoomState | null>(null);
 	let missing = $state(false);
@@ -32,7 +30,7 @@
 	// The projector shows one question at a time, chosen by the host; phones see the whole list.
 	const shown = $derived(room?.shown ?? null);
 	const waiting = $derived(room?.waiting ?? 0);
-	const waitingLabel = $derived(`${waiting >= WAITING_CAP ? `${WAITING_CAP}+` : waiting} more waiting`);
+	const waitingLabel = $derived(`${waitingCount(waiting)} more waiting`);
 	const count = $derived(isQna ? (room?.questions ?? []).length : answers);
 	const countNoun = $derived(
 		isQna ? (count === 1 ? 'question' : 'questions') : isPoll ? (count === 1 ? 'vote' : 'votes') : count === 1 ? 'answer' : 'answers',
@@ -151,8 +149,8 @@
 		{:else if waiting > 0}
 			<section class="qna1" aria-label="Questions waiting">
 				<div class="qna1__body" aria-live="polite">
-					<p class="qna1__count">{waiting >= WAITING_CAP ? `${WAITING_CAP}+` : waiting} {waiting === 1 ? 'question' : 'questions'} waiting</p>
-					<p class="qna1__hint">Up next: the most-voted one, when the host is ready.</p>
+					<p class="qna1__count">{waitingCount(waiting)} {waiting === 1 ? 'question' : 'questions'} waiting</p>
+					<p class="qna1__hint">Questions come up one at a time, when the host is ready.</p>
 				</div>
 			</section>
 		{:else}

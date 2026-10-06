@@ -23,6 +23,13 @@ export type RoomState = {
 	players: [string, number][];
 };
 
+// The state counts the questions waiting up to one past this, so exactly 100
+// and "more than 100" read differently.
+export const WAITING_CAP = 100;
+export function waitingCount(waiting: number): string {
+	return waiting > WAITING_CAP ? `${WAITING_CAP}+` : String(waiting);
+}
+
 // The state is cached at the edge, so a poll can return an older copy than one
 // already shown. Showing it would make the screen step backwards.
 export function isNewer(current: RoomState | null, next: RoomState): boolean {

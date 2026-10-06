@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isNewer, keepOwnCount, newSubmitId, OWN_COUNT_MAX_MS, serverClockOffset, stateMadeAt, type RoomState } from '../src/lib/room-client.ts';
+import { isNewer, keepOwnCount, newSubmitId, OWN_COUNT_MAX_MS, serverClockOffset, stateMadeAt, WAITING_CAP, waitingCount, type RoomState } from '../src/lib/room-client.ts';
 
 const state = (version: number) => ({ version }) as RoomState;
 
@@ -50,4 +50,11 @@ test('the count from the vote reply stands until a state made after it arrives, 
 	// A missing Age header can't pin the number for good.
 	assert.equal(keepOwnCount(own, 9_000, 10_000 + OWN_COUNT_MAX_MS - 1), true);
 	assert.equal(keepOwnCount(own, 9_000, 10_000 + OWN_COUNT_MAX_MS), false);
+});
+
+test('the waiting count reads 100 at exactly 100 and 100+ only above it', () => {
+	assert.equal(WAITING_CAP, 100);
+	for (const [waiting, shown] of [[0, '0'], [1, '1'], [99, '99'], [100, '100'], [101, '100+'], [5000, '100+']] as const) {
+		assert.equal(waitingCount(waiting), shown, String(waiting));
+	}
 });
