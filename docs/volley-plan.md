@@ -582,3 +582,9 @@ Also: one gate command (build, typecheck, all tests, exit code intact, A17).
 - **The projector's Q&A count tops out at 40**, because it counts the shared
   state's list, which is capped. Fine for a workshop; a true count would need
   one more field in the state.
+- **Input borders on a tinted surface fall just short (2026-10-06).** The
+  neutral theme's border (50% ink over paper) is 3.37:1 on paper but 2.98:1 on
+  the surface tint, under SC 1.4.11's 3:1. The `/decks` poll options avoid it by
+  not using a tinted panel. Any future tinted panel needs a darker border, or
+  the theme needs a border token mixed at about 55% ink; check it before the AI
+  Builders theme adds a tinted surface.
