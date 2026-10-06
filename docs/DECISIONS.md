@@ -329,6 +329,11 @@ Owner decision. Amends ADR-007.
 - **The host builds a session of up to 3 activities in order** (type, question,
   and options for a poll) on `/decks`, replacing the two one-question test
   forms. The smallest step toward Milestone 3's deck editor, not the editor.
+  **Later (2026-10-06):** the list now starts at 1 activity and grows to 10
+  (`MAX_ACTIVITIES` in `src/lib/session-limits.ts`, and `start_session` in
+  migration 0014); a poll takes 2 to 6 separate options. The server action
+  checks the shape itself. Ten is the builder session's choice; the owner can
+  change it in those two places.
 - **The activity contract** now has a third activity. `defineActivity` is still
   not extracted; see the plan's Milestone 2 note on its two halves.
 
