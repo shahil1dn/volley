@@ -16,6 +16,10 @@ export type RoomState = {
 	tallies: [string, number][];
 	// A Q&A item's main list: [id, text, votes], most votes first.
 	questions: [number, string, number][];
+	// A Q&A item: the one question the host has put on the projector ([id, text,
+	// votes], null if none), and how many others wait their turn (counted to 100).
+	shown: [number, string, number] | null;
+	waiting: number;
 	players: [string, number][];
 };
 

@@ -12,10 +12,13 @@
 	// Each shrink step, and the floor below which words would be unreadable anyway.
 	const FIT_STEP = 0.9;
 	const MIN_FIT = 0.2;
+	// The state counts waiting questions only up to this many.
+	const WAITING_CAP = 100;
 
 	let room = $state<RoomState | null>(null);
 	let missing = $state(false);
 	let cloud = $state<HTMLUListElement>();
+	let questionBox = $state<HTMLElement>();
 
 	const words = $derived(room?.tallies ?? []);
 	const biggest = $derived(words[0]?.[1] ?? 1);
@@ -26,8 +29,10 @@
 	const bars = $derived(isPoll ? pollBars(room?.item?.settings.options, words) : []);
 	const mostVotes = $derived(Math.max(1, ...bars.map((bar) => bar.votes)));
 	const isQna = $derived(room?.item?.type === 'qna');
-	// The projector shows the top of the main list; phones see all of it.
-	const topQuestions = $derived((room?.questions ?? []).slice(0, 6));
+	// The projector shows one question at a time, chosen by the host; phones see the whole list.
+	const shown = $derived(room?.shown ?? null);
+	const waiting = $derived(room?.waiting ?? 0);
+	const waitingLabel = $derived(`${waiting >= WAITING_CAP ? `${WAITING_CAP}+` : waiting} more waiting`);
 	const count = $derived(isQna ? (room?.questions ?? []).length : answers);
 	const countNoun = $derived(
 		isQna ? (count === 1 ? 'question' : 'questions') : isPoll ? (count === 1 ? 'vote' : 'votes') : count === 1 ? 'answer' : 'answers',
@@ -58,6 +63,16 @@
 	$effect(() => {
 		if (!cloud || words.length === 0) return;
 		const box = cloud;
+		fitToBox(box);
+		const observer = new ResizeObserver(() => fitToBox(box));
+		observer.observe(box);
+		return () => observer.disconnect();
+	});
+
+	// A long question shrinks to fit its box the same way the cloud does.
+	$effect(() => {
+		if (!questionBox || !shown) return;
+		const box = questionBox;
 		fitToBox(box);
 		const observer = new ResizeObserver(() => fitToBox(box));
 		observer.observe(box);
@@ -125,14 +140,23 @@
 			{/each}
 		</ol>
 	{:else if isQna}
-		{#if topQuestions.length === 0}
-			<p class="cloud__empty">Questions will appear here as they come in.</p>
+		{#if shown}
+			<section class="qna1" aria-label="Question on screen">
+				<div class="qna1__body" bind:this={questionBox} aria-live="polite">
+					<p class="qna1__text">{shown[1]}</p>
+					<p class="qna1__votes">{shown[2]} {shown[2] === 1 ? 'vote' : 'votes'}</p>
+				</div>
+				<p class="qna1__more">{waiting > 0 ? waitingLabel : 'No more questions waiting'}</p>
+			</section>
+		{:else if waiting > 0}
+			<section class="qna1" aria-label="Questions waiting">
+				<div class="qna1__body" aria-live="polite">
+					<p class="qna1__count">{waiting >= WAITING_CAP ? `${WAITING_CAP}+` : waiting} {waiting === 1 ? 'question' : 'questions'} waiting</p>
+					<p class="qna1__hint">Up next: the most-voted one, when the host is ready.</p>
+				</div>
+			</section>
 		{:else}
-			<ol class="qna" aria-label="Top questions">
-				{#each topQuestions as [id, text, votes] (id)}
-					<li class="qna__row"><span>{text}</span> <span class="qna__votes">{votes} {votes === 1 ? 'vote' : 'votes'}</span></li>
-				{/each}
-			</ol>
+			<p class="cloud__empty">Questions will appear here as they come in.</p>
 		{/if}
 	{:else if words.length === 0}
 		<p class="cloud__empty">Answers will appear here as they come in.</p>

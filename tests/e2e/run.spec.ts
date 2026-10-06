@@ -320,7 +320,7 @@ test('A21: the workshop flow: a word cloud, then Q&A with asks, upvotes, hide an
 	await expect(projector.getByRole('list', { name: 'Word cloud' }).getByText('robots')).toBeVisible({ timeout: 3000 });
 
 	// Same room, same phones: the host moves on and the Q&A arrives on every screen.
-	await control.getByRole('button', { name: 'Next' }).click();
+	await control.getByRole('button', { name: 'Next', exact: true }).click();
 	await control.getByRole('button', { name: 'Open answers' }).click();
 	await expect(statusValue(control, 'Answers')).toHaveText('Open');
 	await expect(statusValue(control, 'Activity')).toHaveText('2 of 2');
@@ -339,25 +339,41 @@ test('A21: the workshop flow: a word cloud, then Q&A with asks, upvotes, hide an
 		await expect(upvote(phone, 'Is AI safe?')).toHaveAttribute('aria-pressed', 'true');
 	}
 
-	// Most votes first, on the projector and the phones, within 3 seconds.
-	const top = projector.getByRole('list', { name: 'Top questions' }).getByRole('listitem');
-	await expect(top).toHaveText(['Is AI safe? 2 votes', 'What is RAG? 0 votes'], { timeout: 3000 });
+	// The projector shows no list, only how many wait, until the host puts one up.
+	await expect(projector.getByText('2 questions waiting')).toBeVisible({ timeout: 3000 });
+	await expect(projector.getByText('Is AI safe?'), 'nothing is on screen yet').toHaveCount(0);
+	// Phones still see everything, most votes first.
 	await expect(phones[1].locator('.question')).toHaveText([/^Is AI safe\?\s*2 votes/, /^What is RAG\?\s*0 votes/], { timeout: 5000 });
+
+	// The host puts up the most-voted one: large, with its votes and what is left.
+	await control.getByRole('button', { name: 'Next question' }).click();
+	const onScreen = projector.getByRole('region', { name: 'Question on screen' });
+	await expect(onScreen.getByText('Is AI safe?')).toBeVisible({ timeout: 3000 });
+	await expect(onScreen.getByText('2 votes')).toBeVisible();
+	await expect(onScreen.getByText('1 more waiting')).toBeVisible();
+	await expect(projector.getByText('What is RAG?'), 'the others stay off the screen').toHaveCount(0);
+	await expect(control.getByText('On screen: 1 of 2 · 1 waiting')).toBeVisible();
+	await expect(phones[1].locator('.question', { hasText: 'Is AI safe?' })).toContainText('On screen now', { timeout: 5000 });
 	await projector.screenshot({ path: 'screenshots/qna/projector.png' });
 	await phones[1].screenshot({ path: 'screenshots/qna/phone.png' });
 
-	// Undo, by the same button.
+	// Undo, by the same button: the question on screen keeps its place and its count follows.
 	await upvote(phones[0], 'Is AI safe?').click();
 	await expect(upvote(phones[0], 'Is AI safe?')).toHaveAttribute('aria-pressed', 'false');
-	await expect(top).toHaveText(['Is AI safe? 1 vote', 'What is RAG? 0 votes'], { timeout: 3000 });
+	await expect(onScreen.getByText('1 vote', { exact: true })).toBeVisible({ timeout: 3000 });
 
+	// Hiding another question changes what is waiting, not what is on screen.
 	await control.getByRole('button', { name: 'Hide “What is RAG?”' }).click();
-	await expect(top).toHaveText(['Is AI safe? 1 vote'], { timeout: 3000 });
+	await expect(onScreen.getByText('No more questions waiting')).toBeVisible({ timeout: 3000 });
 	await expect(phones[2].getByText('What is RAG?')).toHaveCount(0, { timeout: 5000 });
+	await control.getByRole('button', { name: 'Next question' }).click();
+	await expect(control.getByText('No more questions are waiting.')).toBeVisible();
+	await expect(onScreen.getByText('Is AI safe?'), 'it stays up when nothing is left').toBeVisible();
 
+	// Marking it answered takes it off the phones' list; the projector keeps it until the host moves.
 	await control.getByRole('button', { name: 'Mark answered: “Is AI safe?”' }).click();
-	await expect(projector.getByText('Questions will appear here as they come in.')).toBeVisible({ timeout: 3000 });
 	await expect(phones[2].getByText('No questions yet. Ask the first one.')).toBeVisible({ timeout: 5000 });
+	await expect(onScreen.getByText('Is AI safe?')).toBeVisible();
 	await control.screenshot({ path: 'screenshots/qna/control.png', fullPage: true });
 
 	const csvDownload = control.waitForEvent('download');

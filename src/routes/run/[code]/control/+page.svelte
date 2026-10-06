@@ -14,11 +14,20 @@
 		itemState: string;
 		item: { type: string; settings: Record<string, unknown> } | null;
 		tallies: [string, number, boolean][];
-		// Q&A: [id, text, votes, hidden, answered], the main list first.
-		questions: [number, string, number, boolean, boolean][];
+		// Q&A: [id, text, votes, hidden, answered, turn], the main list first. The
+		// turn is when it was first put on the projector (null: not yet).
+		questions: [number, string, number, boolean, boolean, number | null][];
+		// Q&A: the id of the question on the projector now.
+		shown: number | null;
 	};
 
 	const POLL_MS = 2000;
+	// Why a Next or Previous question moved nothing (the database says which).
+	const UNMOVED: Record<string, string> = {
+		none_left: 'No more questions are waiting.',
+		first: 'That is the first question shown.',
+		stale: 'The projector had already moved. The page now shows where it is.',
+	};
 	const REFUSED: Record<number, string> = {
 		409: "That can't be done right now. The screen below shows where the session is.",
 		404: "This session isn't yours, or it no longer exists.",
@@ -38,6 +47,15 @@
 	const ANSWER_LABELS: Record<string, string> = { open: 'Open', closed: 'Closed', revealed: 'Shown' };
 	const isPoll = $derived(view?.item?.type === 'poll');
 	const isQna = $derived(view?.item?.type === 'qna');
+	// "3 of 12": this question's turn among every visible question asked so far,
+	// and how many others are waiting (unanswered, not on screen).
+	const asked = $derived((view?.questions ?? []).filter(([, , , hidden]) => !hidden));
+	const turn = $derived(asked.find(([id]) => id === view?.shown)?.[5] ?? null);
+	const position = $derived(turn === null ? 0 : asked.filter((q) => q[5] !== null && q[5] <= turn).length);
+	const waitingCount = $derived(asked.filter(([id, , , , answered]) => !answered && id !== view?.shown).length);
+	const screenLine = $derived(
+		view?.shown == null ? `Nothing on screen · ${waitingCount} waiting` : `On screen: ${position} of ${asked.length} · ${waitingCount} waiting`,
+	);
 	const prompt = $derived(typeof view?.item?.settings.prompt === 'string' ? view.item.settings.prompt : '');
 	// What the projector shows: hidden words stay out of the image too.
 	const visible = $derived((view?.tallies ?? []).filter(([, , hidden]) => !hidden).map(([word, count]): [string, number] => [word, count]));
@@ -63,6 +81,10 @@
 				body: JSON.stringify({ action, key }),
 			});
 			if (!response.ok) notice = REFUSED[response.status] ?? 'That didn’t work. Try again.';
+			else if (action.startsWith('question_')) {
+				const reply = await response.json().catch(() => ({}));
+				if (reply.moved === false) notice = UNMOVED[reply.reason] ?? '';
+			}
 		} catch {
 			notice = 'No connection. Try again.';
 		}
@@ -115,13 +137,22 @@
 		</p>
 
 		<div class="control__bar">
+			{#if isQna}
+				<div class="control__group" role="group" aria-labelledby="group-question">
+					<span class="label" id="group-question">Question on screen</span>
+					<div class="control__row">
+						<button class="btn btn--quiet" disabled={busy || !live} onclick={() => act('question_back', String(view?.shown ?? ''))}>Previous question</button>
+						<button class="btn" disabled={busy || !live} onclick={() => act('question_next', String(view?.shown ?? ''))}>Next question</button>
+					</div>
+				</div>
+			{/if}
 			<div class="control__group" role="group" aria-labelledby="group-answers">
 				<span class="label" id="group-answers">Answers</span>
 				<div class="control__row">
 					{#if answers === 'open'}
-						<button class="btn" disabled={busy || ended} onclick={() => act('close')}>Close answers</button>
+						<button class={isQna ? 'btn btn--quiet' : 'btn'} disabled={busy || ended} onclick={() => act('close')}>Close answers</button>
 					{:else}
-						<button class="btn" disabled={busy || ended || view.status === 'frozen'} onclick={() => act('open')}>Open answers</button>
+						<button class={isQna ? 'btn btn--quiet' : 'btn'} disabled={busy || ended || view.status === 'frozen'} onclick={() => act('open')}>Open answers</button>
 					{/if}
 				</div>
 			</div>
@@ -152,13 +183,14 @@
 
 		{#if isQna}
 			<h2>Questions</h2>
+			<p class="hint" aria-live="polite">{screenLine}</p>
 			{#if view.questions.length === 0}
 				<p class="hint">No questions yet.</p>
 			{:else}
 				<ul class="control__words">
 					{#each view.questions as [id, text, votes, hidden, answered] (id)}
-						<li class:control__word--hidden={hidden}>
-							<span>{text} <span class="hint">× {votes}{hidden ? ', hidden' : ''}{answered ? ', answered' : ''}</span></span>
+						<li class:control__word--hidden={hidden} class:control__word--shown={id === view.shown} aria-current={id === view.shown ? 'true' : undefined}>
+							<span>{#if id === view.shown}<strong class="control__badge">On screen</strong> {/if}{text} <span class="hint">× {votes}{hidden ? ', hidden' : ''}{answered ? ', answered' : ''}</span></span>
 							<div class="control__buttons">
 								<button class="btn btn--quiet" disabled={busy || ended} onclick={() => act(answered ? 'unanswer' : 'answer', String(id))} aria-label="{answered ? 'Back to list:' : 'Mark answered:'} “{text}”">
 									{answered ? 'Back to list' : 'Mark answered'}

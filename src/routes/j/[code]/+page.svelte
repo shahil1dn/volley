@@ -50,6 +50,8 @@
 	const isPoll = $derived(item?.type === 'poll');
 	const isQna = $derived(item?.type === 'qna');
 	const questions = $derived(room?.questions ?? []);
+	// The question the host has put on the big screen, if it is still in the list.
+	const onScreenId = $derived(room?.shown?.[0] ?? null);
 	const options = $derived(isPoll && Array.isArray(item?.settings.options) ? item.settings.options.map(String) : []);
 	const allowed = $derived(Number(item?.settings.answersPerPerson ?? DEFAULT_ANSWERS));
 	const mine = $derived(sent[position] ?? { words: [], left: allowed });
@@ -227,7 +229,7 @@
 				{#each questions as [id, text, votes] (id)}
 					<li class="question">
 						<span>{text}</span>
-						<span class="question__votes">{votes} {votes === 1 ? 'vote' : 'votes'}</span>
+						<span class="question__votes">{votes} {votes === 1 ? 'vote' : 'votes'}{#if id === onScreenId}{' · On screen now'}{/if}</span>
 						<button
 							class="btn btn--quiet"
 							aria-pressed={upvoted.includes(id)}
