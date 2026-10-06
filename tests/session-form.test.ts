@@ -49,6 +49,32 @@ test('a hand-made post can never make the page echo more than the limits', () =>
 	assert.ok(parsed.drafts.every((draft) => draft.options.length <= MAX_OPTIONS));
 });
 
+test('an enormous string is still refused for its length, but only a capped copy is handed back', () => {
+	const huge = 'x'.repeat(100_000);
+	const parsed = refused(post([{ type: 'poll', prompt: huge, options: [huge, 'fine'] }, { type: huge, prompt: 'Q?' }]));
+	// The checks ran on the whole value...
+	assert.match(parsed.errors.drafts[0].prompt ?? '', /140 characters/);
+	assert.match(parsed.errors.drafts[0].option?.[0] ?? '', /80 characters/);
+	assert.equal(parsed.errors.drafts[1].type, 'Choose a type.');
+	// ...and the copy is cut to twice each limit.
+	assert.equal(parsed.drafts[0].prompt.length, MAX_PROMPT_CHARS * 2);
+	assert.equal(parsed.drafts[0].options[0].length, MAX_OPTION_CHARS * 2);
+	assert.ok(parsed.drafts[1].type.length <= 20);
+	// A value within twice the limit comes back whole.
+	const pasted = 'y'.repeat(MAX_PROMPT_CHARS + 30);
+	assert.equal(refused(post([{ type: 'qna', prompt: pasted }])).drafts[0].prompt, pasted);
+});
+
+test('a question of exactly the limit and an option of exactly the limit are accepted', () => {
+	const prompt = 'q'.repeat(MAX_PROMPT_CHARS);
+	const option = 'o'.repeat(MAX_OPTION_CHARS);
+	const parsed = parseSessionForm(post([{ type: 'poll', prompt, options: [option, 'short'] }]));
+	assert.deepEqual(parsed, { ok: true, items: [{ type: 'poll', prompt, options: [option, 'short'] }] });
+	// One more is refused, so the edge sits where the limit says.
+	assert.equal(parseSessionForm(post([{ type: 'poll', prompt, options: [`${option}o`, 'short'] }])).ok, false);
+	assert.equal(parseSessionForm(post([{ type: 'qna', prompt: `${prompt}q` }])).ok, false);
+});
+
 test('type and prompt fields that do not pair up are refused as an incomplete form', () => {
 	const form = post([cloud(0), cloud(1)]);
 	form.append('type', 'qna');

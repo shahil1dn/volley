@@ -2,38 +2,48 @@
 // the shape and the limits are enforced, and the database checks them again.
 // Activities arrive as parallel `type` / `prompt` fields in order; a poll's
 // options arrive as `options<N>` for the activity at index N.
+import type { Draft, DraftErrors } from '../session-draft.ts';
 import { ACTIVITY_TYPES, MAX_ACTIVITIES, MAX_OPTION_CHARS, MAX_OPTIONS, MAX_PROMPT_CHARS, MIN_OPTIONS } from '../session-limits.ts';
 
-/** What the host typed, handed back untouched when something is wrong. */
-export type Draft = { type: string; prompt: string; options: string[] };
+type SessionItem = { type: string; prompt: string; options?: string[] };
 
-/** One message per wrong field, shown next to it. `option` is keyed by option index. */
-export type DraftErrors = { type?: string; prompt?: string; options?: string; option?: Record<number, string> };
-
-export type SessionItem = { type: string; prompt: string; options?: string[] };
-
-export type ParsedSession =
+type ParsedSession =
 	| { ok: true; items: SessionItem[] }
 	| { ok: false; drafts: Draft[]; errors: { form?: string; drafts: DraftErrors[] } };
+
+// A refused form is handed back so nothing typed is lost, but only up to this
+// multiple of each limit: a long paste still shows (and still fails its check,
+// which runs on the whole value), without echoing a megabyte.
+const ECHO_FACTOR = 2;
 
 const TYPES: ReadonlySet<string> = new Set(ACTIVITY_TYPES.map(([value]) => value));
 
 const text = (entry: FormDataEntryValue | undefined) => (typeof entry === 'string' ? entry : '');
 // The database counts characters, not UTF-16 units, so an emoji is one.
 const chars = (value: string) => [...value].length;
+const cut = (value: string, limit: number) => (chars(value) > limit * ECHO_FACTOR ? [...value].slice(0, limit * ECHO_FACTOR).join('') : value);
+const LONGEST_TYPE = Math.max(...ACTIVITY_TYPES.map(([value]) => value.length));
+const echoed = (draft: Draft): Draft => ({
+	type: cut(draft.type, LONGEST_TYPE),
+	prompt: cut(draft.prompt, MAX_PROMPT_CHARS),
+	options: draft.options.map((option) => cut(option, MAX_OPTION_CHARS)),
+});
 
 export function parseSessionForm(form: FormData): ParsedSession {
 	const types = form.getAll('type');
 	const prompts = form.getAll('prompt');
 	const count = types.length;
 
-	// Echoing is capped too, so a hand-made post can't make this page return a
-	// huge form. The page itself can never send more than the limits.
-	const drafts: Draft[] = Array.from({ length: Math.min(count, MAX_ACTIVITIES) }, (_, i) => ({
+	// Every check below runs on these whole values. What is handed back on a
+	// refusal is `echoed(...)` of them: at most MAX_ACTIVITIES activities, MAX_OPTIONS
+	// options each, each text cut to ECHO_FACTOR times its limit, so a hand-made
+	// post can't make this page return a huge form. The page itself never sends more.
+	const full: Draft[] = Array.from({ length: Math.min(count, MAX_ACTIVITIES) }, (_, i) => ({
 		type: text(types[i]),
 		prompt: text(prompts[i]),
 		options: form.getAll(`options${i}`).slice(0, MAX_OPTIONS).map(text),
 	}));
+	const drafts = full.map(echoed);
 
 	const refuse = (form_: string) => ({ ok: false as const, drafts, errors: { form: form_, drafts: drafts.map(() => ({})) } });
 	if (count === 0) return refuse('Add at least one activity.');
@@ -42,7 +52,7 @@ export function parseSessionForm(form: FormData): ParsedSession {
 
 	const errors: DraftErrors[] = [];
 	const items: SessionItem[] = [];
-	for (const [i, draft] of drafts.entries()) {
+	for (const [i, draft] of full.entries()) {
 		const found: DraftErrors = {};
 		const prompt = draft.prompt.trim();
 		if (!TYPES.has(draft.type)) found.type = 'Choose a type.';

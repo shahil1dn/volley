@@ -5,7 +5,7 @@ import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type pg from 'pg';
 import { connectAsOwner } from '../scripts/pg-connect.ts';
-import { MAX_ACTIVITIES } from '../src/lib/session-limits.ts';
+import { MAX_ACTIVITIES, MAX_OPTION_CHARS, MAX_PROMPT_CHARS } from '../src/lib/session-limits.ts';
 import { parseSessionForm } from '../src/lib/server/session-form.ts';
 import { inRolledBackTransaction, makeRun, scanCounts, skipWithoutDatabase as skip, submit } from './db-helpers.ts';
 
@@ -310,6 +310,25 @@ test('a posted session round-trips through the reader and start_session, options
 			{ type: 'word_cloud', settings: { prompt: 'One word?' } },
 			{ type: 'poll', settings: { prompt: 'Second poll?', options: ['Yes', 'No'] } },
 		]);
+	});
+});
+
+// The reader and the database were written apart; both must take the longest
+// question and option the limits allow, and neither a character more.
+test('start_session accepts a question and an option of exactly the limit, and refuses one more', { skip }, async () => {
+	await inRolledBackTransaction(db, async () => {
+		const host = await makeRun(db);
+		const prompt = 'q'.repeat(MAX_PROMPT_CHARS);
+		const option = '🙂'.repeat(MAX_OPTION_CHARS);
+		const ok = await startSession(db, host.userId, [{ type: 'poll', prompt, options: [option, 'short'] }]);
+		assert.equal(ok.status, 'ok');
+		const stored = await db.query(
+			`select i.settings from public.runs r join public.deck_items i on i.deck_id = r.deck_id where r.code = $1`,
+			[ok.code],
+		);
+		assert.deepEqual(stored.rows[0].settings, { prompt, options: [option, 'short'] });
+		assert.equal((await startSession(db, host.userId, [{ type: 'poll', prompt, options: [`${option}🙂`, 'short'] }])).status, 'invalid');
+		assert.equal((await startSession(db, host.userId, [{ type: 'qna', prompt: `${prompt}q` }])).status, 'invalid');
 	});
 });
 
