@@ -169,6 +169,7 @@ test('the host view includes hidden words and full settings', { skip }, async ()
 			itemState: 'open',
 			item: { type: 'word_cloud', settings: { prompt: 'Q?', correct: 1 } },
 			tallies: [['kind', 2, false], ['rude', 1, true]],
+			shown: null,
 			questions: [],
 		});
 	});
