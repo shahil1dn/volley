@@ -219,7 +219,7 @@
 <main class="phone" data-clock-offset={clockOffsetMs}>
 	<header class="masthead"><Brand /><p class="label">Room {code}</p></header>
 
-	{#if room && connectionLost(failedPolls)}
+	{#if room && !missing && connectionLost(failedPolls)}
 		<p class="notice" role="status">Connection lost. What's below may be out of date. Trying again…</p>
 	{/if}
 

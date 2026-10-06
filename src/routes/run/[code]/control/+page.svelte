@@ -33,6 +33,7 @@
 		409: "That can't be done right now. The screen below shows where the session is.",
 		404: "This session isn't yours, or it no longer exists.",
 		401: "You've been signed out, so that wasn't done.",
+		403: "You're no longer a host on this Volley, so that wasn't done.",
 	};
 
 	let view = $state<HostView | null>(null);
@@ -42,6 +43,8 @@
 	// Refreshes that failed in a row, and whether the server said the host is signed out.
 	let failedPolls = $state(0);
 	let signedOut = $state(false);
+	// The account is signed in but is no longer a host (removed while the page was open).
+	let notHost = $state(false);
 
 	const live = $derived(view?.status === 'live');
 	const ended = $derived(view?.status === 'ended');
@@ -69,11 +72,14 @@
 		try {
 			const response = await fetch(`/api/r/${data.code}/host`, { cache: 'no-store' });
 			signedOut = response.status === 401;
+			notHost = response.status === 403;
 			if (response.status === 404) missing = true;
 			if (response.ok) {
 				view = await response.json();
+				// A notice about a failed action is stale once the connection is back.
+				if (failedPolls > 0) notice = '';
 				failedPolls = 0;
-			} else if (response.status !== 404) failedPolls++;
+			} else if (response.status !== 404 && !signedOut && !notHost) failedPolls++;
 		} catch {
 			// Offline for a moment: keep the last view, say so once it lasts, and try again next tick.
 			failedPolls++;
@@ -91,6 +97,7 @@
 				body: JSON.stringify({ action, key }),
 			});
 			if (response.status === 401) signedOut = true;
+			if (response.status === 403) notHost = true;
 			if (!response.ok) notice = REFUSED[response.status] ?? 'That didn’t work. Try again.';
 			else if (action.startsWith('question_')) {
 				const reply = await response.json().catch(() => ({}));
@@ -131,15 +138,19 @@
 
 <main class="control">
 	<header class="masthead"><Brand /><p class="label">Room {data.code} · control</p></header>
-	{#if signedOut}
+	{#if missing}
+		<!-- No banners here: the session isn't there to be out of date. -->
+	{:else if signedOut}
 		<p class="notice" role="alert">You've been signed out, so this page can't update or send anything. <a href="/">Sign in again</a> to carry on; the session keeps running.</p>
+	{:else if notHost}
+		<p class="notice" role="alert">You're no longer a host on this Volley, so this page can't update or send anything.</p>
 	{:else if connectionLost(failedPolls)}
 		<p class="notice" role="status">Connection lost. {view ? "What's below may be out of date. " : ''}Trying again…</p>
 	{/if}
 	{#if missing}
 		<h1>We can't find that session</h1>
 	{:else if !view}
-		<p class="hint" aria-live="polite">Loading…</p>
+		{#if !signedOut && !notHost}<p class="hint" aria-live="polite">Loading…</p>{/if}
 	{:else}
 		<h1>{prompt}</h1>
 		<dl class="status" aria-live="polite">

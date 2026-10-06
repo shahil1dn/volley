@@ -41,7 +41,7 @@
 	const ended = $derived(room?.status === 'ended');
 	const note = $derived(
 		ended ? ''
-		: connectionLost(failedPolls) ? 'Reconnecting…'
+		: connectionLost(failedPolls) && !missing ? 'Reconnecting…'
 		: room?.status === 'frozen' ? 'Answers paused'
 		: room?.status === 'lobby' ? 'Starting soon'
 		: room?.itemState === 'closed' ? 'Answers closed'
@@ -121,14 +121,14 @@
 				<p class="host__ended">Session ended</p>
 				<p class="host__count">{count} {countNoun}</p>
 			</div>
-		{:else if room}
+		{:else if !missing}
 			<div class="host__join">
 				<div class="host__qr" role="img" aria-label="QR code to join at {data.joinUrl}">{@html data.qrSvg}</div>
 				<div>
 					<p class="host__joinText">Scan, or go to</p>
 					<p class="host__url">{data.joinUrl.replace(/^https?:\/\//, '')}</p>
 					<p class="host__code">{data.code}</p>
-					<p class="host__count" aria-live="polite">{count} {countNoun}</p>
+					{#if room}<p class="host__count" aria-live="polite">{count} {countNoun}</p>{/if}
 				</div>
 			</div>
 		{/if}
