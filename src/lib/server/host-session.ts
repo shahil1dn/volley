@@ -28,6 +28,10 @@ export function readHostSession(secret: string, token: string | undefined, nowSe
 	return given.length === expected.length && timingSafeEqual(given, expected) ? userId : null;
 }
 
+// A session started at `startedAt` is stamped no earlier than the host's last
+// reset, even if this server's clock is behind the database's.
+export const sessionIssuedAt = (startedAt: number, notBefore: number) => Math.max(startedAt, notBefore);
+
 // When a session that readHostSession accepted was issued, in unix seconds.
 export function hostSessionIssuedAt(token: string): number {
 	return Number(token.split('.')[1]) - HOST_SESSION_SECONDS;

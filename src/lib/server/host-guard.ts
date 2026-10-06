@@ -1,7 +1,7 @@
 import type { Cookies } from '@sveltejs/kit';
 import { HOST_SESSION_SECRET } from '$env/static/private';
 import { dbCall } from '$lib/server/db';
-import { HOST_SESSION_SECONDS, hostSessionIssuedAt, makeHostSession, readHostSession } from '$lib/server/host-session';
+import { HOST_SESSION_SECONDS, hostSessionIssuedAt, makeHostSession, readHostSession, sessionIssuedAt } from '$lib/server/host-session';
 
 const COOKIE = 'volley_host';
 
@@ -26,10 +26,11 @@ export async function currentHost(cookies: Cookies): Promise<Host | 'signed_out'
 // Path '/' because host pages and APIs are spread across the app (SPEC routes).
 // httpOnly keeps it out of page scripts (A7); `secure` is SvelteKit's default,
 // on everywhere except http://localhost.
-// `notBefore` is the host's sessionsValidAfter: a session issued now must never
+// `notBefore` is the host's sessionsValidAfter: a session started now must never
 // look older than the last reset, even if this server's clock is behind.
-export function startHostSession(cookies: Cookies, userId: string, notBefore: number) {
-	cookies.set(COOKIE, makeHostSession(HOST_SESSION_SECRET, userId, Math.max(nowSeconds(), notBefore)), {
+// `startedAt` is when sign-in began, if earlier than now (see host-signin.ts).
+export function startHostSession(cookies: Cookies, userId: string, notBefore: number, startedAt = nowSeconds()) {
+	cookies.set(COOKIE, makeHostSession(HOST_SESSION_SECRET, userId, sessionIssuedAt(startedAt, notBefore)), {
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax',

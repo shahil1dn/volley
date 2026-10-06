@@ -6,6 +6,7 @@ import type pg from 'pg';
 import { connectAsOwner } from '../scripts/pg-connect.ts';
 import { inRolledBackTransaction, makeRun, skipWithoutDatabase as skip } from './db-helpers.ts';
 import { hostSessionIssuedAt, makeHostSession } from '../src/lib/server/host-session.ts';
+import { signInHost, type SignInDeps } from '../src/lib/server/host-signin.ts';
 
 let db: pg.Client;
 before(async () => {
@@ -254,6 +255,78 @@ test("a reset ends a session issued in the same second; the next second's is val
 		const refused = (issuedAt: number) => hostSessionIssuedAt(makeHostSession('s', host, issuedAt)) < reported;
 		assert.equal(refused(stamp), true, 'issued in the reset second: refused');
 		assert.equal(refused(stamp + 1), false, 'issued one second later: accepted');
+	});
+});
+
+// Sign-in against the real database (the password check is the caller's stub).
+function signInWith(email: string, checkPassword: SignInDeps['checkPassword']) {
+	return signInHost(
+		{
+			now: () => 0,
+			findUserId: async (address) => (await db.query('select id from auth.users where lower(email) = $1', [address])).rows[0]?.id ?? null,
+			readProfile: (userId) => call('public.host_profile($1)', [userId]),
+			checkPassword,
+		},
+		email,
+		'pw',
+	);
+}
+
+test('a reset that lands while the password is being checked still ends the session it produces', { skip }, async () => {
+	await inRolledBackTransaction(db, async () => {
+		const { userId: host } = await makeRun(db);
+		const email = (await db.query('select email from public.hosts where user_id = $1', [host])).rows[0].email;
+		await db.query('update auth.users set email = $2 where id = $1', [host, email]);
+		// The database's own clock, so the test doesn't depend on this machine agreeing with it.
+		const startedAt = Number((await db.query('select floor(extract(epoch from clock_timestamp()))::bigint as s')).rows[0].s);
+		const guardRefuses = async (issuedAt: number) => {
+			const { sessionsValidAfter } = await call('public.host_profile($1)', [host]);
+			return hostSessionIssuedAt(makeHostSession('s', host, issuedAt)) < Number(sessionsValidAfter);
+		};
+
+		const quiet = await signInWith(email, async () => ({ status: 'ok', userId: host }));
+		assert.equal(quiet.status, 'ok');
+		if (quiet.status === 'ok') assert.equal(await guardRefuses(quiet.issuedAt), false, 'with no reset, the session stands');
+
+		let clock = startedAt;
+		const raced = await signInHost(
+			{
+				now: () => clock,
+				findUserId: async () => host,
+				readProfile: (id) => call('public.host_profile($1)', [id]),
+				checkPassword: async () => {
+					await db.query('update public.hosts set sessions_valid_after = clock_timestamp() where user_id = $1', [host]);
+					clock = startedAt + 2; // the check was slow, so time has moved on by the time it returns
+					return { status: 'ok', userId: host };
+				},
+			},
+			email,
+			'pw',
+		);
+		assert.equal(raced.status, 'ok');
+		if (raced.status === 'ok') assert.equal(await guardRefuses(raced.issuedAt), true, 'the reset ended it');
+	});
+});
+
+test('a non-host gets the same answer to a wrong password whoever the email belongs to, and the password is always checked', { skip }, async () => {
+	await inRolledBackTransaction(db, async () => {
+		const { userId: host } = await makeRun(db);
+		const hostEmail = (await db.query('select email from public.hosts where user_id = $1', [host])).rows[0].email;
+		await db.query('update auth.users set email = $2 where id = $1', [host, hostEmail]);
+		const stranger = await authUser('stranger@example.org');
+
+		let checks = 0;
+		const wrong: SignInDeps['checkPassword'] = async () => (checks++, { status: 'wrong' });
+		const answers = [];
+		for (const email of [hostEmail, 'stranger@example.org', 'nobody@example.org']) {
+			answers.push(await signInWith(email, wrong));
+		}
+		assert.deepEqual(answers, Array(3).fill({ status: 'wrong_password' }));
+		assert.equal(checks, 3, 'the password was checked for the host, the non-host and the unknown email alike');
+
+		const right = (userId: string): SignInDeps['checkPassword'] => async () => ({ status: 'ok', userId });
+		assert.deepEqual((await signInWith('stranger@example.org', right(stranger))), { status: 'not_host' });
+		assert.deepEqual((await signInWith(hostEmail, right(stranger))), { status: 'not_host' }, 'a password for a different account is not this host');
 	});
 });
 

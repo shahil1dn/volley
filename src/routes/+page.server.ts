@@ -4,6 +4,7 @@ import { HOST_SESSION_SECRET, SUPABASE_URL } from '$env/static/private';
 import { PUBLIC_SUPABASE_PUBLISHABLE_KEY } from '$env/static/public';
 import { dbCall } from '$lib/server/db';
 import { hasHostSession, startHostSession } from '$lib/server/host-guard';
+import { signInHost } from '$lib/server/host-signin';
 import { hashEmail } from '$lib/server/host-session';
 import { hashClientIp } from '$lib/server/participant-token';
 import type { Actions, PageServerLoad } from './$types';
@@ -33,16 +34,27 @@ export const actions: Actions = {
 		const auth = createClient(SUPABASE_URL, PUBLIC_SUPABASE_PUBLISHABLE_KEY, {
 			auth: { persistSession: false, autoRefreshToken: false },
 		}).auth;
-		const { data, error } = await auth.signInWithPassword({ email, password });
-		if (error?.code === 'invalid_credentials') return fail(400, { email, message: 'Email or password is incorrect.' });
-		if (error || !data.user) return fail(503, { email, message: 'Sign-in is unavailable. Try again shortly.' });
-		await auth.signOut({ scope: 'local' });
+		const result = await signInHost(
+			{
+				now: () => Math.floor(Date.now() / 1000),
+				findUserId: (address) => dbCall<string>('auth_user_id', [address]),
+				readProfile: (userId) => dbCall<{ sessionsValidAfter: number }>('host_profile', [userId]),
+				checkPassword: async (address, secret) => {
+					const { data, error } = await auth.signInWithPassword({ email: address, password: secret });
+					if (error?.code === 'invalid_credentials') return { status: 'wrong' };
+					if (error || !data.user) return { status: 'unavailable' };
+					await auth.signOut({ scope: 'local' });
+					return { status: 'ok', userId: data.user.id };
+				},
+			},
+			email,
+			password,
+		);
+		if (result.status === 'wrong_password') return fail(400, { email, message: 'Email or password is incorrect.' });
+		if (result.status === 'unavailable') return fail(503, { email, message: 'Sign-in is unavailable. Try again shortly.' });
+		if (result.status === 'not_host') return fail(403, { email, message: "That account isn't a host on this Volley." });
 
-		const profile = await dbCall<{ sessionsValidAfter: number }>('host_profile', [data.user.id]).catch(() => undefined);
-		if (profile === undefined) return fail(503, { email, message: 'Sign-in is unavailable. Try again shortly.' });
-		if (!profile) return fail(403, { email, message: "That account isn't a host on this Volley." });
-
-		startHostSession(cookies, data.user.id, profile.sessionsValidAfter);
+		startHostSession(cookies, result.userId, 0, result.issuedAt);
 		redirect(303, '/decks');
 	},
 };

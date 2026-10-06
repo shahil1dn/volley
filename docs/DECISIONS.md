@@ -421,6 +421,15 @@ Supersedes SPEC 1's "hosts are created only by `add-host`".
   no change: it stamps `now()`, and everything reads it through `host_profile`.
   Still true: the guard compares the app server's clock with the database's,
   so a gap of a second or more between them can shift that boundary.
+  **Later (2026-10-06, sign-in order):** sign-in used to read the reset stamp
+  *after* the password check, so a sign-in with the old password that was
+  being checked while a reset landed got a session newer than the reset.
+  `host-signin.ts` now reads the stamp before the password is checked and
+  stamps the session no later than that moment, so a reset that lands during
+  the check ends the session however long the check takes. The password is
+  checked for every email, host or not, so a wrong password gets one answer
+  for all emails; "That account isn't a host" is only said to someone who
+  proved the password, as before.
 - **Resets:** an admin can make a reset link for another host, but not for
   another admin. An admin can't reset or remove themselves, or other admins,
   on the page; the owner's own reset stays
