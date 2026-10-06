@@ -235,6 +235,8 @@
 							disabled={voting.includes(id)}
 							onclick={() => upvote(id)}
 						>
+							<!-- Pressed shows a tick as well as the fill, so it doesn't depend on colour. -->
+							{#if upvoted.includes(id)}<svg class="btn__tick" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 8.5l3.2 3.2L13 4.8" /></svg>{/if}
 							Upvote
 						</button>
 					</li>

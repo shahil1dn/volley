@@ -8,7 +8,7 @@ import { createClient } from '@supabase/supabase-js';
 import type pg from 'pg';
 import { connectAsOwner } from '../../scripts/pg-connect.ts';
 import { makeRun, submit, type TestRun } from '../db-helpers.ts';
-import { addHost, BASE, signIn, startSession } from './helpers.ts';
+import { addHost, BASE, signIn, startSession, statusValue } from './helpers.ts';
 
 const PHONE = { viewport: { width: 375, height: 812 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
 const SCREENS = 'screenshots/s7';
@@ -69,7 +69,8 @@ test('A8: phones answer and the projector follows; hide, freeze and end reach ev
 	await control.waitForURL('**/decks');
 	const code = await startSession(control, [{ type: 'Word cloud', question: PROMPT }]);
 	await control.getByRole('button', { name: 'Open answers' }).click();
-	await expect(control.getByText('Session: live. Answers: open.')).toBeVisible();
+	await expect(statusValue(control, 'Session')).toHaveText('Live');
+	await expect(statusValue(control, 'Answers')).toHaveText('Open');
 
 	const projector = await laptop.newPage();
 	await projector.goto(`/run/${code}`);
@@ -169,7 +170,8 @@ test('S8: after the session ends, the host downloads a CSV matching the tallies 
 	await control.waitForURL('**/decks');
 	const code = await startSession(control, [{ type: 'Word cloud', question: 'Anything, even "odd", words?' }]);
 	await control.getByRole('button', { name: 'Open answers' }).click();
-	await expect(control.getByText('Session: live. Answers: open.')).toBeVisible();
+	await expect(statusValue(control, 'Session')).toHaveText('Live');
+	await expect(statusValue(control, 'Answers')).toHaveText('Open');
 
 	// Words that break a naive CSV, sent straight to submit_answer.
 	for (const word of ['robots', 'robots', 'robots', 'a, b', 'say "hi"', '=1+1', 'café ☕']) {
@@ -179,7 +181,8 @@ test('S8: after the session ends, the host downloads a CSV matching the tallies 
 	await expect(control.getByRole('button', { name: 'Unhide “a, b”' })).toBeVisible();
 	control.once('dialog', (dialog) => dialog.accept());
 	await control.getByRole('button', { name: 'End session' }).click();
-	await expect(control.getByText('Session: ended. Answers: closed.'), 'an ended session never reads as open').toBeVisible();
+	await expect(statusValue(control, 'Session')).toHaveText('Ended');
+	await expect(statusValue(control, 'Answers'), 'an ended session never reads as open').toHaveText('Closed');
 	await control.screenshot({ path: 'screenshots/s8/control-export.png', fullPage: true });
 
 	const csvDownload = control.waitForEvent('download');
@@ -229,7 +232,8 @@ test('poll: phones vote once each, the bars match the tallies, and hide, freeze,
 	await expect(control.getByRole('heading', { name: 'Votes' })).toBeVisible();
 	await expect(control.getByRole('button', { name: /PNG/ }), 'the PNG export is word-cloud only').toHaveCount(0);
 	await control.getByRole('button', { name: 'Open answers' }).click();
-	await expect(control.getByText('Session: live. Answers: open.')).toBeVisible();
+	await expect(statusValue(control, 'Session')).toHaveText('Live');
+	await expect(statusValue(control, 'Answers')).toHaveText('Open');
 
 	const projector = await laptop.newPage();
 	await projector.goto(`/run/${code}`);
@@ -306,7 +310,7 @@ test('A21: the workshop flow: a word cloud, then Q&A with asks, upvotes, hide an
 		{ type: 'Q&A', question: 'Ask us anything' },
 	]);
 	await control.getByRole('button', { name: 'Open answers' }).click();
-	await expect(control.getByText('Activity 1 of 2')).toBeVisible();
+	await expect(statusValue(control, 'Activity')).toHaveText('1 of 2');
 
 	const projector = await laptop.newPage();
 	await projector.goto(`/run/${code}`);
@@ -318,7 +322,8 @@ test('A21: the workshop flow: a word cloud, then Q&A with asks, upvotes, hide an
 	// Same room, same phones: the host moves on and the Q&A arrives on every screen.
 	await control.getByRole('button', { name: 'Next' }).click();
 	await control.getByRole('button', { name: 'Open answers' }).click();
-	await expect(control.getByText('Answers: open. Activity 2 of 2.')).toBeVisible();
+	await expect(statusValue(control, 'Answers')).toHaveText('Open');
+	await expect(statusValue(control, 'Activity')).toHaveText('2 of 2');
 	for (const phone of phones) await expect(phone.getByRole('heading', { name: 'Ask us anything' })).toBeVisible({ timeout: 5000 });
 
 	async function ask(phone: Page, question: string) {

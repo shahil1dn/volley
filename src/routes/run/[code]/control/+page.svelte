@@ -34,6 +34,8 @@
 	// Ending leaves the item's own state as it was, but nothing is accepted after
 	// the end (submit_answer checks the status), so say so.
 	const answers = $derived(ended ? 'closed' : view?.itemState);
+	const SESSION_LABELS: Record<string, string> = { lobby: 'Not started', live: 'Live', frozen: 'Frozen', ended: 'Ended' };
+	const ANSWER_LABELS: Record<string, string> = { open: 'Open', closed: 'Closed', revealed: 'Shown' };
 	const isPoll = $derived(view?.item?.type === 'poll');
 	const isQna = $derived(view?.item?.type === 'qna');
 	const prompt = $derived(typeof view?.item?.settings.prompt === 'string' ? view.item.settings.prompt : '');
@@ -102,28 +104,49 @@
 		<p class="hint" aria-live="polite">Loading…</p>
 	{:else}
 		<h1>{prompt}</h1>
-		<p class="hint" aria-live="polite">
-			Session: {view.status}. Answers: {answers}. Activity {view.currentPosition + 1} of {view.itemCount}.
-		</p>
+		<dl class="status" aria-live="polite">
+			<div class="status__item"><dt>Session</dt><dd>{SESSION_LABELS[view.status] ?? view.status}</dd></div>
+			<div class="status__item"><dt>Answers</dt><dd>{ANSWER_LABELS[answers ?? ''] ?? answers}</dd></div>
+			<div class="status__item"><dt>Activity</dt><dd>{view.currentPosition + 1} of {view.itemCount}</dd></div>
+		</dl>
 		<p class="hint">
 			Projector: <a href="/run/{data.code}" target="_blank" rel="noopener">open the projector view</a>. Phones join at
 			{data.joinUrl}
 		</p>
 
-		<div class="control__actions">
-			{#if answers === 'open'}
-				<button class="btn" disabled={busy || ended} onclick={() => act('close')}>Close answers</button>
-			{:else}
-				<button class="btn" disabled={busy || ended || view.status === 'frozen'} onclick={() => act('open')}>Open answers</button>
-			{/if}
-			<button class="btn btn--quiet" disabled={busy || !live || view.currentPosition === 0} onclick={() => act('back')}>Previous</button>
-			<button class="btn btn--quiet" disabled={busy || !live || view.currentPosition >= view.itemCount - 1} onclick={() => act('next')}>Next</button>
-			{#if view.status === 'frozen'}
-				<button class="btn btn--quiet" disabled={busy} onclick={() => act('unfreeze')}>Unfreeze input</button>
-			{:else}
-				<button class="btn btn--quiet" disabled={busy || !live} onclick={() => act('freeze')}>Freeze input</button>
-			{/if}
-			<button class="btn btn--quiet" disabled={busy || ended} onclick={() => act('end')}>End session</button>
+		<div class="control__bar">
+			<div class="control__group" role="group" aria-labelledby="group-answers">
+				<span class="label" id="group-answers">Answers</span>
+				<div class="control__row">
+					{#if answers === 'open'}
+						<button class="btn" disabled={busy || ended} onclick={() => act('close')}>Close answers</button>
+					{:else}
+						<button class="btn" disabled={busy || ended || view.status === 'frozen'} onclick={() => act('open')}>Open answers</button>
+					{/if}
+				</div>
+			</div>
+			<div class="control__group" role="group" aria-labelledby="group-activity">
+				<span class="label" id="group-activity">Activity</span>
+				<div class="control__row">
+					<button class="btn btn--quiet" disabled={busy || !live || view.currentPosition === 0} onclick={() => act('back')}>Previous</button>
+					<button class="btn btn--quiet" disabled={busy || !live || view.currentPosition >= view.itemCount - 1} onclick={() => act('next')}>Next</button>
+				</div>
+			</div>
+			<div class="control__group" role="group" aria-labelledby="group-input">
+				<span class="label" id="group-input">Input</span>
+				<div class="control__row">
+					{#if view.status === 'frozen'}
+						<button class="btn btn--quiet" disabled={busy} onclick={() => act('unfreeze')}>Unfreeze input</button>
+					{:else}
+						<button class="btn btn--quiet" disabled={busy || !live} onclick={() => act('freeze')}>Freeze input</button>
+					{/if}
+				</div>
+			</div>
+		</div>
+		<!-- Apart from the rest, and the only red button: it can't be undone. -->
+		<div class="control__end">
+			<button class="btn btn--danger" disabled={busy || ended} onclick={() => act('end')}>End session</button>
+			<p class="hint">Ends it for everyone. Answers close for good.</p>
 		</div>
 		{#if notice}<p class="error" role="alert">{notice}</p>{/if}
 

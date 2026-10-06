@@ -48,3 +48,21 @@ export async function startSession(page: Page, activities: Activity[]): Promise<
 	await page.waitForURL(/\/run\/[A-Z0-9]{5}\/control$/);
 	return /\/run\/([A-Z0-9]{5})\/control$/.exec(page.url())?.[1] ?? '';
 }
+
+// The control page's status block: Session, Answers and Activity, each a label and a value.
+export function statusValue(page: Page, label: 'Session' | 'Answers' | 'Activity') {
+	return page.locator('.status__item', { has: page.locator('dt', { hasText: new RegExp(`^${label}$`) }) }).locator('dd');
+}
+
+// A theme variable (accent, muted, error, surface...) as the browser computes it, for comparing
+// against what an element actually renders with.
+export function themeColour(page: Page, name: string) {
+	return page.evaluate((variable) => {
+		const probe = document.createElement('i');
+		probe.style.color = `var(--${variable})`;
+		document.body.append(probe);
+		const colour = getComputedStyle(probe).color;
+		probe.remove();
+		return colour;
+	}, name);
+}
