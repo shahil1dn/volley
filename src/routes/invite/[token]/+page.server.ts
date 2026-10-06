@@ -1,6 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { dbCall } from '$lib/server/db';
 import { startHostSession } from '$lib/server/host-guard';
+import { sessionIssuedAt } from '$lib/server/host-session';
 import { hashToken, passwordProblem, TOKEN_PATTERN } from '$lib/server/invite-token';
 import { setPassword } from '$lib/server/invites';
 import type { Actions, PageServerLoad } from './$types';
@@ -66,7 +67,7 @@ export const actions: Actions = {
 		if (!finished) error(500, 'Could not use the link');
 		if (finished.status !== 'ok') return fail(400, { name, message: REFUSED[finished.status] ?? REFUSED.invalid });
 
-		startHostSession(cookies, account.userId, finished.sessionsValidAfter ?? 0);
+		startHostSession(cookies, account.userId, sessionIssuedAt(Math.floor(Date.now() / 1000), finished.sessionsValidAfter ?? 0));
 		redirect(303, '/decks');
 	},
 };

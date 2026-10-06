@@ -37,8 +37,7 @@ export const actions: Actions = {
 		const result = await signInHost(
 			{
 				now: () => Math.floor(Date.now() / 1000),
-				findUserId: (address) => dbCall<string>('auth_user_id', [address]),
-				readProfile: (userId) => dbCall<{ sessionsValidAfter: number }>('host_profile', [userId]),
+				lookup: (address) => dbCall<{ userId: string; profile: { sessionsValidAfter: number } | null }>('host_lookup', [address]),
 				checkPassword: async (address, secret) => {
 					const { data, error } = await auth.signInWithPassword({ email: address, password: secret });
 					if (error?.code === 'invalid_credentials') return { status: 'wrong' };
@@ -54,7 +53,7 @@ export const actions: Actions = {
 		if (result.status === 'unavailable') return fail(503, { email, message: 'Sign-in is unavailable. Try again shortly.' });
 		if (result.status === 'not_host') return fail(403, { email, message: "That account isn't a host on this Volley." });
 
-		startHostSession(cookies, result.userId, 0, result.issuedAt);
+		startHostSession(cookies, result.userId, result.issuedAt);
 		redirect(303, '/decks');
 	},
 };

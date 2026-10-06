@@ -3,8 +3,8 @@ import { sessionIssuedAt } from './host-session.ts';
 // What a host sign-in needs from outside, so the order of steps can be tested.
 export type SignInDeps = {
 	now(): number; // unix seconds
-	findUserId(email: string): Promise<string | null>;
-	readProfile(userId: string): Promise<{ sessionsValidAfter: number } | null>;
+	// One database call for every email: null when there is no account.
+	lookup(email: string): Promise<{ userId: string; profile: { sessionsValidAfter: number } | null } | null>;
 	checkPassword(email: string, password: string): Promise<{ status: 'ok'; userId: string } | { status: 'wrong' | 'unavailable' }>;
 };
 
@@ -28,11 +28,10 @@ export async function signInHost(deps: SignInDeps, email: string, password: stri
 	let sessionsValidAfter = 0;
 	try {
 		startedAt = deps.now();
-		const userId = await deps.findUserId(email);
-		const profile = userId ? await deps.readProfile(userId) : null;
-		if (userId && profile) {
-			hostId = userId;
-			sessionsValidAfter = profile.sessionsValidAfter;
+		const found = await deps.lookup(email);
+		if (found?.profile) {
+			hostId = found.userId;
+			sessionsValidAfter = found.profile.sessionsValidAfter;
 		}
 	} catch {
 		return { status: 'unavailable' };

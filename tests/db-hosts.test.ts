@@ -7,6 +7,7 @@ import { connectAsOwner } from '../scripts/pg-connect.ts';
 import { inRolledBackTransaction, makeRun, skipWithoutDatabase as skip } from './db-helpers.ts';
 import { hostSessionIssuedAt, makeHostSession } from '../src/lib/server/host-session.ts';
 import { signInHost, type SignInDeps } from '../src/lib/server/host-signin.ts';
+import { HOST_LOOKUP_SQL } from '../src/lib/server/host-lookup.ts';
 
 let db: pg.Client;
 before(async () => {
@@ -258,18 +259,16 @@ test("a reset ends a session issued in the same second; the next second's is val
 	});
 });
 
+// The sign-in lookup as the app runs it (the real statement), counting calls.
+const calls = { lookup: 0, password: 0 };
+async function lookup(address: string) {
+	calls.lookup++;
+	return (await db.query(HOST_LOOKUP_SQL, [address])).rows[0]?.result ?? null;
+}
+
 // Sign-in against the real database (the password check is the caller's stub).
 function signInWith(email: string, checkPassword: SignInDeps['checkPassword']) {
-	return signInHost(
-		{
-			now: () => 0,
-			findUserId: async (address) => (await db.query('select id from auth.users where lower(email) = $1', [address])).rows[0]?.id ?? null,
-			readProfile: (userId) => call('public.host_profile($1)', [userId]),
-			checkPassword,
-		},
-		email,
-		'pw',
-	);
+	return signInHost({ now: () => 0, lookup, checkPassword: async (...args) => (calls.password++, checkPassword(...args)) }, email, 'pw');
 }
 
 test('a reset that lands while the password is being checked still ends the session it produces', { skip }, async () => {
@@ -292,8 +291,7 @@ test('a reset that lands while the password is being checked still ends the sess
 		const raced = await signInHost(
 			{
 				now: () => clock,
-				findUserId: async () => host,
-				readProfile: (id) => call('public.host_profile($1)', [id]),
+				lookup,
 				checkPassword: async () => {
 					await db.query('update public.hosts set sessions_valid_after = clock_timestamp() where user_id = $1', [host]);
 					clock = startedAt + 2; // the check was slow, so time has moved on by the time it returns
@@ -315,18 +313,35 @@ test('a non-host gets the same answer to a wrong password whoever the email belo
 		await db.query('update auth.users set email = $2 where id = $1', [host, hostEmail]);
 		const stranger = await authUser('stranger@example.org');
 
-		let checks = 0;
-		const wrong: SignInDeps['checkPassword'] = async () => (checks++, { status: 'wrong' });
+		const wrong: SignInDeps['checkPassword'] = async () => ({ status: 'wrong' });
 		const answers = [];
+		const costs = [];
 		for (const email of [hostEmail, 'stranger@example.org', 'nobody@example.org']) {
+			calls.lookup = calls.password = 0;
 			answers.push(await signInWith(email, wrong));
+			costs.push({ ...calls });
 		}
 		assert.deepEqual(answers, Array(3).fill({ status: 'wrong_password' }));
-		assert.equal(checks, 3, 'the password was checked for the host, the non-host and the unknown email alike');
+		assert.deepEqual(costs, Array(3).fill({ lookup: 1, password: 1 }), 'a host, a non-host and an unknown email cost the same: one lookup, one password check');
 
 		const right = (userId: string): SignInDeps['checkPassword'] => async () => ({ status: 'ok', userId });
 		assert.deepEqual((await signInWith('stranger@example.org', right(stranger))), { status: 'not_host' });
 		assert.deepEqual((await signInWith(hostEmail, right(stranger))), { status: 'not_host' }, 'a password for a different account is not this host');
+	});
+});
+
+test('the sign-in lookup returns the account and its host profile, a null profile for a non-host, and nothing for an unknown email', { skip }, async () => {
+	await inRolledBackTransaction(db, async () => {
+		const { userId: host } = await makeRun(db);
+		const hostEmail = (await db.query('select email from public.hosts where user_id = $1', [host])).rows[0].email;
+		await db.query('update auth.users set email = $2 where id = $1', [host, hostEmail]);
+		const stranger = await authUser('stranger@example.org');
+
+		const found = await lookup(hostEmail);
+		assert.equal(found.userId, host);
+		assert.equal(found.profile.email, hostEmail);
+		assert.deepEqual(await lookup('stranger@example.org'), { userId: stranger, profile: null });
+		assert.equal(await lookup('nobody@example.org'), null);
 	});
 });
 

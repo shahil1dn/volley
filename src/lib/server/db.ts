@@ -2,6 +2,7 @@ import { attachDatabasePool } from '@vercel/functions';
 import pg from 'pg';
 import { POSTGRES_URL } from '$env/static/private';
 import { retryColdConnect } from '$lib/server/cold-connect';
+import { HOST_LOOKUP_SQL } from '$lib/server/host-lookup';
 import { SUPABASE_ROOT_CA } from '$lib/server/supabase-ca';
 
 // Every server-side database call goes through here, over a direct Postgres
@@ -25,6 +26,7 @@ const STATEMENTS = {
 	host_view: 'select public.host_view($1, $2) as result',
 	host_export: 'select public.host_export($1, $2) as result',
 	host_profile: 'select public.host_profile($1) as result',
+	host_lookup: HOST_LOOKUP_SQL,
 	// Supabase keeps emails unique only among non-SSO accounts.
 	auth_user_id: 'select id as result from auth.users where lower(email) = $1 and not is_sso_user',
 	create_host_invite: 'select public.create_host_invite($1, $2, $3, $4, $5) as result',
