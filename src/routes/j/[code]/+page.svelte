@@ -5,6 +5,7 @@
 	import Brand from '$lib/Brand.svelte';
 	import { brand } from '$lib/brand';
 	import {
+		connectionLost,
 		isNewer,
 		loadSent,
 		loadUpvoted,
@@ -31,6 +32,8 @@
 
 	let room = $state<RoomState | null>(null);
 	let missing = $state(false);
+	// Polls that failed in a row; a reply, even an old one, resets it.
+	let failedPolls = $state(0);
 	// Read by the quiz countdown in Milestone 2; tracked from the first poll so
 	// the offset is settled by the time a quiz starts.
 	let clockOffsetMs = $state(0);
@@ -70,7 +73,11 @@
 				missing = true;
 				return;
 			}
-			if (!response.ok) return;
+			if (!response.ok) {
+				failedPolls++;
+				return;
+			}
+			failedPolls = 0;
 			const next: RoomState = await response.json();
 			if (!isNewer(room, next)) return;
 			const receivedAt = Date.now();
@@ -81,7 +88,8 @@
 				if (!keepOwnCount(own, madeAt, receivedAt)) delete ownCounts[Number(id)];
 			}
 		} catch {
-			// Offline for a moment: keep showing the last state and try again next tick.
+			// Offline for a moment: keep showing the last state, say so once it lasts, and try again next tick.
+			failedPolls++;
 		}
 	}
 
@@ -211,11 +219,15 @@
 <main class="phone" data-clock-offset={clockOffsetMs}>
 	<header class="masthead"><Brand /><p class="label">Room {code}</p></header>
 
+	{#if room && connectionLost(failedPolls)}
+		<p class="notice" role="status">Connection lost. What's below may be out of date. Trying again…</p>
+	{/if}
+
 	{#if missing}
 		<h1>We can't find that room</h1>
 		<p class="hint">Check the code on the big screen and try again.</p>
 	{:else if !room}
-		<p class="hint phone__foot" aria-live="polite">Joining…</p>
+		<p class="hint phone__foot" aria-live="polite">{connectionLost(failedPolls) ? "Can't reach the session. Trying again…" : 'Joining…'}</p>
 	{:else if room.status === 'ended'}
 		<h1>That's a wrap</h1>
 		<p class="hint">This session has ended. Thanks for joining in.</p>

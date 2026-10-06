@@ -61,6 +61,12 @@
 		starting = true;
 		formError = undefined;
 		return async ({ result, update }) => {
+			// A dropped connection or a server error: keep the form as typed instead of replacing the page.
+			if (result.type === 'error') {
+				formError = "The session wasn't started. Check your connection and try again; nothing you typed is lost.";
+				starting = false;
+				return;
+			}
 			if (result.type !== 'failure') {
 				await update();
 				// A redirect leaves the page, so the button stays busy until it does.

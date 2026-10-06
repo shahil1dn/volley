@@ -23,6 +23,11 @@ export type RoomState = {
 	players: [string, number][];
 };
 
+// A page is "offline" once this many polls in a row have failed, so one dropped
+// request doesn't flash a warning at a phone on a train.
+export const LOST_AFTER = 2;
+export const connectionLost = (failedPolls: number): boolean => failedPolls >= LOST_AFTER;
+
 // The state counts the questions waiting up to one past this, so exactly 100
 // and "more than 100" read differently.
 export const WAITING_CAP = 100;

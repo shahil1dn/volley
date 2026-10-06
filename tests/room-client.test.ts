@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isNewer, keepOwnCount, newSubmitId, OWN_COUNT_MAX_MS, serverClockOffset, stateMadeAt, WAITING_CAP, waitingCount, type RoomState } from '../src/lib/room-client.ts';
+import { connectionLost, isNewer, keepOwnCount, LOST_AFTER, newSubmitId, OWN_COUNT_MAX_MS, serverClockOffset, stateMadeAt, WAITING_CAP, waitingCount, type RoomState } from '../src/lib/room-client.ts';
 
 const state = (version: number) => ({ version }) as RoomState;
 
@@ -57,4 +57,10 @@ test('the waiting count reads 100 at exactly 100 and 100+ only above it', () => 
 	for (const [waiting, shown] of [[0, '0'], [1, '1'], [99, '99'], [100, '100'], [101, '100+'], [5000, '100+']] as const) {
 		assert.equal(waitingCount(waiting), shown, String(waiting));
 	}
+});
+
+test('a connection counts as lost only after two failed polls in a row', () => {
+	assert.equal(connectionLost(0), false);
+	assert.equal(connectionLost(LOST_AFTER - 1), false);
+	assert.equal(connectionLost(LOST_AFTER), true);
 });

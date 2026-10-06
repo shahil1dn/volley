@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { cloudPng } from '$lib/cloud-png';
+	import { connectionLost } from '$lib/room-client';
 	import Brand from '$lib/Brand.svelte';
 	import { brand } from '$lib/brand';
 
@@ -31,12 +32,16 @@
 	const REFUSED: Record<number, string> = {
 		409: "That can't be done right now. The screen below shows where the session is.",
 		404: "This session isn't yours, or it no longer exists.",
+		401: "You've been signed out, so that wasn't done.",
 	};
 
 	let view = $state<HostView | null>(null);
 	let missing = $state(false);
 	let busy = $state(false);
 	let notice = $state('');
+	// Refreshes that failed in a row, and whether the server said the host is signed out.
+	let failedPolls = $state(0);
+	let signedOut = $state(false);
 
 	const live = $derived(view?.status === 'live');
 	const ended = $derived(view?.status === 'ended');
@@ -63,10 +68,15 @@
 	async function refresh() {
 		try {
 			const response = await fetch(`/api/r/${data.code}/host`, { cache: 'no-store' });
+			signedOut = response.status === 401;
 			if (response.status === 404) missing = true;
-			if (response.ok) view = await response.json();
+			if (response.ok) {
+				view = await response.json();
+				failedPolls = 0;
+			} else if (response.status !== 404) failedPolls++;
 		} catch {
-			// Offline for a moment: keep the last view and try again next tick.
+			// Offline for a moment: keep the last view, say so once it lasts, and try again next tick.
+			failedPolls++;
 		}
 	}
 
@@ -80,6 +90,7 @@
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ action, key }),
 			});
+			if (response.status === 401) signedOut = true;
 			if (!response.ok) notice = REFUSED[response.status] ?? 'That didn’t work. Try again.';
 			else if (action.startsWith('question_')) {
 				const reply = await response.json().catch(() => ({}));
@@ -120,6 +131,11 @@
 
 <main class="control">
 	<header class="masthead"><Brand /><p class="label">Room {data.code} · control</p></header>
+	{#if signedOut}
+		<p class="notice" role="alert">You've been signed out, so this page can't update or send anything. <a href="/">Sign in again</a> to carry on; the session keeps running.</p>
+	{:else if connectionLost(failedPolls)}
+		<p class="notice" role="status">Connection lost. {view ? "What's below may be out of date. " : ''}Trying again…</p>
+	{/if}
 	{#if missing}
 		<h1>We can't find that session</h1>
 	{:else if !view}

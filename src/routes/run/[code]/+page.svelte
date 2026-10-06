@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { isNewer, waitingCount, type RoomState } from '$lib/room-client';
+	import { connectionLost, isNewer, waitingCount, type RoomState } from '$lib/room-client';
 	import { pollBars } from '$lib/poll';
 	import { centreOut, wordSizeVw } from '$lib/words';
 	import Brand from '$lib/Brand.svelte';
@@ -15,6 +15,7 @@
 
 	let room = $state<RoomState | null>(null);
 	let missing = $state(false);
+	let failedPolls = $state(0);
 	let cloud = $state<HTMLUListElement>();
 	let questionBox = $state<HTMLElement>();
 
@@ -40,6 +41,7 @@
 	const ended = $derived(room?.status === 'ended');
 	const note = $derived(
 		ended ? ''
+		: connectionLost(failedPolls) ? 'Reconnecting…'
 		: room?.status === 'frozen' ? 'Answers paused'
 		: room?.status === 'lobby' ? 'Starting soon'
 		: room?.itemState === 'closed' ? 'Answers closed'
@@ -84,11 +86,16 @@
 				missing = true;
 				return;
 			}
-			if (!response.ok) return;
+			if (!response.ok) {
+				failedPolls++;
+				return;
+			}
+			failedPolls = 0;
 			const next: RoomState = await response.json();
 			if (isNewer(room, next)) room = next;
 		} catch {
-			// Offline for a moment: keep the last cloud on screen.
+			// Offline for a moment: keep the last cloud on screen, and say so once it lasts.
+			failedPolls++;
 		}
 	}
 
@@ -114,7 +121,7 @@
 				<p class="host__ended">Session ended</p>
 				<p class="host__count">{count} {countNoun}</p>
 			</div>
-		{:else}
+		{:else if room}
 			<div class="host__join">
 				<div class="host__qr" role="img" aria-label="QR code to join at {data.joinUrl}">{@html data.qrSvg}</div>
 				<div>
@@ -127,7 +134,11 @@
 		{/if}
 	</header>
 
-	{#if isPoll}
+	{#if !room && !missing}
+		<p class="cloud__empty" aria-live="polite">Loading…</p>
+	{:else if missing}
+		<p class="cloud__empty">Check the code and try again.</p>
+	{:else if isPoll}
 		<ol class="poll" aria-label="Poll results">
 			{#each bars as bar (bar.label)}
 				<li class="poll__row">
@@ -154,10 +165,10 @@
 				</div>
 			</section>
 		{:else}
-			<p class="cloud__empty">Questions will appear here as they come in.</p>
+			<p class="cloud__empty">{ended ? 'No questions were asked.' : 'Questions will appear here as they come in.'}</p>
 		{/if}
 	{:else if words.length === 0}
-		<p class="cloud__empty">Answers will appear here as they come in.</p>
+		<p class="cloud__empty">{ended ? 'No answers were sent.' : 'Answers will appear here as they come in.'}</p>
 	{:else}
 		<ul class="cloud" aria-label="Word cloud" bind:this={cloud}>
 			{#each centreOut(words) as [word, count] (word)}
