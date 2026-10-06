@@ -588,3 +588,8 @@ Also: one gate command (build, typecheck, all tests, exit code intact, A17).
   not using a tinted panel. Any future tinted panel needs a darker border, or
   the theme needs a border token mixed at about 55% ink; check it before the AI
   Builders theme adds a tinted surface.
+- **The control page's "N of M · K waiting" line stops at 300 questions
+  (2026-10-06).** It is worked out from `host_view`, which returns at most 300
+  questions for the activity, so past that M and K undercount. Fine for a
+  workshop; a true count would need one more field in `host_view`. The
+  projector's count is separate and runs to "100+".

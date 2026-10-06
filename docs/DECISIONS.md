@@ -464,10 +464,15 @@ once; the host walks through them one by one. Migration 0015.
   puts one up it shows only the count and an "up next" hint, never a list.
   Phones are unchanged: they still see the whole list and can upvote, plus a
   small "On screen now" on the question being shown.
-- **Most votes first, read at the moment of choosing.** Next question puts up
-  the top-voted question that has not had its turn. The question on screen does
-  not change while votes shift or better-voted ones arrive; only the next pick
-  reads the latest votes.
+- **Most votes first, read at the moment of choosing.** Next question brings,
+  in this order: after a Previous, the next one in the order they were shown;
+  otherwise a question that was shown and left unanswered (one hidden and then
+  unhidden, say), which takes a fresh turn at the end of the history; otherwise
+  the top-voted question never shown (equal votes: asked first, then lowest id).
+  The question on screen does not change while votes shift or better-voted ones
+  arrive; only the next pick reads the latest votes. When nothing is left, Next
+  changes nothing: the last question stays on screen and is not marked answered,
+  and the page says so.
 - **Moving on marks the question answered.** The existing `answered` flag fits:
   an answered question already leaves the phones' list and the waiting count, so
   what has been discussed stops asking for votes. Previous goes back through the
@@ -476,8 +481,8 @@ once; the host walks through them one by one. Migration 0015.
 - **Where it lives.** Two columns on `questions`: `shown_seq` (its turn: null
   until first put up, then 1, 2, 3 within the activity) and `on_screen` (at most
   one per activity of a run, by a partial unique index). The shared state gains
-  `shown` ([id, text, votes], or null) and `waiting` (counted to 100, read
-  through the existing index); the host view gains the on-screen id and each
+  `shown` ([id, text, votes], or null) and `waiting` (counted to 101 through the
+  existing index, shown as "100+" above 100); the host view gains the on-screen id and each
   question's turn. Nothing personal is added; question text was already public.
 - **Safe to retry.** The host's `question_next` / `question_back` go through the
   existing locked `host_action` and carry the id the host believes is on screen
