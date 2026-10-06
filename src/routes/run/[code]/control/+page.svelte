@@ -153,11 +153,21 @@
 		{#if !signedOut && !notHost}<p class="hint" aria-live="polite">Loading…</p>{/if}
 	{:else}
 		<h1>{prompt}</h1>
-		<dl class="status" aria-live="polite">
-			<div class="status__item"><dt>Session</dt><dd>{SESSION_LABELS[view.status] ?? view.status}</dd></div>
-			<div class="status__item"><dt>Answers</dt><dd>{ANSWER_LABELS[answers ?? ''] ?? answers}</dd></div>
-			<div class="status__item"><dt>Activity</dt><dd>{view.currentPosition + 1} of {view.itemCount}</dd></div>
-		</dl>
+		<!-- Pinned to the top while the page scrolls: where the session is, and the one thing the host does next. -->
+		<div class="control__top" role="group" aria-label="Status and main action">
+			<dl class="status" aria-live="polite">
+				<div class="status__item"><dt>Session</dt><dd>{SESSION_LABELS[view.status] ?? view.status}</dd></div>
+				<div class="status__item"><dt>Answers</dt><dd>{ANSWER_LABELS[answers ?? ''] ?? answers}</dd></div>
+				<div class="status__item"><dt>Activity</dt><dd>{view.currentPosition + 1} of {view.itemCount}</dd></div>
+			</dl>
+			{#if isQna}
+				<button class="btn" disabled={busy || !live} onclick={() => act('question_next', String(view?.shown ?? ''))}>Next question</button>
+			{:else if answers === 'open'}
+				<button class="btn" disabled={busy || ended} onclick={() => act('close')}>Close answers</button>
+			{:else}
+				<button class="btn" disabled={busy || ended || view.status === 'frozen'} onclick={() => act('open')}>Open answers</button>
+			{/if}
+		</div>
 		<p class="hint">
 			Projector: <a href="/run/{data.code}" target="_blank" rel="noopener">open the projector view</a>. Phones join at
 			{data.joinUrl}
@@ -169,20 +179,21 @@
 					<span class="label" id="group-question">Question on screen</span>
 					<div class="control__row">
 						<button class="btn btn--quiet" disabled={busy || !live} onclick={() => act('question_back', String(view?.shown ?? ''))}>Previous question</button>
-						<button class="btn" disabled={busy || !live} onclick={() => act('question_next', String(view?.shown ?? ''))}>Next question</button>
 					</div>
 				</div>
 			{/if}
-			<div class="control__group" role="group" aria-labelledby="group-answers">
-				<span class="label" id="group-answers">Answers</span>
-				<div class="control__row">
-					{#if answers === 'open'}
-						<button class={isQna ? 'btn btn--quiet' : 'btn'} disabled={busy || ended} onclick={() => act('close')}>Close answers</button>
-					{:else}
-						<button class={isQna ? 'btn btn--quiet' : 'btn'} disabled={busy || ended || view.status === 'frozen'} onclick={() => act('open')}>Open answers</button>
-					{/if}
+			{#if isQna}
+				<div class="control__group" role="group" aria-labelledby="group-answers">
+					<span class="label" id="group-answers">Answers</span>
+					<div class="control__row">
+						{#if answers === 'open'}
+							<button class="btn btn--quiet" disabled={busy || ended} onclick={() => act('close')}>Close answers</button>
+						{:else}
+							<button class="btn btn--quiet" disabled={busy || ended || view.status === 'frozen'} onclick={() => act('open')}>Open answers</button>
+						{/if}
+					</div>
 				</div>
-			</div>
+			{/if}
 			<div class="control__group" role="group" aria-labelledby="group-activity">
 				<span class="label" id="group-activity">Activity</span>
 				<div class="control__row">

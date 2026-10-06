@@ -9,6 +9,8 @@
 
 	let { data, form } = $props();
 
+	const typeName = (value: string) => ACTIVITY_TYPES.find(([v]) => v === value)?.[1] ?? value;
+
 	type Option = { id: number; value: string; error?: string };
 	type Row = { id: number; type: string; prompt: string; options: Option[]; typeError?: string; promptError?: string; optionsError?: string };
 
@@ -140,7 +142,7 @@
 	<title>Start a session · {brand.name}</title>
 </svelte:head>
 
-<main class="phone phone--wide">
+<main class="phone phone--wide phone--columns">
 	<header class="masthead">
 		<Brand />
 		<form method="POST" action="?/signOut"><button class="btn btn--link">Sign out</button></form>
@@ -153,7 +155,8 @@
 	</p>
 	<h1>Start a session</h1>
 	<p class="hint">Add up to {MAX_ACTIVITIES} activities. They run in order, all under one room code.</p>
-	<form method="POST" action="?/startSession" class="stack" use:enhance={submit}>
+	<form method="POST" action="?/startSession" class="stack session" use:enhance={submit}>
+		<div class="session__main">
 		<ol class="activities">
 			{#each rows as row, i (row.id)}
 				<li>
@@ -235,8 +238,23 @@
 			<button type="button" class="btn btn--quiet" id="add-activity" disabled={!ready || rows.length >= MAX_ACTIVITIES} onclick={addRow}>Add activity</button>
 			<p class="hint">{rows.length} of {MAX_ACTIVITIES}{#if rows.length >= MAX_ACTIVITIES} · that's the most a session can hold{/if}</p>
 		</div>
-		{#if signedOut}<p class="error" role="alert">You've been signed out, so the session wasn't started. <a href="/" target="_blank" rel="noopener">Sign in again</a> in a new tab, then press Start here; what you typed is still here.</p>{/if}
-		{#if formError}<p class="error" role="alert">{formError}</p>{/if}
-		<button class="btn btn--block" disabled={starting}>{starting ? 'Starting…' : 'Start session'}</button>
+		</div>
+		<!-- Beside the list from 960px, under it on a phone. It repeats what was typed, so the
+		     Start button can sit next to a view of what it will start. -->
+		<aside class="summary" aria-label="Your session">
+			<h2>Your session</h2>
+			<ol class="summary__list">
+				{#each rows as row, i (row.id)}
+					<li>
+						<span class="label">{i + 1} · {typeName(row.type)}{row.type === 'poll' ? ` · ${row.options.length} options` : ''}</span>
+						<span class={row.prompt.trim() ? '' : 'hint'}>{row.prompt.trim() || 'No question yet'}</span>
+					</li>
+				{/each}
+			</ol>
+			<p class="hint">{rows.length} of {MAX_ACTIVITIES} activities. They run in order under one room code.</p>
+			{#if signedOut}<p class="error" role="alert">You've been signed out, so the session wasn't started. <a href="/" target="_blank" rel="noopener">Sign in again</a> in a new tab, then press Start here; what you typed is still here.</p>{/if}
+			{#if formError}<p class="error" role="alert">{formError}</p>{/if}
+			<button class="btn btn--block" disabled={starting}>{starting ? 'Starting…' : 'Start session'}</button>
+		</aside>
 	</form>
 </main>

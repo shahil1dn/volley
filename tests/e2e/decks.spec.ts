@@ -59,7 +59,7 @@ test('the list starts at one activity, grows to the cap, and renumbers when one 
 	for (let n = 2; n <= MAX_ACTIVITIES; n++) await addActivity(page).click();
 	await expect(headings(page)).toHaveCount(MAX_ACTIVITIES);
 	await expect(addActivity(page), 'the cap is reached').toBeDisabled();
-	await expect(page.getByText(`${MAX_ACTIVITIES} of ${MAX_ACTIVITIES}`)).toBeVisible();
+	await expect(page.locator('.adder--ruled').getByText(`${MAX_ACTIVITIES} of ${MAX_ACTIVITIES}`)).toBeVisible();
 
 	// What was typed stays with its activity when another is removed.
 	await question(page, 2).fill('Second');

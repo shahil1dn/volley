@@ -237,3 +237,28 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
    The ring reaches 12px past the text, so the text stays aligned with the other rows. */
 .control__words .control__word--shown { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--radius); margin: 0 -12px; padding-left: 12px; padding-right: 12px; }
 .control__badge { margin-right: 8px; font-weight: 700; }
+
+/* ---------- /decks: the session summary beside the list ---------- */
+.summary { display: grid; gap: 12px; align-content: start; padding-top: 24px; border-top: 1px solid var(--line); }
+.summary h2 { margin: 0; }
+.summary__list { list-style: none; margin: 0; padding: 0; display: grid; max-height: 40svh; overflow-y: auto; }
+.summary__list li { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+@media (min-width: 960px) {
+  .phone--columns { max-width: 1120px; }
+  .session { grid-template-columns: minmax(0, 1fr) 340px; gap: 48px; align-items: start; }
+  .summary { position: sticky; top: 24px; padding: 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+}
+
+/* ---------- control: the pinned top bar ---------- */
+.control__top {
+  position: sticky; top: 0; z-index: 2; margin: 16px -16px 0; padding: 12px 16px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px;
+  background: var(--paper); border-bottom: 1px solid var(--line);
+}
+.control__top .status { margin: 0; }
+@media (max-width: 599px) {
+  .control__top { gap: 8px 16px; padding: 8px 16px; }
+  .control__top .status { gap: 4px 16px; }
+  .control__top .status dd { font-size: 16px; }
+  .control__top .btn { flex: 1 1 100%; }
+}

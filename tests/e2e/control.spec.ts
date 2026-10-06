@@ -54,10 +54,12 @@ test('the status is labelled, the controls are grouped, and End session stands a
 	await expect(statusValue(control, 'Answers')).toHaveText('Closed');
 	await expect(statusValue(control, 'Activity')).toHaveText('1 of 2');
 
-	const answers = control.getByRole('group', { name: 'Answers', exact: true });
+	// The main action (Open answers here) lives in the pinned bar with the status, not in a group below.
+	const main = control.getByRole('group', { name: 'Status and main action', exact: true });
+	await expect(control.getByRole('group', { name: 'Answers', exact: true }), 'only Q&A has an Answers group').toHaveCount(0);
 	const activity = control.getByRole('group', { name: 'Activity', exact: true });
 	const input = control.getByRole('group', { name: 'Input', exact: true });
-	await expect(answers.getByRole('button')).toHaveText(['Open answers']);
+	await expect(main.getByRole('button')).toHaveText(['Open answers']);
 	await expect(activity.getByRole('button')).toHaveText(['Previous', 'Next']);
 	await expect(input.getByRole('button')).toHaveText(['Freeze input']);
 
@@ -65,7 +67,7 @@ test('the status is labelled, the controls are grouped, and End session stands a
 	const end = control.getByRole('button', { name: 'End session' });
 	await expect(control.getByRole('group').getByRole('button', { name: 'End session' })).toHaveCount(0);
 	const endTop = (await end.boundingBox())!.y;
-	for (const group of [answers, activity, input]) {
+	for (const group of [activity, input]) {
 		const box = (await group.boundingBox())!;
 		expect(endTop, 'below every group').toBeGreaterThanOrEqual(box.y + box.height);
 	}
