@@ -32,10 +32,12 @@ remote yet.
 
 ## 1. Where things stand
 
-- **Live at https://aib-live.vercel.app** (deploy `dpl_2mgvPEZ7MNSenLUUjerVxQAjFQif`,
-  built from `main` at `f4ab024`):
+- **Live at https://aib-live.vercel.app** (deploy `dpl_53JtP7fRd5gRvjfuXKeebH8xSemr`,
+  built from `main` at `e6dfa18` on 2026-10-06):
   - word cloud, poll and Q&A (ADR-008);
-  - sessions of up to 3 activities under one room code (`/decks`);
+  - sessions of 1 to 10 activities under one room code (`/decks`, reworked
+    2026-10-06: add/remove activities, poll options as separate fields shown
+    only for polls, errors beside each field; migration 0014 on both databases);
   - `/join` for typing a code;
   - the new neutral look, with name, colours and logo in `src/lib/brand.ts`
     (ADR-012);
@@ -69,8 +71,6 @@ remote yet.
   - Upvote shows its pressed state by fill alone.
   - The control page's status line is small.
   - End session is styled like Next (a confirm guards it).
-  - `/decks` shows the poll-options box for every type and still says "Saved
-    decks arrive in Milestone 3".
   - A long email wraps in the `/decks` header.
   - The README title still says "AI Builders Live".
 - **The cold-pooler retry** (`src/lib/server/cold-connect.ts`) is proven by
