@@ -113,7 +113,8 @@ remote yet.
   the password and ends older sessions; `set-host` never touches the password.
 - **A password reset ends sessions**, through `hosts.sessions_valid_after`. New
   sessions are stamped no earlier than it (ADR-011). Don't issue a host session
-  without passing that value to `startHostSession`.
+  without passing `sessionIssuedAt(...)` to `startHostSession`: sign-in uses
+  `host-signin.ts`, the invite page passes `sessionIssuedAt(now, sessionsValidAfter)`.
 - **`use:enhance` ignores `onsubmit`'s preventDefault.** Put confirmations in
   the enhance callback and call `cancel()`.
 - **The guard's own redirects** don't carry SvelteKit's cookie changes. Set
