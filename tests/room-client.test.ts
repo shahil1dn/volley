@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isNewer, newSubmitId, serverClockOffset, type RoomState } from '../src/lib/room-client.ts';
+import { isNewer, keepOwnCount, newSubmitId, OWN_COUNT_MAX_MS, serverClockOffset, stateMadeAt, type RoomState } from '../src/lib/room-client.ts';
 
 const state = (version: number) => ({ version }) as RoomState;
 
@@ -30,4 +30,24 @@ test('submit ids are version-4 UUIDs, including the fallback without randomUUID'
 	} finally {
 		Object.defineProperty(crypto, 'randomUUID', { value: original, configurable: true });
 	}
+});
+
+test('a cached state was made Age seconds before it arrived; an uncached one after its request was sent', () => {
+	assert.equal(stateMadeAt(1_000, 5_000, '2'), 3_000);
+	assert.equal(stateMadeAt(1_000, 5_000, null), 1_000);
+	assert.equal(stateMadeAt(1_000, 5_000, '0'), 1_000);
+	assert.equal(stateMadeAt(1_000, 5_000, '-3'), 1_000);
+	assert.equal(stateMadeAt(1_000, 5_000, 'nonsense'), 1_000);
+});
+
+test('the count from the vote reply stands until a state made after it arrives, and never longer than the limit', () => {
+	const own = { votes: 4, at: 10_000 };
+	// Made before the reply: a request already in flight, or a copy from the edge cache.
+	assert.equal(keepOwnCount(own, 9_999, 10_500), true);
+	// Made at or after the reply: it includes the vote, so it can be trusted.
+	assert.equal(keepOwnCount(own, 10_000, 10_500), false);
+	assert.equal(keepOwnCount(own, 12_000, 12_500), false);
+	// A missing Age header can't pin the number for good.
+	assert.equal(keepOwnCount(own, 9_000, 10_000 + OWN_COUNT_MAX_MS - 1), true);
+	assert.equal(keepOwnCount(own, 9_000, 10_000 + OWN_COUNT_MAX_MS), false);
 });

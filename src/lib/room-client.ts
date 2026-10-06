@@ -29,6 +29,27 @@ export function isNewer(current: RoomState | null, next: RoomState): boolean {
 	return !current || next.version >= current.version;
 }
 
+// The vote count the server returned for this phone's own upvote, shown at once
+// instead of waiting for the next poll. `at` is when that reply arrived.
+export type OwnCount = { votes: number; at: number };
+
+// A polled state can be older than the vote it follows (a request already in
+// flight, or a copy the edge cache made a second ago), and showing its count
+// would step the number back. So the reply's count stands until a state that
+// was made AFTER the reply comes in. A cached copy was made `Age` seconds
+// before it arrived; an uncached one was made after its request was sent.
+export function stateMadeAt(sentAt: number, receivedAt: number, ageHeader: string | null): number {
+	const ageSeconds = Number(ageHeader);
+	return Number.isFinite(ageSeconds) && ageSeconds > 0 ? receivedAt - ageSeconds * 1000 : sentAt;
+}
+
+// Whether the phone should still show its own count rather than a polled one.
+// It never outlives OWN_COUNT_MAX_MS, so a missing Age header can't pin it.
+export const OWN_COUNT_MAX_MS = 10_000;
+export function keepOwnCount(own: OwnCount, stateMadeAtMs: number, now: number): boolean {
+	return stateMadeAtMs < own.at && now - own.at < OWN_COUNT_MAX_MS;
+}
+
 // Milliseconds to add to Date.now() to read the server's clock. A cached state
 // was made `Age` seconds before it arrived, so its serverNow is that far behind.
 export function serverClockOffset(serverNow: number, ageHeader: string | null, receivedAt: number): number {

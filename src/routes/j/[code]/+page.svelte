@@ -11,8 +11,11 @@
 		MESSAGES,
 		newSubmitId,
 		saveSent,
+		keepOwnCount,
 		saveUpvoted,
 		serverClockOffset,
+		stateMadeAt,
+		type OwnCount,
 		type RoomState,
 		type SentByItem,
 	} from '$lib/room-client';
@@ -40,6 +43,8 @@
 	// Q&A: the questions this phone has upvoted, and those with a vote in flight.
 	let upvoted = $state<number[]>([]);
 	let voting = $state<number[]>([]);
+	// The count the server returned for each of this phone's own votes, until a newer state replaces it.
+	let ownCounts = $state<Record<number, OwnCount>>({});
 	// The answer being sent, kept with its id until the server has decided on it,
 	// so pressing Send again after a failure retries the same submit (SPEC 12).
 	let pending: { submitId: string; value: string } | null = null;
@@ -59,6 +64,7 @@
 
 	async function poll() {
 		try {
+			const sentAt = Date.now();
 			const response = await fetch(`/api/r/${code}/state`);
 			if (response.status === 404) {
 				missing = true;
@@ -67,8 +73,13 @@
 			if (!response.ok) return;
 			const next: RoomState = await response.json();
 			if (!isNewer(room, next)) return;
-			clockOffsetMs = serverClockOffset(next.serverNow, response.headers.get('age'), Date.now());
+			const receivedAt = Date.now();
+			clockOffsetMs = serverClockOffset(next.serverNow, response.headers.get('age'), receivedAt);
 			room = next;
+			const madeAt = stateMadeAt(sentAt, receivedAt, response.headers.get('age'));
+			for (const [id, own] of Object.entries(ownCounts)) {
+				if (!keepOwnCount(own, madeAt, receivedAt)) delete ownCounts[Number(id)];
+			}
 		} catch {
 			// Offline for a moment: keep showing the last state and try again next tick.
 		}
@@ -81,7 +92,7 @@
 
 	// An answer ({submitId, value}) or an upvote ({questionId, up}). Both are safe
 	// to send again: an answer by its submit id, an upvote because it sets a vote.
-	type Outcome = { status: string; left?: number; voted?: boolean };
+	type Outcome = { status: string; left?: number; voted?: boolean; votes?: number };
 
 	function post(body: object) {
 		return fetch(answerUrl, {
@@ -171,6 +182,7 @@
 		}
 		upvoted = result.voted ? [...new Set([...upvoted, id])] : upvoted.filter((other) => other !== id);
 		saveUpvoted(code, upvoted);
+		if (typeof result.votes === 'number') ownCounts[id] = { votes: result.votes, at: Date.now() };
 	}
 
 	async function vote(event: SubmitEvent) {
@@ -227,9 +239,10 @@
 		{:else}
 			<ol class="questions">
 				{#each questions as [id, text, votes] (id)}
+					{@const votesNow = ownCounts[id]?.votes ?? votes}
 					<li class="question">
 						<span>{text}</span>
-						<span class="question__votes">{votes} {votes === 1 ? 'vote' : 'votes'}{#if id === onScreenId}{' · On screen now'}{/if}</span>
+						<span class="question__votes">{votesNow} {votesNow === 1 ? 'vote' : 'votes'}{#if id === onScreenId}{' · On screen now'}{/if}</span>
 						<button
 							class="btn btn--quiet"
 							aria-pressed={upvoted.includes(id)}
