@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
+	import { enhance } from '$app/forms';
+	import type { SubmitFunction } from '@sveltejs/kit';
 	import Brand from '$lib/Brand.svelte';
 	import { brand } from '$lib/brand';
-	import { ACTIVITY_TYPES, MAX_ACTIVITIES, MAX_OPTION_CHARS, MAX_OPTIONS, MAX_PROMPT_CHARS, MIN_OPTIONS } from '$lib/session-limits';
+	import type { Draft, DraftErrors } from '$lib/session-draft';
+	import { ACTIVITY_TYPES, MAX_ACTIVITIES, MAX_OPTIONS, MIN_OPTIONS } from '$lib/session-limits';
 
 	let { data, form } = $props();
 
@@ -12,7 +15,7 @@
 	// Ids are only for keeping each row's inputs together as others come and go.
 	let nextId = 0;
 	// Every poll keeps at least MIN_OPTIONS boxes, so choosing Poll shows them ready to fill.
-	function makeRow(draft?: { type: string; prompt: string; options: string[] }, errors?: { type?: string; prompt?: string; options?: string; option?: Record<number, string> }): Row {
+	function makeRow(draft?: Draft, errors?: DraftErrors): Row {
 		const count = Math.max(MIN_OPTIONS, draft?.options.length ?? 0);
 		return {
 			id: nextId++,
@@ -25,12 +28,17 @@
 		};
 	}
 
-	// After a refused submit the server hands back exactly what was typed. It is
-	// read once, as the starting point: from then on the host's edits are the truth.
+	type Refusal = { drafts: Draft[]; errors: { form?: string; drafts: DraftErrors[] } };
+	const rowsFrom = (refusal?: Refusal): Row[] => (refusal?.drafts.length ? refusal.drafts.map((draft, i) => makeRow(draft, refusal.errors.drafts[i])) : [makeRow()]);
+
+	// Without script a refused post comes back as a whole new page, and `form`
+	// holds exactly what was typed: it is the starting point, read once, and
+	// from then on the host's edits are the truth.
 	// svelte-ignore state_referenced_locally
-	let rows = $state<Row[]>(form?.drafts?.length ? form.drafts.map((draft, i) => makeRow(draft, form.errors.drafts[i])) : [makeRow()]);
+	let rows = $state<Row[]>(rowsFrom(form ?? undefined));
 	// svelte-ignore state_referenced_locally
-	const formError = form?.errors?.form;
+	let formError = $state(form?.errors?.form);
+	let starting = $state(false);
 
 	// The add and remove buttons need the page's script; until it runs they stay
 	// disabled rather than doing nothing.
@@ -42,8 +50,49 @@
 			if (select instanceof HTMLSelectElement) row.type = select.value;
 		}
 		ready = true;
-		document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+		focusFirstProblem();
 	});
+
+	const focusFirstProblem = () => document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+
+	// Posts without leaving the page, so a refusal keeps everything on screen as
+	// typed and only adds the messages. Without script the form posts normally.
+	const submit: SubmitFunction = () => {
+		starting = true;
+		formError = undefined;
+		return async ({ result, update }) => {
+			if (result.type !== 'failure') {
+				await update();
+				// A redirect leaves the page, so the button stays busy until it does.
+				if (result.type !== 'redirect') starting = false;
+				return;
+			}
+			const refusal = result.data as Refusal;
+			if (refusal.drafts.length === rows.length) {
+				for (const [i, row] of rows.entries()) showErrors(row, refusal.errors.drafts[i]);
+			} else {
+				// A hand-made post the page could never send: show what the server kept.
+				rows = rowsFrom(refusal);
+			}
+			formError = refusal.errors.form;
+			starting = false;
+			await tick();
+			focusFirstProblem();
+		};
+	};
+
+	function showErrors(row: Row, errors: DraftErrors) {
+		row.typeError = errors.type;
+		row.promptError = errors.prompt;
+		row.optionsError = errors.options;
+		for (const [j, option] of row.options.entries()) option.error = row.type === 'poll' ? errors.option?.[j] : undefined;
+	}
+	// An option's message can point at another option ("Same as option 1"), so any
+	// edit, add or removal in a poll drops all of that poll's option messages.
+	function clearOptionErrors(row: Row) {
+		row.optionsError = undefined;
+		for (const option of row.options) option.error = undefined;
+	}
 
 	const focusSoon = async (id: string) => {
 		await tick();
@@ -65,13 +114,13 @@
 		if (row.options.length >= MAX_OPTIONS) return;
 		const option = { id: nextId++, value: '' };
 		row.options.push(option);
-		row.optionsError = undefined;
+		clearOptionErrors(row);
 		focusSoon(`option-${option.id}`);
 	}
 	function removeOption(row: Row, j: number) {
 		if (row.options.length <= MIN_OPTIONS) return;
 		row.options.splice(j, 1);
-		row.optionsError = undefined;
+		clearOptionErrors(row);
 		focusSoon(`add-option-${row.id}`);
 	}
 </script>
@@ -81,10 +130,19 @@
 </svelte:head>
 
 <main class="phone phone--wide">
-	<header class="masthead"><Brand /><p class="label">Signed in as {data.name ?? data.email}{#if data.isAdmin} · <a href="/hosts">Manage hosts</a>{/if}</p></header>
+	<header class="masthead">
+		<Brand />
+		<form method="POST" action="?/signOut"><button class="btn btn--link">Sign out</button></form>
+	</header>
+	<!-- The one line that can be long (an email), so it truncates instead of wrapping. -->
+	<p class="account label">
+		<span>Signed in as</span>
+		<span class="account__who" title={data.name ?? data.email}>{data.name ?? data.email}</span>
+		{#if data.isAdmin}<span>·</span> <a href="/hosts">Manage hosts</a>{/if}
+	</p>
 	<h1>Start a session</h1>
 	<p class="hint">Add up to {MAX_ACTIVITIES} activities. They run in order, all under one room code.</p>
-	<form method="POST" action="?/startSession" class="stack">
+	<form method="POST" action="?/startSession" class="stack" use:enhance={submit}>
 		<ol class="activities">
 			{#each rows as row, i (row.id)}
 				<li>
@@ -113,11 +171,13 @@
 							{#if row.typeError}<p class="error" id="type-error-{row.id}">{row.typeError}</p>{/if}
 						</div>
 						<div class="field">
+							<!-- No maxlength on the question or the options: the browser counts UTF-16
+							     units and the limit counts characters (an emoji is one), so it would be
+							     stricter than the server. The server's message beside the field is the limit. -->
 							<label class="label" for="prompt-{row.id}">Question</label>
 							<input
 								id="prompt-{row.id}"
 								name="prompt"
-								maxlength={MAX_PROMPT_CHARS}
 								bind:value={row.prompt}
 								aria-invalid={row.promptError ? 'true' : undefined}
 								aria-describedby={row.promptError ? `prompt-error-${row.id}` : undefined}
@@ -139,11 +199,10 @@
 										<input
 											id="option-{option.id}"
 											name="options{i}"
-											maxlength={MAX_OPTION_CHARS}
 											bind:value={option.value}
 											aria-invalid={option.error ? 'true' : undefined}
 											aria-describedby={option.error ? `option-error-${option.id}` : undefined}
-											oninput={() => (option.error = undefined)}
+											oninput={() => clearOptionErrors(row)}
 										/>
 										<button type="button" class="btn btn--link" aria-label="Remove option {j + 1}" disabled={!ready || row.options.length <= MIN_OPTIONS} onclick={() => removeOption(row, j)}>Remove</button>
 									</div>
@@ -166,9 +225,6 @@
 			<p class="hint">{rows.length} of {MAX_ACTIVITIES}{#if rows.length >= MAX_ACTIVITIES} · that's the most a session can hold{/if}</p>
 		</div>
 		{#if formError}<p class="error" role="alert">{formError}</p>{/if}
-		<button class="btn btn--block">Start session</button>
-	</form>
-	<form method="POST" action="?/signOut" class="stack">
-		<button class="btn btn--block btn--quiet">Sign out</button>
+		<button class="btn btn--block" disabled={starting}>{starting ? 'Starting…' : 'Start session'}</button>
 	</form>
 </main>

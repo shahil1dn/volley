@@ -8,7 +8,7 @@ import { createClient } from '@supabase/supabase-js';
 import type pg from 'pg';
 import { connectAsOwner } from '../../scripts/pg-connect.ts';
 import { MAX_ACTIVITIES, MAX_OPTIONS, MIN_OPTIONS } from '../../src/lib/session-limits.ts';
-import { activityBox, addHost, BASE, builderReady, signIn, startSession } from './helpers.ts';
+import { activityBox, addHost, BASE, builderReady, signIn, startSession, statusValue, themeColour } from './helpers.ts';
 
 const admin = createClient(process.env.SUPABASE_URL ?? '', process.env.SUPABASE_SECRET_KEY ?? '', {
 	auth: { persistSession: false, autoRefreshToken: false },
@@ -16,6 +16,8 @@ const admin = createClient(process.env.SUPABASE_URL ?? '', process.env.SUPABASE_
 
 let db: pg.Client;
 const hostEmail = `volley-e2e-decks-${randomUUID()}@example.com`;
+// Long enough that it can't fit a phone's width, for the masthead test.
+const longEmail = `volley-e2e-decks-${randomUUID()}-with-an-address-far-too-long-for-a-phone@example.com`;
 let hostPassword = '';
 const suiteStart = new Date();
 
@@ -25,7 +27,7 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-	const { rows } = await db.query('select id from auth.users where email = $1', [hostEmail]);
+	const { rows } = await db.query('select id from auth.users where email = any($1)', [[hostEmail, longEmail]]);
 	for (const { id } of rows) await admin.deleteUser(id);
 	await db.query(
 		`delete from public.rate_limits where key like 'signin-%' and window_start >= $1::timestamptz - interval '15 minutes'`,
@@ -50,6 +52,9 @@ test('the list starts at one activity, grows to the cap, and renumbers when one 
 	await openBuilder(page);
 	await expect(headings(page)).toHaveCount(1);
 	await expect(page.getByRole('button', { name: 'Remove activity 1' }), 'the last activity cannot be removed').toBeDisabled();
+	// Disabled looks the same on every button: muted text, no fading.
+	const look = await page.getByRole('button', { name: 'Remove activity 1' }).evaluate((el) => ({ colour: getComputedStyle(el).color, opacity: getComputedStyle(el).opacity }));
+	expect(look).toEqual({ colour: await themeColour(page, 'muted'), opacity: '1' });
 
 	for (let n = 2; n <= MAX_ACTIVITIES; n++) await addActivity(page).click();
 	await expect(headings(page)).toHaveCount(MAX_ACTIVITIES);
@@ -103,7 +108,8 @@ test('a session of mixed activities starts, and the poll keeps its options in th
 		{ type: 'Q&A', question: 'Ask us anything' },
 	]);
 	await control.getByRole('button', { name: 'Open answers' }).click();
-	await expect(control.getByText('Session: live. Answers: open.')).toBeVisible();
+	await expect(statusValue(control, 'Session')).toHaveText('Live');
+	await expect(statusValue(control, 'Answers')).toHaveText('Open');
 	const projector = await laptop.newPage();
 	await projector.goto(`/run/${code}`);
 	await expect(projector.getByRole('list', { name: 'Poll results' }).getByRole('listitem')).toContainText(['Tea', 'Coffee', 'Neither', 'Water']);
@@ -123,9 +129,14 @@ test('a refused submit says which field is wrong, next to it, and gives back eve
 	await typeOf(page, 3).selectOption({ label: 'Q&A' });
 	await question(page, 3).fill('Ask us anything');
 
+	// A marker on the live page: it survives only if the refusal didn't reload it.
+	await page.evaluate(() => ((window as unknown as { kept: boolean }).kept = true));
 	await page.getByRole('button', { name: 'Start session' }).click();
-	// Refused, so still on the builder (a plain form post keeps its action in the address).
-	await expect(page).toHaveURL(`${BASE}/decks?/startSession`);
+	// Refused, and still the same page at the same address.
+	await expect(activityBox(page, 2).getByText('Write the question.')).toBeVisible();
+	await expect(page).toHaveURL(`${BASE}/decks`);
+	expect(await page.evaluate(() => (window as unknown as { kept?: boolean }).kept), 'no reload').toBe(true);
+	await expect(page.getByRole('button', { name: 'Start session' }), 'busy only while posting').toBeEnabled();
 
 	// Every activity and option is still there, as typed, spaces included.
 	await expect(headings(page)).toHaveCount(3);
@@ -154,10 +165,61 @@ test('a refused submit says which field is wrong, next to it, and gives back eve
 	await expect(activityBox(page, 2).getByText('Write the question.')).toHaveCount(0);
 	await expect(activityBox(page, 2).getByText('Same as option 1. Options must differ.')).toBeVisible();
 
+	// An option's message can point at another option, so editing any option in
+	// the poll drops all of that poll's option messages, not only its own.
+	await option(page, 2, 1).fill('Chai');
+	await expect(activityBox(page, 2).getByText('Same as option 1. Options must differ.')).toHaveCount(0);
+	await expect(activityBox(page, 2).getByText('Write an option, or remove this one.')).toHaveCount(0);
+	await expect(activityBox(page, 2).locator('[aria-invalid="true"]')).toHaveCount(0);
+
 	await option(page, 2, 2).fill('Water');
 	await activityBox(page, 2).getByRole('button', { name: 'Remove option 3' }).click();
 	await page.getByRole('button', { name: 'Start session' }).click();
 	await page.waitForURL(/\/run\/[A-Z0-9]{5}\/control$/);
+});
+
+test('removing an option drops its poll\'s stale "same as" messages', async ({ page }) => {
+	await openBuilder(page);
+	await question(page, 1).fill('Tea or coffee?');
+	await typeOf(page, 1).selectOption({ label: 'Poll' });
+	await activityBox(page, 1).getByRole('button', { name: 'Add option' }).click();
+	for (const [j, value] of ['Tea', 'tea', 'Coffee'].entries()) await option(page, 1, j + 1).fill(value);
+	await page.getByRole('button', { name: 'Start session' }).click();
+	await expect(activityBox(page, 1).getByText('Same as option 1. Options must differ.')).toBeVisible();
+	await activityBox(page, 1).getByRole('button', { name: 'Remove option 1' }).click();
+	// "tea" is now option 1; the old message would say it repeats an option before it.
+	await expect(activityBox(page, 1).getByText(/Same as option/)).toHaveCount(0);
+	await expect(activityBox(page, 1).locator('[aria-invalid="true"]')).toHaveCount(0);
+});
+
+test('without script a refused post still comes back with the message and everything typed', async ({ browser }) => {
+	const context = await browser.newContext({ baseURL: BASE, javaScriptEnabled: false });
+	const page = await context.newPage();
+	await signIn(page, hostEmail, hostPassword);
+	await page.waitForURL('**/decks');
+	// 200 characters: over the limit, but within what is handed back.
+	await question(page, 1).fill('x'.repeat(200));
+	await page.getByRole('button', { name: 'Start session' }).click();
+	await expect(activityBox(page, 1).getByText('Keep the question to 140 characters or fewer.')).toBeVisible();
+	await expect(question(page, 1)).toHaveValue('x'.repeat(200));
+	await context.close();
+});
+
+test('a long email truncates on a phone, and Sign out sits in the masthead', async ({ browser }) => {
+	const { password } = addHost(longEmail);
+	const context = await browser.newContext({ baseURL: BASE, viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });
+	const page = await context.newPage();
+	await signIn(page, longEmail, password);
+	await page.waitForURL('**/decks');
+	const who = page.locator('.account__who');
+	await expect(who).toHaveText(longEmail);
+	const box = await who.evaluate((el) => ({ clipped: el.scrollWidth > el.clientWidth, height: el.getBoundingClientRect().height }));
+	expect(box.clipped, 'cut with an ellipsis, not wrapped').toBe(true);
+	expect(box.height, 'one line').toBeLessThan(30);
+	expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'no sideways scroll').toBe(true);
+	await expect(page.locator('header.masthead').getByRole('button', { name: 'Sign out' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(1);
+	await context.close();
 });
 
 // The page can't send these, so they are made by hand, exactly as a script would.
