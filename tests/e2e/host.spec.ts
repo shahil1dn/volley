@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import type pg from 'pg';
 import { connectAsOwner } from '../../scripts/pg-connect.ts';
 import { makeHostSession } from '../../src/lib/server/host-session.ts';
-import { addHost, BASE, signIn } from './helpers.ts';
+import { activityBox, addHost, BASE, signIn } from './helpers.ts';
 
 const HOST_API = '/api/r/ABCDE/host';
 const admin = createClient(process.env.SUPABASE_URL ?? '', process.env.SUPABASE_SECRET_KEY ?? '', {
@@ -98,14 +98,16 @@ test('an activity type chosen before the page finishes loading is kept', async (
 		await route.continue();
 	});
 	await page.goto('/decks', { waitUntil: 'commit' });
-	await page.getByLabel('Activity 1 type').selectOption({ label: 'Poll' });
+	const type = activityBox(page, 1).getByLabel('Type', { exact: true });
+	await type.selectOption({ label: 'Poll' });
 	await page.waitForLoadState('networkidle');
 	// Settled, so a late reset would already have happened.
 	await page.waitForTimeout(1000);
-	await expect(page.getByLabel('Activity 1 type')).toHaveValue('poll');
-	await expect(page.getByLabel('Activity 2 type'), 'the defaults still apply').toHaveValue('');
+	await expect(type).toHaveValue('poll');
+	await expect(activityBox(page, 1).getByLabel('Option 1', { exact: true }), 'the page noticed the choice').toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Activity 2' }), 'the defaults still apply').toHaveCount(0);
 	await page.goto('/decks');
-	await expect(page.getByLabel('Activity 1 type'), 'the defaults still apply').toHaveValue('word_cloud');
+	await expect(type, 'the defaults still apply').toHaveValue('word_cloud');
 });
 
 test('a wrong password gets a plain message and no session', async ({ page }) => {

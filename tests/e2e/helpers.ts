@@ -1,6 +1,6 @@
 // Shared by the browser tests.
 import { spawnSync } from 'node:child_process';
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 export const BASE = 'http://localhost:5174';
 
@@ -19,15 +19,30 @@ export async function signIn(page: Page, email: string, password: string) {
 	await page.getByRole('button', { name: 'Sign in' }).click();
 }
 
-export type Activity = { type: 'Word cloud' | 'Poll' | 'Q&A'; question: string; options?: string };
+export type Activity = { type: 'Word cloud' | 'Poll' | 'Q&A'; question: string; options?: string[] };
 
-// Fills the /decks session form (up to 3 activities, in order) and starts it.
+// One activity's box on the /decks form, by its heading.
+export const activityBox = (page: Page, n: number) => page.getByRole('group', { name: `Activity ${n}`, exact: true });
+
+// The add and remove buttons stay disabled until the page's script has run, so
+// an enabled "Add activity" means the form is ready to be filled.
+export async function builderReady(page: Page) {
+	await expect(page.getByRole('button', { name: 'Add activity' })).toBeEnabled();
+}
+
+// Fills the /decks session form, one activity after another, and starts it.
 // Returns the room code from the control view it lands on.
 export async function startSession(page: Page, activities: Activity[]): Promise<string> {
+	await builderReady(page);
 	for (const [i, activity] of activities.entries()) {
-		await page.getByLabel(`Activity ${i + 1} type`).selectOption({ label: activity.type });
-		await page.getByLabel(`Activity ${i + 1} question`).fill(activity.question);
-		if (activity.options) await page.getByLabel(`Activity ${i + 1} poll options`).fill(activity.options);
+		if (i > 0) await page.getByRole('button', { name: 'Add activity' }).click();
+		const box = activityBox(page, i + 1);
+		await box.getByLabel('Type', { exact: true }).selectOption({ label: activity.type });
+		await box.getByLabel('Question', { exact: true }).fill(activity.question);
+		for (const [j, option] of (activity.options ?? []).entries()) {
+			if (j >= 2) await box.getByRole('button', { name: 'Add option' }).click();
+			await box.getByLabel(`Option ${j + 1}`, { exact: true }).fill(option);
+		}
 	}
 	await page.getByRole('button', { name: 'Start session' }).click();
 	await page.waitForURL(/\/run\/[A-Z0-9]{5}\/control$/);

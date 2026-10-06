@@ -48,7 +48,7 @@ a:hover { text-decoration-thickness: 2px; }
 }
 .field input:focus-visible, .field textarea:focus-visible, .field select:focus-visible { outline-offset: 0; border-color: var(--accent); }
 .field input::placeholder, .field textarea::placeholder { color: var(--muted); }
-.field input[aria-invalid="true"] { border-color: var(--error); }
+.field input[aria-invalid="true"], .field select[aria-invalid="true"] { border-color: var(--error); }
 /* A value that can't be changed, shown as text but kept as a field so password
    managers still read it. */
 .field input.field__static { border-color: transparent; background: transparent; padding-left: 0; }
@@ -80,9 +80,29 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 .sent strong { font-weight: 600; }
 
 /* ---------- start a session ---------- */
-.activity { display: grid; gap: 12px; min-width: 0; margin: 0; padding: 24px 0 0; border: 0; border-top: 1px solid var(--line); }
-.activity legend { float: left; width: 100%; padding: 0; font-size: 16px; font-weight: 600; color: var(--ink); }
-.activity legend + * { clear: left; }
+/* A form that grows (up to ten activities, each maybe a poll) gets more room than a phone screen. */
+.phone--wide { max-width: 640px; }
+.activities { list-style: none; margin: 0; padding: 0; display: grid; }
+.activity { display: grid; gap: 16px; min-width: 0; padding: 24px 0; border-top: 1px solid var(--line); }
+.activity__head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.activity__head h2 { margin: 0; font-size: 18px; }
+.activity__main { display: grid; gap: 16px; }
+/* Type and question share a row once there is room. */
+@media (min-width: 560px) { .activity__main { grid-template-columns: 160px minmax(0, 1fr); align-items: start; } }
+/* A poll's options sit under its question, grouped by their heading and spacing.
+   (Not a tinted panel: input borders only reach 3:1 against paper.) */
+.options { display: grid; gap: 16px; }
+.options__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; }
+.options__head h3 { margin: 0; font-size: 16px; font-weight: 600; color: var(--ink); }
+.option__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+/* An add control with its count beside it; ruled when it closes the list. */
+.adder { display: flex; align-items: center; gap: 16px; }
+.adder--ruled { padding-top: 24px; border-top: 1px solid var(--line); }
+.btn--small { padding: 8px 16px; }
+/* Remove is the quietest control: text only, so Add and Start stay the buttons you notice. */
+.btn--link { background: none; box-shadow: none; color: var(--muted); padding: 8px; margin-right: -8px; text-decoration: underline; text-underline-offset: 3px; }
+.btn--link:hover:not(:disabled) { filter: none; background: none; color: var(--ink); }
+.btn--link:disabled { background: none; box-shadow: none; color: var(--muted); opacity: 0.5; text-decoration: none; }
 
 /* ---------- projector ---------- */
 /* Built for a projector: the question and the way in stay fixed at the top,

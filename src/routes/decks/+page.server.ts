@@ -1,9 +1,8 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { dbCall } from '$lib/server/db';
 import { endHostSession } from '$lib/server/host-guard';
+import { parseSessionForm } from '$lib/server/session-form';
 import type { Actions, PageServerLoad } from './$types';
-
-const SLOTS = 3;
 
 export const load: PageServerLoad = ({ locals }) => {
 	// hooks.server.ts guards this path; refusing here too fails closed if the
@@ -13,30 +12,22 @@ export const load: PageServerLoad = ({ locals }) => {
 };
 
 export const actions: Actions = {
-	// Up to 3 activities in order under one room code, until the deck editor
-	// arrives in Milestone 3 (ADR-008). The database checks every field.
+	// A session of 1 to MAX_ACTIVITIES activities, in order, under one room code.
+	// parseSessionForm enforces the count and each field; the database checks
+	// them again.
 	startSession: async ({ locals, request }) => {
 		if (!locals.host) error(403, 'Not a host');
-		const form = await request.formData();
-		const slots = Array.from({ length: SLOTS }, (_, i) => ({
-			type: String(form.get(`type${i}`) ?? ''),
-			prompt: String(form.get(`prompt${i}`) ?? ''),
-			options: String(form.get(`options${i}`) ?? ''),
-		}));
-		const items = slots
-			.filter((slot) => slot.type !== '')
-			.map((slot) =>
-				slot.type === 'poll'
-					? // Blank lines are just spacing.
-						{ type: slot.type, prompt: slot.prompt, options: slot.options.split(/\r?\n/).filter((line) => line.trim() !== '') }
-					: { type: slot.type, prompt: slot.prompt },
-			);
-		const result = await dbCall<{ status: string; code?: string }>('start_session', [locals.host.userId, JSON.stringify(items)]);
+		const parsed = parseSessionForm(await request.formData());
+		if (!parsed.ok) return fail(400, { drafts: parsed.drafts, errors: parsed.errors });
+
+		const result = await dbCall<{ status: string; code?: string }>('start_session', [locals.host.userId, JSON.stringify(parsed.items)]);
 		if (!result) error(500, 'Could not start the session');
+		if (result.status === 'not_host') error(403, 'Not a host');
 		if (result.status !== 'ok') {
+			// The form passed our checks but not the database's: the two have drifted.
 			return fail(400, {
-				slots,
-				message: 'Each activity needs a question of 1 to 140 characters. A poll needs 2 to 6 different options, each up to 80 characters.',
+				drafts: parsed.items.map((item) => ({ type: item.type, prompt: item.prompt, options: item.options ?? [] })),
+				errors: { form: 'The session was refused. Check each activity and try again.', drafts: parsed.items.map(() => ({})) },
 			});
 		}
 		redirect(303, `/run/${result.code}/control`);

@@ -225,7 +225,7 @@ test('poll: phones vote once each, the bars match the tallies, and hide, freeze,
 	const control = await laptop.newPage();
 	await signIn(control, hostEmail, hostPassword);
 	await control.waitForURL('**/decks');
-	const code = await startSession(control, [{ type: 'Poll', question: 'Tea or coffee?', options: 'Tea\nCoffee\n\nNeither\n' }]);
+	const code = await startSession(control, [{ type: 'Poll', question: 'Tea or coffee?', options: ['Tea', 'Coffee', 'Neither'] }]);
 	await expect(control.getByRole('heading', { name: 'Votes' })).toBeVisible();
 	await expect(control.getByRole('button', { name: /PNG/ }), 'the PNG export is word-cloud only').toHaveCount(0);
 	await control.getByRole('button', { name: 'Open answers' }).click();
