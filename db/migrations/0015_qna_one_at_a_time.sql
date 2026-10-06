@@ -13,7 +13,7 @@ create unique index questions_shown_seq_idx on public.questions (run_id, item_id
 
 -- 0012's state plus `shown` ([id, text, votes] of the question on the
 -- projector, null if none) and `waiting` (visible, unanswered, not on screen;
--- at most 100).
+-- at most 101).
 create or replace function public.get_state(p_code text) returns jsonb
 language sql stable
 security definer
@@ -60,14 +60,15 @@ return (
 			select jsonb_build_array(q.id, q.text, q.votes) from public.questions q
 			where q.run_id = r.id and q.item_id = i.id and q.on_screen and not q.hidden
 		) end,
-		-- Counted up to 100 and read through the main-list index, so a room with
-		-- thousands of questions costs no more than one with a hundred.
+		-- Counted up to 101 (the page shows 100+ above 100) and read through the
+		-- main-list index, so a room with thousands of questions costs no more than
+		-- one with a hundred.
 		'waiting', case when i.type = 'qna' then (
 			select count(*) from (
 				select 1 from public.questions q
 				where q.run_id = r.id and q.item_id = i.id and not q.hidden and not q.answered and not q.on_screen
 				order by q.votes desc, q.created_at, q.id
-				limit 100
+				limit 101
 			) w
 		) else 0 end,
 		'players', coalesce((
@@ -149,6 +150,7 @@ declare
 	v_expected bigint;
 	v_cur public.questions;
 	v_target bigint;
+	v_renew boolean := false;
 	illegal constant jsonb := jsonb_build_object('status', 'illegal');
 begin
 	-- Locked, so two control tabs pressing buttons at once apply in turn.
@@ -251,12 +253,16 @@ begin
 					order by q.shown_seq
 					limit 1;
 				end if;
-				-- Otherwise whatever was shown and left unanswered, then the top-voted new one.
+				-- Otherwise whatever was shown and left unanswered (a question hidden
+				-- and unhidden, say), then the top-voted one never shown. One shown
+				-- before takes a fresh turn at the end of the history, so walking
+				-- forward later cannot land on something already answered.
 				if v_target is null then
 					select q.id into v_target from public.questions q
 					where q.run_id = v_run.id and q.item_id = v_item.id and not q.hidden and not q.answered and q.id is distinct from v_cur.id
 					order by q.shown_seq nulls last, q.votes desc, q.created_at, q.id
 					limit 1;
+					v_renew := true;
 				end if;
 			else
 				select q.id into v_target from public.questions q
@@ -276,7 +282,9 @@ begin
 			end if;
 			update public.questions set on_screen = false where run_id = v_run.id and item_id = v_item.id and on_screen;
 			update public.questions set on_screen = true,
-				shown_seq = coalesce(shown_seq, (select coalesce(max(s.shown_seq), 0) + 1 from public.questions s where s.run_id = v_run.id and s.item_id = v_item.id))
+				shown_seq = case when shown_seq is null or v_renew
+					then (select coalesce(max(s.shown_seq), 0) + 1 from public.questions s where s.run_id = v_run.id and s.item_id = v_item.id)
+					else shown_seq end
 			where id = v_target;
 		when 'answer', 'unanswer' then
 			if v_item.type is distinct from 'qna' or coalesce(p_key, '') !~ '^[0-9]{1,18}$' then

@@ -126,10 +126,11 @@ test('moving on marks the question answered, so it leaves the phones\' list; Pre
 test('after Previous, Next goes forward through what was shown before it brings anything new', { skip }, async () => {
 	await inRolledBackTransaction(db, async () => {
 		const s = await liveSession();
-		await ask(s, 'A?', 4);
-		await ask(s, 'B?', 3);
-		await ask(s, 'C?', 2);
+		// Asked out of vote order, so only the votes can put them in the right one.
 		await ask(s, 'D?', 1);
+		await ask(s, 'B?', 3);
+		await ask(s, 'A?', 4);
+		await ask(s, 'C?', 2);
 		await next(s); // A
 		await next(s); // B
 		await next(s); // C
@@ -332,5 +333,88 @@ test('only one question per activity can be on screen, and one must have had its
 		await db.query('savepoint two');
 		await assert.rejects(db.query('update public.questions set on_screen = true, shown_seq = 2 where id = $1', [b]), /questions_on_screen_idx/);
 		await db.query('rollback to savepoint two');
+	});
+});
+
+test('a question shown, hidden, shown again and answered never comes up a second time', { skip }, async () => {
+	await inRolledBackTransaction(db, async () => {
+		const s = await liveSession();
+		const q1 = await ask(s, 'Q1?', 5);
+		const q2 = await ask(s, 'Q2?', 3);
+		const q3 = await ask(s, 'Q3?', 1);
+		const seen: (number | null)[] = [];
+		const shownId = async () => (await state(s)).shown?.[0] ?? null;
+
+		await next(s); // Q1
+		seen.push(await shownId());
+		await next(s); // Q2, and Q1 is done
+		seen.push(await shownId());
+		await act(s, 'hide', String(q2));
+		seen.push(await shownId()); // nothing on screen
+		await next(s); // with the screen empty: Q3
+		seen.push(await shownId());
+		await act(s, 'unhide', String(q2));
+		await next(s); // Q3 is done; Q2, shown before and still unanswered, comes back
+		seen.push(await shownId());
+		assert.deepEqual(seen, [q1, q2, null, q3, q2]);
+
+		// Q1 and Q3 are answered. Nothing is left, so Next stays put and Q3 does not come round again.
+		const end = await next(s);
+		assert.deepEqual({ ...end, version: undefined }, { status: 'ok', version: undefined, moved: false, reason: 'none_left' });
+		assert.equal(await shownId(), q2);
+		const answered = Object.fromEntries((await view(s)).questions.map((q: [number, string, number, boolean, boolean]) => [q[1], q[4]]));
+		assert.deepEqual(answered, { 'Q1?': true, 'Q2?': false, 'Q3?': true }, 'the last question stays up, unanswered');
+
+		// The history is in the order they were put up: Q2 came back last, so Previous finds Q3 before it.
+		await back(s);
+		assert.equal(await shownId(), q3);
+	});
+});
+
+test('equal votes: the question asked first comes first, then the lower id', { skip }, async () => {
+	await inRolledBackTransaction(db, async () => {
+		const s = await liveSession();
+		const { rows } = await db.query(
+			`select i.id from public.runs r join public.deck_items i on i.deck_id = r.deck_id where r.id = $1`,
+			[s.runId],
+		);
+		const insert = (text: string, minutesAgo: number) =>
+			db.query(
+				`insert into public.questions (run_id, item_id, text, votes, created_at) values ($1, $2, $3, 2, now() - make_interval(mins => $4))`,
+				[s.runId, rows[0].id, text, minutesAgo],
+			);
+		// The newest is inserted first, so it has the lowest id: only created_at can put the others ahead of it.
+		await insert('Newest', 1);
+		await insert('Oldest', 30);
+		await insert('Middle, first by id', 10);
+		await insert('Middle, second by id', 10);
+		const order: (string | null)[] = [];
+		for (let n = 0; n < 4; n++) {
+			await next(s);
+			order.push(await shownText(s));
+		}
+		assert.deepEqual(order, ['Oldest', 'Middle, first by id', 'Middle, second by id', 'Newest']);
+	});
+});
+
+test('the waiting count reads 100 at exactly 100 and one more above it, and stops counting there', { skip }, async () => {
+	await inRolledBackTransaction(db, async () => {
+		const s = await liveSession();
+		const { rows } = await db.query(
+			`select i.id from public.runs r join public.deck_items i on i.deck_id = r.deck_id where r.id = $1`,
+			[s.runId],
+		);
+		const add = (count: number) =>
+			db.query(`insert into public.questions (run_id, item_id, text) select $1, $2, 'q' || n || '-' || random() from generate_series(1, $3) n`, [
+				s.runId, rows[0].id, count,
+			]);
+		await add(100);
+		assert.equal((await state(s)).waiting, 100, 'exactly 100 waiting');
+		await add(1);
+		assert.equal((await state(s)).waiting, 101, 'one more is distinguishable');
+		await add(60);
+		assert.equal((await state(s)).waiting, 101, 'and it stops there');
+		await next(s);
+		assert.equal((await state(s)).waiting, 101, 'still more than 100 after one goes on screen');
 	});
 });
