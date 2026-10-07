@@ -100,12 +100,17 @@ remote yet.
 
 ## 3. Exact next pickup point
 
-1. **Milestone 4 step 2**: `npm run setup` and `npm run doctor` (A14). The
-   plan lists the snags they must remove: `NEXT_PUBLIC_…` against `PUBLIC_…`
-   names, the pooler URL, the pinned CA, migrations and `pg_cron`, the first
-   host (`add-host` then `set-host --admin`), preview-only protection for the
-   cron, and generating the secrets. Open `docs/volley-plan.md` at "Milestone
-   4" for the full order.
+1. **Small follow-up to step 2:** split setup's `--force`. Today the advice
+   "rerun with --force to reset the first admin" also regenerates every secret,
+   which signs all hosts out and makes phones look new. Give the account reset
+   its own flag.
+2. **Milestone 4 step 3**: `AGENTS.md`, a Deploy button, and a fresh AI agent
+   setting up a copy from `AGENTS.md` alone (A15). Setup and doctor are done
+   (ADR-014, `npm run doctor -- --help`). Doctor's HUMAN steps and the build
+   session's 2026-10-07 list are the input. Step 3 needs new Supabase and Vercel
+   projects on Shahil's accounts, so ask first. Its Vercel paths
+   (`--push-vercel-env`, `--vercel-protection`, `doctor --vercel`) and
+   `--disable-signup` have only been tested against fakes.
 
 ## 4. What will bite
 
