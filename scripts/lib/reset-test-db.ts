@@ -1,8 +1,7 @@
 // Returns Volley's test Supabase project to "brand new" for Volley's purposes, so a setup trial
 // can start from nothing. It wipes data, so every guard runs BEFORE anything connects: only the
 // one test project (by exact ref, any letter case) is ever accepted, production is named and
-// refused, and a confirmation flag must be given. Supabase's managed schemas are never touched (pg_cron, which
-// Volley's own migration 0008 installs, is the one extension removed).
+// refused, and a confirmation flag must be given. Supabase's managed schemas and extensions are never touched.
 import type pg from 'pg';
 import { PRODUCTION_REF, productionSetting } from '../production-guard.ts';
 import { projectRefOf } from './checks.ts';
@@ -28,7 +27,8 @@ export function wipeableRefusal(env: Record<string, string | undefined>, args: s
 }
 
 // Drops what Volley's migrations create in `public` (never an extension's own objects), our one cron
-// job (and the pg_cron extension itself, which migration 0008 installs), and every auth user. Written as catalogue loops so it needs no list of names to go stale.
+// job, and every auth user. pg_cron itself stays: Supabase's owner role owns it, and migration 0008 now
+// copes with it being installed already. Written as catalogue loops so it needs no list of names to go stale.
 const WIPE_PUBLIC = `
 do $wipe$
 declare r record;
@@ -73,9 +73,6 @@ export async function resetTestDb(
 		await db.query('begin');
 		try {
 			await db.query(WIPE_PUBLIC);
-			// A new project has no pg_cron. Leaving it installed makes migration 0008's grants fail on the next run
-			// (found by running the trial sequence), and its job table goes with it.
-			await db.query('drop extension if exists pg_cron');
 			await db.query('delete from auth.users');
 			const left = await db.query(`select
 				(select count(*) from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'p', 'v', 'm', 'S', 'f') and not exists (select 1 from pg_depend d where d.objid = c.oid and d.deptype = 'e'))

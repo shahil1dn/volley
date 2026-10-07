@@ -81,11 +81,9 @@ test('the wipe touches only Volley\'s objects in public, our cron job, and auth 
 	await resetTestDb(urls(TEST_REF), [CONFIRM_FLAG], async () => db.client);
 	const all = db.sql.join('\n');
 	assert.match(all, /delete from auth\.users/);
-	assert.match(all, /volley-purge-expired/);
+	assert.match(all, /cron\.unschedule\(jobid\) from cron\.job where jobname = 'volley-purge-expired'/, 'the job is unscheduled by name');
 	assert.doesNotMatch(all, /drop schema/i, 'schemas are never dropped');
-	// A new project has no pg_cron, and migration 0008's grants fail if they run over an old install: so exactly this one extension goes.
-	assert.match(all, /drop extension if exists pg_cron\b/);
-	assert.deepEqual([...all.matchAll(/drop extension[^;\n]*/gi)].map((match) => match[0].trim().toLowerCase()), ['drop extension if exists pg_cron']);
+	assert.doesNotMatch(all, /drop extension/i, 'extensions belong to Supabase; the reset leaves them installed');
 	assert.doesNotMatch(all, /truncate/i);
 	for (const statement of db.sql) {
 		for (const managed of ['storage', 'realtime', 'extensions', 'vault', 'graphql', 'pgsodium', 'supabase_functions', 'pg_catalog', 'information_schema']) {
