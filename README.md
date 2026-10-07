@@ -8,7 +8,20 @@ SvelteKit on Vercel (London), Supabase for the database.
 
 ## Set up a copy (made for an AI agent)
 
-You can hand this to an AI coding agent: it needs only this repository, a Supabase
+**An AI coding agent: follow [`AGENTS.md`](AGENTS.md).** It is the ordered list; the rest of this
+section is for people.
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FTODO-OWNER%2FTODO-REPO&project-name=volley&repository-name=volley&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22supabase%22%2C%22productSlug%22%3A%22supabase%22%7D%5D)
+
+<!-- TODO (Milestone 4 step 5): the repository-url above is a placeholder. Replace
+     https://github.com/TODO-OWNER/TODO-REPO with the real public repository once it exists, in this link.
+     Format and the stores JSON: https://vercel.com/docs/deploy-button/source (store product integration).
+     The Supabase slugs (integrationSlug "supabase", productSlug "supabase") are the ones the deploy button on
+     https://vercel.com/marketplace/supabase carries. Not yet tried end to end. -->
+The button (not live until the repository is public) creates the Vercel project and a Supabase
+store in one go; then follow `AGENTS.md` for the rest.
+
+You can hand this repository to an AI coding agent: it needs only this repository, a Supabase
 project and (to deploy) a Vercel project. Everything is a command with no prompts.
 
 ```bash

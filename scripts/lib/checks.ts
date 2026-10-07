@@ -401,7 +401,7 @@ export const CHECKS: ((ctx: Ctx) => Check | Promise<Check>)[] = [
 	vercelLinked, vercelEnv, vercelProtection, vercelCron,
 ];
 
-const IDS = [
+export const IDS = [
 	'env.required', 'env.public_names', 'env.secrets', 'env.same_project', 'db.pooler', 'db.region', 'db.connect', 'db.pooler_tls',
 	'db.migrations', 'db.pg_cron', 'auth.signup_disabled', 'hosts.first_admin', 'vercel.linked', 'vercel.env', 'vercel.protection', 'vercel.cron',
 ];
