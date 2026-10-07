@@ -544,7 +544,18 @@ person need not read the output.
   `add-host`, `set-host` and `migrate` now share their code with setup
   (`scripts/lib/`), so there is one way to make a host and to migrate.
 - **Safety.** Setup refuses this repo's production database (the existing guard) and
-  has no flag to override it.
+  has no flag to override it. The guard runs on the final values (after `--from-env-file`
+  and the renames), again before any database connection, and doctor skips its database
+  checks instead of connecting. Secret files go only to paths git ignores (`.env*` except
+  `.env.example`; `--env-out` refuses any other), are written to a 0600 temp file and
+  renamed into place, and every report string is scrubbed of known secret values.
+- **Failure behaviour.** The first admin's password file is written before the account
+  is touched and removed if the account step fails; making an existing non-admin host an
+  admin needs `--force`. `--dry-run` only reads. `--vercel-protection` rewrites only
+  `all` (All Deployments), the one mode Vercel documents as covering production domains;
+  Standard Protection and unknown modes are a warning for a person. A command that needs
+  a person's input (an email) is a `human` step with a separate `template` field, never a
+  `run` command; a setup step only a person can fix exits 2 even if doctor says "run setup".
 
 **Not confirmed against live services** (checked only with fakes or the docs):
 the Vercel project API calls (`vercel api` for `ssoProtection.deploymentType`, `vercel env

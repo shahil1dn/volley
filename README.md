@@ -25,6 +25,9 @@ a password). `.env.example` lists every setting and where it comes from; `npm ru
 setup -- --help` lists every flag. Setup never changes Vercel unless you pass
 `--push-vercel-env` or `--vercel-protection`, and only for the project linked in `.vercel/`.
 
+Setup writes secrets only to files git ignores (every `.env*` name except `.env.example`);
+to bring in another file's values, name it `.env.pulled.local` and pass `--from-env-file`.
+
 To run locally with the Vercel store's settings instead: `vercel env pull .env.local --yes`,
 then `npm run setup` (it copies the store's `NEXT_PUBLIC_…` names to the `PUBLIC_…` names
 SvelteKit reads and makes `PARTICIPANT_SECRET`, `HOST_SESSION_SECRET` and `CRON_SECRET`),
