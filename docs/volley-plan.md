@@ -410,6 +410,9 @@ In this order (owner, 2026-09-30):
    generating the secrets.
 3. `AGENTS.md`, a Deploy button with the `stores` parameter (must-verify 4),
    and a fresh AI agent setting up a copy from `AGENTS.md` alone (A15).
+   `AGENTS.md`, the README button (its repository URL is a TODO until step 5) and the
+   trial plan (`docs/trial-A15.md`, with `scripts/reset-test-db.ts`) are written on branch
+   `m4-agents`. The trial itself has not been run, and the button has not been clicked.
 4. A 10-minute, 200-phone load test, with measured numbers replacing the
    estimates in ARCHITECTURE §10 (A10), and the Supabase Security Advisor clean
    (A13).

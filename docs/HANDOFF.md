@@ -100,13 +100,12 @@ remote yet.
 
 ## 3. Exact next pickup point
 
-1. **Milestone 4 step 3**: `AGENTS.md`, a Deploy button, and a fresh AI agent
-   setting up a copy from `AGENTS.md` alone (A15). Setup and doctor are done
-   (ADR-014, `npm run doctor -- --help`). Doctor's HUMAN steps and the build
-   session's 2026-10-07 list are the input. Step 3 needs new Supabase and Vercel
-   projects on Shahil's accounts, so ask first. Its Vercel paths
-   (`--push-vercel-env`, `--vercel-protection`, `doctor --vercel`) and
-   `--disable-signup` have only been tested against fakes.
+1. **Milestone 4 step 3, the trial.** `AGENTS.md`, the Deploy button and the trial plan are
+   written (`docs/trial-A15.md`; reset script `scripts/reset-test-db.ts`, not an npm script).
+   Still to do: run the trial (needs Shahil to type the Supabase values and decide the Vercel
+   project, so ask first), click the button once the repo is public (step 5), and fix `AGENTS.md`
+   from the record. Its Vercel paths (`--push-vercel-env`, `--vercel-protection`,
+   `doctor --vercel`) and `--disable-signup` have only been tested against fakes.
 
 ## 4. What will bite
 
