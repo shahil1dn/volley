@@ -6,11 +6,12 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type pg from 'pg';
 import { productionSetting, refuseProduction } from '../production-guard.ts';
-import { exitCode, publicRenames, runChecks, type Check, type Ctx, type Next } from './checks.ts';
+import { exitCode, human, publicRenames, runChecks, type Check, type Ctx, type Next } from './checks.ts';
 import { EMAIL, makeHost, setHost } from './make-host.ts';
 import { applyMigrations, pendingMigrations } from './migrations.ts';
 import { ENV_NAME, VARS, makeSecret, mask, parse, setLine } from './env.ts';
 import { writePrivate } from './private-file.ts';
+import { shellQuote } from './shell.ts';
 import { addEnv, setProtectionPreviewOnly, vercelProbe, type Exec } from './vercel.ts';
 
 export type Options = {
@@ -27,7 +28,7 @@ export type Options = {
 	disableSignup: boolean;
 };
 
-export type StepStatus = 'done' | 'unchanged' | 'would' | 'skipped' | 'failed';
+export type StepStatus = 'done' | 'unchanged' | 'would' | 'skipped' | 'warn' | 'failed';
 export type Step = { id: string; status: StepStatus; detail: string; next: Next[] };
 
 export type AuthAdmin = Parameters<typeof makeHost>[1];
@@ -56,7 +57,8 @@ const GENERATED = VARS.filter((spec) => spec.origin === 'generated');
 const SENSITIVE = new Set(['HOST_SESSION_SECRET', 'PARTICIPANT_SECRET', 'CRON_SECRET', 'SUPABASE_SECRET_KEY', 'POSTGRES_URL', 'POSTGRES_URL_NON_POOLING']);
 
 const step = (id: string, status: StepStatus, detail: string, next: Next[] = []): Step => ({ id, status, detail, next });
-const humanNext = (text: string): Next => ({ kind: 'human', text: `HUMAN: ${text}` });
+const humanNext = human;
+const EMAIL_TEMPLATE = 'npm run setup -- --first-admin-email <EMAIL>';
 const failure = (error: unknown) => (error as Error).message;
 
 export const realDeps = (root: string, env: Record<string, string | undefined>, hooks: Pick<Deps, 'connectOwner' | 'exec' | 'vercelLink' | 'doctor' | 'authAdmin'>): Deps => ({
@@ -204,7 +206,7 @@ export async function runSetup(options: Options, deps: Deps): Promise<{ steps: S
 	} finally {
 		await db?.end().catch(() => undefined);
 	}
-	if (options.firstAdminEmail === undefined) steps.push(step('hosts.first_admin', 'skipped', 'No --first-admin-email given, so no host was made.', [{ kind: 'run', command: 'npm run setup -- --first-admin-email <EMAIL>', text: 'Ask the person which email they will sign in with, then run: npm run setup -- --first-admin-email <EMAIL>' }]));
+	if (options.firstAdminEmail === undefined) steps.push(step('hosts.first_admin', 'skipped', 'No --first-admin-email given, so no host was made.', [humanNext('Ask the person which email they will sign in with, then run the template with it.', EMAIL_TEMPLATE)]));
 
 	// 5. Vercel and Supabase settings: only with their own explicit flags.
 	if (options.pushVercelEnv) steps.push(await pushVercelEnv(options, deps, effective));
@@ -248,24 +250,43 @@ async function ensureCronJob(db: pg.Client): Promise<boolean> {
 
 async function firstAdmin(db: pg.Client, options: Options, deps: Deps, effective: Record<string, string | undefined>): Promise<Step> {
 	const email = (options.firstAdminEmail ?? '').trim().toLowerCase();
-	if (!EMAIL.test(email)) return step('hosts.first_admin', 'failed', `"${options.firstAdminEmail}" isn't an email address.`, [{ kind: 'run', command: 'npm run setup -- --first-admin-email <EMAIL>', text: 'Run again with the person\'s real email.' }]);
+	// The text is never echoed back: it came from outside and ends up in the report.
+	if (!EMAIL.test(email)) return step('hosts.first_admin', 'failed', "That isn't a plain email address (letters, digits and . _ % + - only, one @, a real domain).", [humanNext('Ask the person for the email they will sign in with, then run the template with it.', EMAIL_TEMPLATE)]);
+	const asked = shellQuote(email);
+	const forceNext = (): Next => ({ kind: 'run', command: `npm run setup -- --first-admin-email ${asked} --force`, text: `If that is the right person: run npm run setup -- --first-admin-email ${asked} --force` });
 	const host = (await db.query('select is_admin from public.hosts where email = $1', [email])).rows[0];
 	if (host?.is_admin) return step('hosts.first_admin', 'unchanged', `${email} is already an admin host. Nothing changed (no password was touched).`);
 	if (host) {
+		if (!options.force) return step('hosts.first_admin', 'failed', `${email} is already a host but not an admin. Making them one gives them power over every host, so setup won't without --force.`, [forceNext()]);
 		if (options.dryRun) return step('hosts.first_admin', 'would', `Would make the existing host ${email} an admin.`);
 		await setHost(db, email, { name: options.firstAdminName, admin: true });
 		return step('hosts.first_admin', 'done', `${email} was already a host; made them an admin. Their password was not touched.`);
 	}
 	const account = (await db.query('select 1 from auth.users where lower(email) = $1', [email])).rows.length > 0;
 	if (account && !options.force) {
-		return step('hosts.first_admin', 'failed', `A Supabase account for ${email} already exists but isn't a host. Making it a host resets its password, so setup won't do that without --force.`, [{ kind: 'run', command: `npm run setup -- --first-admin-email ${email} --force`, text: `If that is the right person: run npm run setup -- --first-admin-email ${email} --force` }]);
+		return step('hosts.first_admin', 'failed', `A Supabase account for ${email} already exists but isn't a host. Making it a host resets its password, so setup won't do that without --force.`, [forceNext()]);
 	}
 	if (options.dryRun) return step('hosts.first_admin', 'would', `Would create ${email} as an admin host and write the first password to ${FIRST_ADMIN_FILE} (never to the screen).`);
+	if (!deps.isIgnored(FIRST_ADMIN_FILE)) return step('hosts.first_admin', 'failed', `${FIRST_ADMIN_FILE} isn't ignored by git, so a password written there could be committed. Nothing was made.`, [{ kind: 'edit', text: `Add ${FIRST_ADMIN_FILE} to .gitignore, then run setup again.` }]);
 	if (deps.exists(FIRST_ADMIN_FILE) && !options.force) return step('hosts.first_admin', 'failed', `${FIRST_ADMIN_FILE} already exists, and setup won't overwrite a file that may hold a password.`, [{ kind: 'run', command: `rm ${FIRST_ADMIN_FILE}`, text: `If you have already used it: delete it (rm ${FIRST_ADMIN_FILE}) and run setup again.` }]);
+
+	// The file first, the account second: a password that exists only after a failed write would leave an
+	// account nobody can sign in to, and a rerun would call it "unchanged".
 	const password = makeSecret().slice(0, 32);
-	await makeHost(db, deps.authAdmin(effective), email, password);
-	await setHost(db, email, { name: options.firstAdminName, admin: true });
-	deps.write(FIRST_ADMIN_FILE, `Volley first admin\nemail: ${email}\npassword: ${password}\nSign in at the site root (/). Delete this file once the password is saved somewhere safe.\n`, 0o600);
+	try {
+		deps.write(FIRST_ADMIN_FILE, `Volley first admin\nemail: ${email}\npassword: ${password}\nSign in at the site root (/). Delete this file once the password is saved somewhere safe.\n`, 0o600);
+	} catch (error) {
+		deps.remove(FIRST_ADMIN_FILE);
+		return step('hosts.first_admin', 'failed', `Could not write ${FIRST_ADMIN_FILE}: ${failure(error)}. No account was made or changed.`, [humanNext('Make the folder writable (or free some disk space), then run setup again.')]);
+	}
+	try {
+		await makeHost(db, deps.authAdmin(effective), email, password);
+		await setHost(db, email, { name: options.firstAdminName, admin: true });
+	} catch (error) {
+		deps.remove(FIRST_ADMIN_FILE);
+		const again = `npm run setup -- --first-admin-email ${asked}${account ? ' --force' : ''}`;
+		return step('hosts.first_admin', 'failed', `${failure(error)}. The password file was removed.${account ? ' The account already existed, so its password may have been reset: run again with --force to set a fresh one.' : ' Run setup again to retry from the start.'}`, [{ kind: 'run', command: again, text: `Once the cause above is fixed, run: ${again}` }]);
+	}
 	return step('hosts.first_admin', 'done', `Created ${email} as an admin host. The first password is in ${FIRST_ADMIN_FILE} (permissions 0600); it was not printed.`, [humanNext(`Give the person the password in ${FIRST_ADMIN_FILE} privately (read the file, don't paste it into a chat log), have them sign in at the site root and keep it in a password manager, then delete the file.`)]);
 }
 
@@ -308,9 +329,12 @@ async function protectionStep(options: Options, deps: Deps): Promise<Step> {
 	try {
 		const current = await vercelProbe(deps.exec, () => link).protection();
 		if (current === null || current === 'preview') return step('vercel.protection', 'unchanged', 'Vercel Authentication already covers preview deployments only (or is off).');
-		if (options.dryRun) return step('vercel.protection', 'would', `Would change Vercel Authentication from "${current}" to preview deployments only.`);
+		// Only "All Deployments" is documented to protect production domains (Vercel docs: Deployment
+		// Protection → "Choose which URLs to protect"). Any other value is left exactly as it is.
+		if (current !== 'all') return step('vercel.protection', 'warn', `Vercel Authentication is "${current}". Setup only changes "all" (All Deployments), the one mode documented to cover production domains, so it left this alone.`, [humanNext('Look at the first scheduled run: Vercel dashboard → the project → Logs, filter requestPath:/api/cron/keep-alive. Status 200 means it gets through; a login page means set Vercel Authentication to "Only Preview Deployments".')]);
+		if (options.dryRun) return step('vercel.protection', 'would', 'Would change Vercel Authentication from "all" to preview deployments only.');
 		setProtectionPreviewOnly(deps.exec, link);
-		return step('vercel.protection', 'done', `Changed Vercel Authentication from "${current}" to preview deployments only, so the keep-alive cron can reach production.`);
+		return step('vercel.protection', 'done', 'Changed Vercel Authentication from "all" to preview deployments only, so the keep-alive cron can reach production.');
 	} catch (error) {
 		return step('vercel.protection', 'failed', failure(error), [humanNext('Vercel dashboard → the project → Settings → Deployment Protection → Vercel Authentication → "Only Preview Deployments" → Save.')]);
 	}

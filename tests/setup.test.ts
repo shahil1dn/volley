@@ -357,6 +357,22 @@ test('--vercel-protection changes the setting only when it is wrong, and only on
 	assert.equal(none.steps.find((s) => s.id === 'vercel.protection')?.next[0].command, 'vercel link');
 });
 
+test('--vercel-protection rewrites only "all"; Standard Protection and anything unknown are reported and left alone', async () => {
+	const calls: Calls = { exec: [], fetches: [] };
+	const link = () => ({ projectId: 'prj_1', orgId: 'team_1' });
+	for (const current of ['prod_deployment_urls_and_all_previews', 'brand_new_mode']) {
+		const exec: Deps['exec'] = (args, input) => {
+			calls.exec.push({ args, input });
+			return { status: 0, stdout: JSON.stringify({ ssoProtection: { deploymentType: current } }), stderr: '' };
+		};
+		const result = await runSetup({ ...OPTIONS, vercelProtection: true }, depsFor(folder(), {}, { exec, vercelLink: link }, calls));
+		const step = result.steps.find((s) => s.id === 'vercel.protection');
+		assert.equal(step?.status, 'warn', current);
+		assert.ok(step?.next.every((next) => next.kind === 'human'));
+		assert.ok(!calls.exec.some((call) => call.args.includes('PATCH')), `${current} was rewritten`);
+	}
+});
+
 test('--disable-signup needs an access token, and says plainly what a person does instead', async () => {
 	const calls: Calls = { exec: [], fetches: [] };
 	const without = await runSetup({ ...OPTIONS, disableSignup: true }, depsFor(folder(), { SUPABASE_URL: `https://${REF}.supabase.co` }, {}, calls));
@@ -371,6 +387,124 @@ test('--disable-signup needs an access token, and says plainly what a person doe
 	assert.equal(calls.fetches[0].url, `https://api.supabase.com/v1/projects/${REF}/config/auth`);
 	assert.equal(calls.fetches[0].init?.method, 'PATCH');
 	assert.ok(!everything(withToken, OPTIONS).includes('sbp_TOKEN_VALUE_XYZ'));
+});
+
+// ---- the first admin, on a fake database: the order of steps and what a failure leaves behind ----
+
+type HostState = { host?: { is_admin: boolean }; account?: boolean };
+
+function fakeAdminWorld(state: HostState, over: { failWrite?: boolean; failCreate?: boolean } = {}) {
+	const log: string[] = [];
+	const db = {
+		query: async (sql: string) => {
+			const text = sql.replace(/\s+/g, ' ').trim();
+			if (/select is_admin from public\.hosts/.test(text)) return { rows: state.host ? [state.host] : [], rowCount: state.host ? 1 : 0 };
+			if (/select 1 from auth\.users/.test(text)) return { rows: state.account ? [{}] : [], rowCount: state.account ? 1 : 0 };
+			if (/select id from auth\.users/.test(text)) return { rows: state.account ? [{ id: 'u-existing' }] : [], rowCount: state.account ? 1 : 0 };
+			if (/^insert into public\.hosts/.test(text)) { log.push('db:insert host'); return { rows: [], rowCount: 1 }; }
+			if (/^update public\.hosts/.test(text)) { log.push('db:update host'); return { rows: [], rowCount: 1 }; }
+			throw new Error(`unexpected SQL in this fake: ${text}`);
+		},
+		end: async () => undefined,
+	} as unknown as pg.Client;
+	const authAdmin = (): Deps['authAdmin'] extends (e: never) => infer A ? A : never => ({
+		createUser: async () => {
+			log.push('auth:createUser');
+			return state.account || over.failCreate ? { data: { user: null }, error: { message: 'boom: password pw-SECRET rejected' } } : { data: { user: { id: 'u-new' } }, error: null };
+		},
+		updateUserById: async () => {
+			log.push('auth:setPassword');
+			return { error: null };
+		},
+	});
+	const root = folder();
+	const over2: Partial<Deps> = {
+		connectOwner: async () => db,
+		authAdmin,
+		write: (path, text, mode) => {
+			if (path === FIRST_ADMIN_FILE) log.push(`write:${path}`);
+			if (over.failWrite && path === FIRST_ADMIN_FILE) throw new Error('disk full');
+			writeFileSync(join(root, path), text, { mode });
+		},
+	};
+	return { root, log, deps: depsFor(root, { POSTGRES_URL_NON_POOLING: 'postgres://u:p@h.invalid:5432/db' }, over2) };
+}
+
+const ADMIN_OPTIONS = { ...OPTIONS, firstAdminEmail: 'new.person@example.com' };
+
+test('first admin: the password file is written BEFORE the account is touched; if the write fails no account is made or changed', async () => {
+	const world = fakeAdminWorld({}, { failWrite: true });
+	const result = await runSetup(ADMIN_OPTIONS, world.deps);
+	const step = result.steps.find((s) => s.id === 'hosts.first_admin');
+	assert.equal(step?.status, 'failed');
+	assert.deepEqual(world.log, [`write:${FIRST_ADMIN_FILE}`], 'nothing else happened');
+
+	const good = fakeAdminWorld({});
+	await runSetup(ADMIN_OPTIONS, good.deps);
+	assert.ok(good.log.indexOf(`write:${FIRST_ADMIN_FILE}`) >= 0 && good.log.indexOf(`write:${FIRST_ADMIN_FILE}`) < good.log.indexOf('auth:createUser'), `order was ${good.log.join(' → ')}`);
+});
+
+test('first admin: if the account cannot be made the password file is removed, the error is plain, and a rerun starts clean', async () => {
+	const world = fakeAdminWorld({}, { failCreate: true });
+	const first = await runSetup(ADMIN_OPTIONS, world.deps);
+	const step = first.steps.find((s) => s.id === 'hosts.first_admin');
+	assert.equal(step?.status, 'failed');
+	assert.equal(existsSync(join(world.root, FIRST_ADMIN_FILE)), false, 'no file with a password for an account that does not exist');
+	assert.match(step?.detail ?? '', /password file was removed/);
+
+	const retry = fakeAdminWorld({});
+	const again = await runSetup(ADMIN_OPTIONS, retry.deps);
+	assert.equal(again.steps.find((s) => s.id === 'hosts.first_admin')?.status, 'done', 'a rerun makes the host (it is not "unchanged")');
+});
+
+test('first admin: making an existing non-admin host an admin needs --force', async () => {
+	const without = fakeAdminWorld({ host: { is_admin: false }, account: true });
+	const refused = await runSetup(ADMIN_OPTIONS, without.deps);
+	const step = refused.steps.find((s) => s.id === 'hosts.first_admin');
+	assert.equal(step?.status, 'failed');
+	assert.match(step?.detail ?? '', /--force/);
+	assert.equal(step?.next[0].command, 'npm run setup -- --first-admin-email new.person@example.com --force');
+	assert.ok(!without.log.some((entry) => entry.startsWith('db:')), 'the host row was not touched');
+
+	const forced = fakeAdminWorld({ host: { is_admin: false }, account: true });
+	const done = await runSetup({ ...ADMIN_OPTIONS, force: true }, forced.deps);
+	assert.equal(done.steps.find((s) => s.id === 'hosts.first_admin')?.status, 'done');
+	assert.ok(forced.log.includes('db:update host'));
+	assert.ok(!forced.log.includes('auth:setPassword'), 'promoting a host does not touch its password');
+
+	const dry = fakeAdminWorld({ host: { is_admin: false }, account: true });
+	const would = await runSetup({ ...ADMIN_OPTIONS, force: true, dryRun: true }, dry.deps);
+	assert.equal(would.steps.find((s) => s.id === 'hosts.first_admin')?.status, 'would');
+	assert.deepEqual(dry.log, []);
+});
+
+test('first admin: the password file must be git-ignored before anything is made', async () => {
+	const unignored = fakeAdminWorld({});
+	const refused = await runSetup(ADMIN_OPTIONS, { ...unignored.deps, isIgnored: (path) => path !== FIRST_ADMIN_FILE });
+	assert.equal(refused.steps.find((s) => s.id === 'hosts.first_admin')?.status, 'failed');
+	assert.deepEqual(unignored.log, [], 'nothing written, nothing created');
+});
+
+test('first admin: a bad email is refused without echoing it, and the fix is a person\'s step with a template, never a command', async () => {
+	const hostile = 'a@b.com; touch /tmp/pwned #';
+	const world = fakeAdminWorld({});
+	const result = await runSetup({ ...ADMIN_OPTIONS, firstAdminEmail: hostile }, world.deps);
+	const step = result.steps.find((s) => s.id === 'hosts.first_admin');
+	assert.equal(step?.status, 'failed');
+	assert.ok(!JSON.stringify(result.steps).includes('touch /tmp/pwned'), 'the hostile text was echoed back');
+	assert.ok(step?.next.every((next) => next.kind === 'human' && next.command === undefined));
+	assert.match(step?.next[0].template ?? '', /--first-admin-email <EMAIL>/);
+	assert.equal(result.exitCode, 2);
+	assert.deepEqual(world.log, []);
+});
+
+test('with no --first-admin-email, the skipped step asks a person for the email via a template, not a command', async () => {
+	const result = await runSetup(OPTIONS, depsFor(folder(), {}));
+	const step = result.steps.find((s) => s.id === 'hosts.first_admin');
+	assert.equal(step?.status, 'skipped');
+	assert.equal(step?.next[0].kind, 'human');
+	assert.equal(step?.next[0].command, undefined);
+	assert.match(step?.next[0].template ?? '', /<EMAIL>/);
 });
 
 // ---- the database steps, on the TEST database ----

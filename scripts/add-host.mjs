@@ -6,10 +6,10 @@
 import { randomBytes } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { connectAsOwner } from './pg-connect.ts';
-import { makeHost } from './lib/make-host.ts';
+import { EMAIL, makeHost } from './lib/make-host.ts';
 
 const email = (process.argv[2] ?? '').trim().toLowerCase();
-if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+if (!EMAIL.test(email)) {
 	console.error('Usage: npm run add-host <email>');
 	process.exit(1);
 }

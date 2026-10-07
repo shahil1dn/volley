@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { exitCode, runChecks, type Check, type Ctx } from '../scripts/lib/checks.ts';
+import { exitCode, projectRefOf, runChecks, type Check, type Ctx } from '../scripts/lib/checks.ts';
 import { VARS } from '../scripts/lib/env.ts';
 import { toJson, toText } from '../scripts/lib/report.ts';
 
@@ -135,6 +135,15 @@ test('env.same_project: values from two different Supabase projects fail', async
 	assert.equal(check.next[0].kind, 'human');
 });
 
+test('env.same_project: the direct address (user@db.<ref>.supabase.co) is read too, so a mixed project there is caught', async () => {
+	const direct = (ref: string) => `postgres://postgres:pw@db.${ref}.supabase.co:5432/postgres`;
+	const mixed = byId(await runChecks(ctxWith({ env: { ...GOOD_ENV, POSTGRES_URL_NON_POOLING: direct('zzzzzzzzzzzzzzzzzzzz') } })), 'env.same_project');
+	assert.equal(mixed.status, 'fail');
+	assert.match(mixed.summary, /POSTGRES_URL_NON_POOLING → zzzzzzzzzzzzzzzzzzzz/);
+	assert.equal(byId(await runChecks(ctxWith({ env: { ...GOOD_ENV, POSTGRES_URL_NON_POOLING: direct(REF) } })), 'env.same_project').status, 'ok');
+	assert.equal(projectRefOf(direct(REF)), REF);
+});
+
 test('db.pooler: the direct address and the session-mode port both fail, with different fixes', async () => {
 	const direct = byId(await runChecks(ctxWith({ env: { ...GOOD_ENV, POSTGRES_URL: `postgres://postgres:pw@db.${REF}.supabase.co:5432/postgres` } })), 'db.pooler');
 	assert.equal(direct.status, 'fail');
@@ -205,6 +214,11 @@ test('auth.signup_disabled: sign-up on fails as a HUMAN step with the place to c
 	assert.equal(check.next.length, 1);
 	assert.ok(check.next[0].text.startsWith('HUMAN:') && /Authentication → Sign In \/ Providers/.test(check.next[0].text));
 	assert.equal(exitCode(on), 2, 'only a person can fix it');
+	const withToken = await runChecks(ctxWith({ env: { ...GOOD_ENV, SUPABASE_ACCESS_TOKEN: 'sbp_x', }, settings: { status: 200, body: { disable_signup: false } } }));
+	const offered = byId(withToken, 'auth.signup_disabled');
+	assert.ok(offered.next.some((next) => next.kind === 'run' && next.command === 'npm run setup -- --disable-signup'), 'with an access token the agent can switch it off');
+	assert.ok(offered.next.some((next) => next.kind === 'human'), 'and the by-hand way stays as the fallback');
+	assert.equal(exitCode(withToken), 1);
 	assert.equal(byId(await runChecks(ctxWith()), 'auth.signup_disabled').status, 'ok');
 	assert.match(byId(await runChecks(ctxWith({ settings: { status: 401, body: null } })), 'auth.signup_disabled').summary, /HTTP 401/);
 	assert.match(byId(await runChecks(ctxWith({ settings: new Error('fetch failed') })), 'auth.signup_disabled').summary, /Could not reach Supabase Auth: fetch failed/);
@@ -215,11 +229,15 @@ test('hosts.first_admin: no host, hosts but no admin, and an admin each read rig
 	const none = byId(await runChecks(ctxWith({ hosts: { total: 0, admins: 0 } })), 'hosts.first_admin');
 	assert.equal(none.status, 'fail');
 	assert.match(none.summary, /no host yet/);
-	assert.equal(none.next[0].kind, 'run');
-	assert.match(none.next[0].command ?? '', /--first-admin-email <EMAIL>/);
+	assert.equal(none.next[0].kind, 'human', 'asking the person for their email is a person\'s step');
+	assert.equal(none.next[0].command, undefined, 'a placeholder is never in a command');
+	assert.match(none.next[0].template ?? '', /npm run setup -- --first-admin-email <EMAIL>/);
+	assert.match(none.next[0].text, /^HUMAN: /);
 	const noAdmin = byId(await runChecks(ctxWith({ hosts: { total: 2, admins: 0 } })), 'hosts.first_admin');
 	assert.match(noAdmin.summary, /none is an admin/);
-	assert.match(noAdmin.next[0].command ?? '', /set-host/);
+	assert.equal(noAdmin.next[0].kind, 'human');
+	assert.match(noAdmin.next[0].template ?? '', /npm run set-host -- <EMAIL> --admin/);
+	assert.equal(exitCode([none]), 2, 'with no email known, only a person can go on');
 	assert.equal(byId(await runChecks(ctxWith({ hosts: { total: 3, admins: 1 } })), 'hosts.first_admin').status, 'ok');
 	assert.equal(byId(await runChecks(ctxWith({ hosts: 'no-table' })), 'hosts.first_admin').status, 'skipped');
 });
@@ -246,12 +264,18 @@ test('vercel checks: not linked, missing settings, and protection that covers pr
 	assert.ok(missing.next.some((next) => next.kind === 'run' && /--push-vercel-env/.test(next.command ?? '')));
 	assert.ok(missing.next.some((next) => next.kind === 'human' && /Storage/.test(next.text)), 'store-supplied values are a person\'s step');
 
-	for (const covered of ['all', 'prod_deployment_urls_and_all_previews']) {
-		const protection = byId(await runChecks(ctxWith({ vercel: probe({ protection: covered }) })), 'vercel.protection');
-		assert.equal(protection.status, 'fail', covered);
-		assert.match(protection.summary, /keep-alive cron/);
-		assert.ok(protection.next.some((next) => next.kind === 'run' && next.command === 'npm run setup -- --vercel-protection'));
-		assert.ok(protection.next.some((next) => next.kind === 'human' && /Only Preview Deployments/.test(next.text)));
+	// Vercel documents "All Deployments" as protecting production domains. Standard Protection is
+	// documented as leaving them open, so it is a warning for a person, never rewritten.
+	const all = byId(await runChecks(ctxWith({ vercel: probe({ protection: 'all' }) })), 'vercel.protection');
+	assert.equal(all.status, 'fail');
+	assert.match(all.summary, /keep-alive cron/);
+	assert.ok(all.next.some((next) => next.kind === 'run' && next.command === 'npm run setup -- --vercel-protection'));
+	assert.ok(all.next.some((next) => next.kind === 'human' && /Only Preview Deployments/.test(next.text)));
+	for (const other of ['prod_deployment_urls_and_all_previews', 'something_new']) {
+		const protection = byId(await runChecks(ctxWith({ vercel: probe({ protection: other }) })), 'vercel.protection');
+		assert.equal(protection.status, 'warn', other);
+		assert.ok(protection.next.every((next) => next.kind === 'human'), `${other}: nothing the agent should change`);
+		assert.equal(exitCode([protection]), 0, 'a warning never fails a run');
 	}
 	assert.equal(byId(await runChecks(ctxWith({ vercel: probe({ protection: null }) })), 'vercel.protection').status, 'ok');
 });
@@ -277,13 +301,14 @@ test('a check that crashes is reported as a failed check with its message, and t
 
 test('exit codes: 0 all fine, 1 when the agent can fix something, 2 when only a person can, and 1 if both are present', async () => {
 	assert.equal(exitCode(await runChecks(ctxWith())), 0);
-	assert.equal(exitCode(await runChecks(ctxWith({ hosts: { total: 0, admins: 0 } }))), 1);
+	assert.equal(exitCode(await runChecks(ctxWith({ applied: [] }))), 1);
 	assert.equal(exitCode(await runChecks(ctxWith({ settings: { status: 200, body: { disable_signup: false } } }))), 2);
-	assert.equal(exitCode(await runChecks(ctxWith({ hosts: { total: 0, admins: 0 }, settings: { status: 200, body: { disable_signup: false } } }))), 1);
+	assert.equal(exitCode(await runChecks(ctxWith({ hosts: { total: 0, admins: 0 } }))), 2, 'no host yet: only the person knows their email');
+	assert.equal(exitCode(await runChecks(ctxWith({ applied: [], settings: { status: 200, body: { disable_signup: false } } }))), 1);
 });
 
 test('the JSON has a stable shape: ids, status, summary, next actions, counts, exit code', async () => {
-	const result = toJson(await runChecks(ctxWith({ hosts: { total: 0, admins: 0 } })));
+	const result = toJson(await runChecks(ctxWith({ applied: [] })));
 	assert.deepEqual(Object.keys(result).sort(), ['checks', 'counts', 'exitCode', 'ok']);
 	assert.equal(result.ok, false);
 	assert.equal(result.exitCode, 1);
@@ -295,10 +320,26 @@ test('the JSON has a stable shape: ids, status, summary, next actions, counts, e
 	for (const check of result.checks) {
 		assert.deepEqual(Object.keys(check).sort(), ['id', 'next', 'status', 'summary']);
 		assert.ok(['ok', 'fail', 'warn', 'skipped'].includes(check.status));
-		for (const next of check.next) assert.ok(['run', 'edit', 'human'].includes(next.kind));
+		for (const next of check.next) {
+			assert.ok(['run', 'edit', 'human'].includes(next.kind));
+			assert.ok(Object.keys(next).every((key) => ['kind', 'text', 'command', 'template'].includes(key)), `unexpected field in ${JSON.stringify(next)}`);
+		}
 	}
 	assert.equal(toJson(await runChecks(ctxWith())).exitCode, 0);
-	assert.match(toText(await runChecks(ctxWith({ hosts: { total: 0, admins: 0 } }))), /Verdict: not ready\. Exit 1/);
+	assert.match(toText(await runChecks(ctxWith({ applied: [] }))), /Verdict: not ready\. Exit 1/);
+	assert.match(toText(await runChecks(ctxWith({ hosts: { total: 0, admins: 0 } }))), /Verdict: not ready\. Exit 2/);
+});
+
+test('a `run` command is always something that can be executed as written: no placeholder, ever', async () => {
+	const scenarios: Over[] = [
+		{ hosts: { total: 0, admins: 0 } }, { hosts: { total: 2, admins: 0 } }, { hosts: 'no-table' }, { applied: [] }, { cron: 'no-extension' }, { cron: 'missing-job' }, { cron: 'inactive' },
+		{ env: {} }, { env: { ...GOOD_ENV, NEXT_PUBLIC_X: 'y' } }, { settings: { status: 200, body: { disable_signup: false } } }, { owner: { ok: false, reason: 'no' }, pooler: { ok: false, reason: 'no' } },
+	];
+	for (const over of scenarios) {
+		for (const check of await runChecks(ctxWith(over))) {
+			for (const next of check.next) if (next.kind === 'run') assert.ok(next.command && !/[<>]/.test(next.command), `${check.id}: ${next.command}`);
+		}
+	}
 });
 
 test('no result, in text or JSON, ever contains a secret value, however many checks fail', async () => {

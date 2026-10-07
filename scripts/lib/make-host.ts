@@ -7,7 +7,9 @@ type AuthAdmin = {
 	updateUserById(id: string, attrs: { password: string; email_confirm: boolean }): Promise<{ error: { message: string } | null }>;
 };
 
-export const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Plain addresses only: no quote, space, `$ ( ) ; | & < >` or backslash, so an email can't carry shell
+// syntax into a suggested command or anywhere else it is shown.
+export const EMAIL = /^(?=.{3,254}$)[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
 
 // Creates the account (already confirmed) or resets the password of an existing one, then makes it
 // a host. A new password ends every older session (ADR-011).

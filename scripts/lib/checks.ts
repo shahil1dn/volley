@@ -5,13 +5,19 @@
 import { VARS, publicName, nextPublicNames, type VarSpec } from './env.ts';
 
 export type Status = 'ok' | 'fail' | 'warn' | 'skipped';
-// run: a command the agent can run. edit: a file change the agent can make. human: a person must.
-export type Next = { kind: 'run' | 'edit' | 'human'; text: string; command?: string };
+// run: a command the agent can run, exactly as written (`command`, never with a placeholder in it).
+// edit: a file change the agent can make. human: a person must. `template` is a command with a
+// <PLACEHOLDER> that only a person can fill in (an email, say): never run it as it stands.
+export type Next = { kind: 'run' | 'edit' | 'human'; text: string; command?: string; template?: string };
 export type Check = { id: string; status: Status; summary: string; next: Next[] };
 
 const run = (command: string, text = ''): Next => ({ kind: 'run', command, text: text || `Run: ${command}` });
 const edit = (text: string): Next => ({ kind: 'edit', text });
-const human = (text: string): Next => ({ kind: 'human', text: `HUMAN: ${text}` });
+export const human = (text: string, template?: string): Next => ({
+	kind: 'human',
+	text: `HUMAN: ${text}${template ? ` Template (replace the placeholder; never run it as it stands): ${template}` : ''}`,
+	...(template ? { template } : {}),
+});
 
 type Rows = Record<string, unknown>[];
 export type VercelProbe = {
@@ -55,7 +61,7 @@ export const REGION_PAIRS: Record<string, string> = {
 
 export const awsRegionOf = (poolerUrl: string): string | null => /aws-\d+-([a-z0-9-]+)\.pooler\.supabase\.com/.exec(poolerUrl)?.[1] ?? null;
 export const projectRefOf = (value: string): string | null =>
-	/\/\/([a-z0-9]{20})\.supabase\.co/.exec(value)?.[1] ?? /\/\/postgres\.([a-z0-9]{20}):/.exec(value)?.[1] ?? /\/\/db\.([a-z0-9]{20})\.supabase\.co/.exec(value)?.[1] ?? null;
+	/\/\/([a-z0-9]{20})\.supabase\.co/.exec(value)?.[1] ?? /\/\/postgres\.([a-z0-9]{20}):/.exec(value)?.[1] ?? /@db\.([a-z0-9]{20})\.supabase\.co/.exec(value)?.[1] ?? null;
 
 // The renames a store's NEXT_PUBLIC_… names need before SvelteKit can read them. Only for names
 // whose PUBLIC_ twin is missing. The publishable key is also accepted from the store's older
@@ -278,7 +284,10 @@ async function authSignup(ctx: Ctx): Promise<Check> {
 			id: 'auth.signup_disabled',
 			status: 'fail',
 			summary: 'Anyone on the internet can create a Supabase account on this project (public sign-up is on). The app refuses such accounts, but switch it off.',
-			next: [human('Supabase dashboard → your project → Authentication → Sign In / Providers → turn off "Allow new users to sign up" → Save. (Menu wording as best known; not confirmed in the docs.) Then run `npm run doctor` again.')],
+			next: [
+				...(ctx.env.SUPABASE_ACCESS_TOKEN ? [run('npm run setup -- --disable-signup', 'Run: npm run setup -- --disable-signup (SUPABASE_ACCESS_TOKEN is set, so it can ask the Supabase Management API to switch sign-up off).')] : []),
+				human('Supabase dashboard → your project → Authentication → Sign In / Providers → turn off "Allow new users to sign up" → Save. (Menu wording as best known; not confirmed in the docs.) Then run `npm run doctor` again.'),
+			],
 		};
 	}
 	return { id: 'auth.signup_disabled', status: 'warn', summary: "Supabase's settings reply didn't say whether sign-up is allowed (no disable_signup field).", next: [human('Check Authentication → Sign In / Providers in the Supabase dashboard: "Allow new users to sign up" should be off.')] };
@@ -301,10 +310,10 @@ async function hostsFirstAdmin(ctx: Ctx): Promise<Check> {
 			id: 'hosts.first_admin',
 			status: 'fail',
 			summary: 'There is no host yet, so nobody can sign in and start a session.',
-			next: [run('npm run setup -- --first-admin-email <EMAIL>', 'Ask the person which email they will sign in with, then run: npm run setup -- --first-admin-email <EMAIL> (it makes the account and an admin host; the first password goes to a private file, never the screen).')],
+			next: [human('Ask the person which email they will sign in with, then run the template with it (it makes the account and an admin host; the first password goes to a private file, never the screen).', 'npm run setup -- --first-admin-email <EMAIL>')],
 		};
 	}
-	return { id: 'hosts.first_admin', status: 'fail', summary: `There ${total === 1 ? 'is 1 host' : `are ${total} hosts`} but none is an admin, so nobody can invite more hosts.`, next: [run('npm run set-host -- <EMAIL> --admin', 'Run: npm run set-host -- <EMAIL> --admin (use one of the existing hosts\' emails).')] };
+	return { id: 'hosts.first_admin', status: 'fail', summary: `There ${total === 1 ? 'is 1 host' : `are ${total} hosts`} but none is an admin, so nobody can invite more hosts.`, next: [human("Ask the person which existing host should be the admin, then run the template with that host's email.", 'npm run set-host -- <EMAIL> --admin')] };
 }
 
 const NEED_VERCEL: Next[] = [run('npm run doctor -- --vercel', 'Run: npm run doctor -- --vercel (checks the linked Vercel project; read-only).')];
@@ -352,11 +361,24 @@ async function vercelProtection(ctx: Ctx): Promise<Check> {
 		return { id: 'vercel.protection', status: 'fail', summary: `Could not read the project's deployment protection: ${(error as Error).message}`, next: [human('Run `vercel login` and approve it in the browser, then run `npm run doctor -- --vercel` again.')] };
 	}
 	if (type === null || type === 'preview') return { id: 'vercel.protection', status: 'ok', summary: type === null ? 'No Vercel Authentication, so the cron can reach production.' : 'Vercel Authentication covers preview deployments only, so the cron can reach production.', next: [] };
+	// Vercel's Deployment Protection page: "All Deployments" protects production domains too, Standard
+	// Protection (prod_deployment_urls_and_all_previews) protects everything except production domains.
+	if (type === 'all') {
+		return {
+			id: 'vercel.protection',
+			status: 'fail',
+			summary: 'Vercel Authentication is on for All Deployments, production included; the daily keep-alive cron then gets a login page instead of the app and Supabase can pause the project.',
+			next: [run('npm run setup -- --vercel-protection', 'Run: npm run setup -- --vercel-protection (sets Vercel Authentication to preview deployments only).'), human('Or by hand: Vercel dashboard → the project → Settings → Deployment Protection → Vercel Authentication → choose "Only Preview Deployments" → Save.')],
+		};
+	}
+	const standard = type === 'prod_deployment_urls_and_all_previews';
 	return {
 		id: 'vercel.protection',
-		status: 'fail',
-		summary: `Vercel Authentication also covers production (${type}); the daily keep-alive cron then gets a login page instead of the app and Supabase can pause the project.`,
-		next: [run('npm run setup -- --vercel-protection', 'Run: npm run setup -- --vercel-protection (sets Vercel Authentication to preview deployments only).'), human('Or by hand: Vercel dashboard → the project → Settings → Deployment Protection → Vercel Authentication → choose "Only Preview Deployments" → Save.')],
+		status: 'warn',
+		summary: standard
+			? 'Vercel Authentication is on as Standard Protection. Vercel documents that this leaves production domains open, so the keep-alive cron should get through, but the docs do not say which address the cron calls.'
+			: `Vercel Authentication is set to "${type}", a value doctor does not know, so it can't tell whether the keep-alive cron reaches production.`,
+		next: [human('Look at the first scheduled run: Vercel dashboard → the project → Logs, filter requestPath:/api/cron/keep-alive. Status 200 means it gets through. A login page or redirect means set Vercel Authentication to "Only Preview Deployments" (Settings → Deployment Protection).')],
 	};
 }
 
