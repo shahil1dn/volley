@@ -6,7 +6,7 @@ export const PRODUCTION_REF = 'qeheedlsskaurqshmueb';
 // The name of the first setting that points at production, or null.
 export function productionSetting(env: Record<string, string | undefined>): string | null {
 	for (const [name, value] of Object.entries(env)) {
-		if (value?.includes(PRODUCTION_REF)) return name;
+		if (value?.toLowerCase().includes(PRODUCTION_REF)) return name;
 	}
 	return null;
 }

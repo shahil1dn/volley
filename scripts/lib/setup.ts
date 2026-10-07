@@ -2,8 +2,8 @@
 // it never asks a question, never overwrites a value it didn't make unless --force, never prints
 // a secret value, and ends by running doctor so its last line is the verdict.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { dirname, join, sep } from 'node:path';
 import type pg from 'pg';
 import { productionSetting, refuseProduction } from '../production-guard.ts';
 import { exitCode, human, publicRenames, runChecks, type Check, type Ctx, type Next } from './checks.ts';
@@ -11,6 +11,7 @@ import { EMAIL, makeHost, setHost } from './make-host.ts';
 import { applyMigrations, pendingMigrationsReadOnly } from './migrations.ts';
 import { ENV_NAME, VARS, makeSecret, mask, parse, redact, redactDeep, secretValues, setLine } from './env.ts';
 import { writePrivate } from './private-file.ts';
+import { safeRelative } from './safe-path.ts';
 import { shellQuote } from './shell.ts';
 import { addEnv, setProtectionPreviewOnly, vercelProbe, type Exec } from './vercel.ts';
 
@@ -71,18 +72,45 @@ export const realDeps = (root: string, env: Record<string, string | undefined>, 
 	write: (path, text, mode) => writePrivate(join(root, path), text, mode),
 	remove: (path) => rmSync(join(root, path), { force: true }),
 	isIgnored: (path) => {
-		// 0: ignored. 1: not ignored. Anything else (no repo, no git): nothing can be committed.
+		// Fail closed. The file must really sit inside the folder (a `../` path or a symlinked folder leads
+		// elsewhere), and git must say yes (exit 0). Exit 1 is "not ignored"; any other answer (128: beyond a
+		// symlink, outside the repo, a broken repo) only counts as fine when there is no repo at all.
+		try {
+			const home = realpathSync(root);
+			const folder = realpathSync(dirname(join(root, path)));
+			if (folder !== home && !folder.startsWith(home + sep)) return false;
+		} catch {
+			return false;
+		}
 		const run = spawnSync('git', ['check-ignore', '-q', '--', path], { cwd: root });
-		return run.status !== 1;
+		if (run.status === 0) return true;
+		if (run.status === 1) return false;
+		return spawnSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: root }).status !== 0;
 	},
 	fetch,
 	...hooks,
 });
 
-export async function runSetup(options: Options, deps: Deps): Promise<{ steps: Step[]; checks: Check[]; exitCode: 0 | 1 | 2 }> {
+type SetupResult = { steps: Step[]; checks: Check[]; exitCode: 0 | 1 | 2 };
+
+export async function runSetup(options: Options, deps: Deps): Promise<SetupResult> {
+	// Every version of the settings setup has seen (process env, the env file, the import, what it
+	// generated), so an error that escapes is scrubbed of all of them, not only of process.env.
+	const seen: Record<string, string | undefined>[] = [deps.env];
+	try {
+		return await setup(options, deps, (view) => void seen.push(view));
+	} catch (error) {
+		throw new Error(redact((error as Error).message, seen.flatMap(secretValues)));
+	}
+}
+
+async function setup(options: Options, deps: Deps, track: (view: Record<string, string | undefined>) => void): Promise<SetupResult> {
 	const steps: Step[] = [];
-	let fileText = deps.read(options.envFile) ?? '';
+	// One relative path, used for the read, git's ignore check and the write.
+	const envFile = safeRelative(deps.root, options.envFile);
+	let fileText = envFile === null ? '' : (deps.read(envFile) ?? '');
 	let effective: Record<string, string | undefined> = { ...parse(fileText), ...deps.env };
+	track(effective);
 	const writes: string[] = [];
 
 	// Every write step goes through the production guard first: this repo's own production database is refused.
@@ -93,9 +121,13 @@ export async function runSetup(options: Options, deps: Deps): Promise<{ steps: S
 		return finish(steps, options, deps, effective);
 	}
 
-	// Secrets go only to a file git ignores, so a later `git add .` can't publish them.
-	if (!deps.isIgnored(options.envFile)) {
-		steps.push(step('env.out', 'failed', `${options.envFile} isn't ignored by git, so secrets written there could be committed. Nothing was written.`, [{ kind: 'run', command: 'npm run setup -- --env-out .env.local', text: 'Write to a file git ignores: npm run setup -- --env-out .env.local (every .env* name is ignored except .env.example).' }]));
+	// Secrets go only to a file inside the repo that git ignores, so a later `git add .` can't publish them.
+	if (envFile === null) {
+		steps.push(step('env.out', 'failed', 'The --env-out path must be a file inside this folder (not the folder itself, not an absolute path elsewhere, not ../). Nothing was written.', [{ kind: 'run', command: 'npm run setup -- --env-out .env.local', text: 'Use a file name inside this folder that git ignores: npm run setup -- --env-out .env.local' }]));
+		return finish(steps, options, deps, effective);
+	}
+	if (!deps.isIgnored(envFile)) {
+		steps.push(step('env.out', 'failed', `${envFile} isn't ignored by git (or can't be checked), so secrets written there could be committed. Nothing was written.`, [{ kind: 'run', command: 'npm run setup -- --env-out .env.local', text: 'Write to a file git ignores: npm run setup -- --env-out .env.local (every .env* name is ignored except .env.example).' }]));
 		return finish(steps, options, deps, effective);
 	}
 
@@ -110,6 +142,7 @@ export async function runSetup(options: Options, deps: Deps): Promise<{ steps: S
 			return;
 		}
 		effective = { ...effective, [name]: value };
+		track(effective);
 		writes.push(name);
 	};
 
@@ -122,6 +155,7 @@ export async function runSetup(options: Options, deps: Deps): Promise<{ steps: S
 			const incoming = parse(text);
 			const names = Object.keys(incoming).filter((name) => ENV_NAME.test(name) && (VARS.some((spec) => spec.name === name) || name.startsWith('NEXT_PUBLIC_') || name.startsWith('PUBLIC_')) && incoming[name] && !effective[name]);
 			imported = Object.fromEntries(names.map((name) => [name, incoming[name]]));
+			track(incoming);
 			if (!options.dryRun) for (const name of names) put(name, incoming[name]);
 			steps.push(step('env.import', names.length === 0 ? 'unchanged' : options.dryRun ? 'would' : 'done', names.length === 0 ? `Nothing to import from ${options.fromEnvFile}: every name it has is already set.` : `${options.dryRun ? 'Would import' : 'Imported'} ${names.join(', ')} from ${options.fromEnvFile}.`));
 		}
@@ -162,14 +196,14 @@ export async function runSetup(options: Options, deps: Deps): Promise<{ steps: S
 	}
 
 	if (unsafe.length > 0) {
-		steps.push(step('env.file', 'failed', `Nothing was written to ${options.envFile}: the value of ${[...new Set(unsafe)].join(', ')} can't be stored in an env file so it reads back the same (a line break, or quotes of every kind).`, [humanNext(`Fix the value of ${[...new Set(unsafe)].join(', ')} at its source (Supabase dashboard → Connect for the connection strings), then run \`npm run setup\` again.`)]));
+		steps.push(step('env.file', 'failed', `Nothing was written to ${envFile}: the value of ${[...new Set(unsafe)].join(', ')} can't be stored in an env file so it reads back the same (a line break, or quotes of every kind).`, [humanNext(`Fix the value of ${[...new Set(unsafe)].join(', ')} at its source (Supabase dashboard → Connect for the connection strings), then run \`npm run setup\` again.`)]));
 		return finish(steps, options, deps, effective);
 	}
 
 	// Write the env file once, private to the owner.
 	if (writes.length > 0 && !options.dryRun) {
-		deps.write(options.envFile, fileText, 0o600);
-		steps.push(step('env.file', 'done', `Wrote ${[...new Set(writes)].join(', ')} to ${options.envFile} (permissions 0600).`));
+		deps.write(envFile, fileText, 0o600);
+		steps.push(step('env.file', 'done', `Wrote ${[...new Set(writes)].join(', ')} to ${envFile} (permissions 0600).`));
 	}
 
 	// 4. Database: migrations, pg_cron, the first host. Needs the direct connection.
@@ -212,7 +246,7 @@ export async function runSetup(options: Options, deps: Deps): Promise<{ steps: S
 					}
 				}
 			}
-			if (options.firstAdminEmail !== undefined) steps.push(await firstAdmin(db, options, deps, effective));
+			if (options.firstAdminEmail !== undefined) steps.push(await firstAdmin(db, options, deps, effective).catch((error) => hostLookupFailed(error, options)));
 		}
 	} finally {
 		await db?.end().catch(() => undefined);
@@ -262,6 +296,16 @@ async function ensureCronJob(db: pg.Client): Promise<'scheduled' | 'switched on'
 	return 'switched on';
 }
 
+// The hosts table is missing (migrations failed, were skipped, or this is a dry run on a fresh database) or
+// the lookup failed some other way: a step the agent can read, never a crash.
+function hostLookupFailed(error: unknown, options: Options): Step {
+	if ((error as { code?: string }).code === '42P01' || /does not exist/i.test(failure(error))) {
+		if (options.dryRun) return step('hosts.first_admin', 'would', 'Would create the first admin after the migrations are applied: the hosts table does not exist yet.');
+		return step('hosts.first_admin', 'failed', 'The hosts table does not exist, so the first admin could not be made: the migrations have not been applied.', [humanNext('Fix the db.migrate problem above (or run without --skip-migrate), then run setup again with the same --first-admin-email.')]);
+	}
+	return step('hosts.first_admin', 'failed', `Could not look the host up: ${failure(error)}`, [humanNext('Fix what the message says, then run setup again.')]);
+}
+
 async function firstAdmin(db: pg.Client, options: Options, deps: Deps, effective: Record<string, string | undefined>): Promise<Step> {
 	const email = (options.firstAdminEmail ?? '').trim().toLowerCase();
 	// The text is never echoed back: it came from outside and ends up in the report.
@@ -290,17 +334,23 @@ async function firstAdmin(db: pg.Client, options: Options, deps: Deps, effective
 	try {
 		deps.write(FIRST_ADMIN_FILE, `Volley first admin\nemail: ${email}\npassword: ${password}\nSign in at the site root (/). Delete this file once the password is saved somewhere safe.\n`, 0o600);
 	} catch (error) {
-		deps.remove(FIRST_ADMIN_FILE);
+		// The write is atomic (temp file, then rename), so an existing file is untouched: nothing to clean up.
 		return step('hosts.first_admin', 'failed', `Could not write ${FIRST_ADMIN_FILE}: ${redact(failure(error), [password])}. No account was made or changed.`, [humanNext('Make the folder writable (or free some disk space), then run setup again.')]);
 	}
+	// The account and the host row land together or not at all. (The Supabase account itself is made through
+	// its API and can't be rolled back, so afterwards we look at what really exists and advise from that.)
 	try {
+		await db.query('begin');
 		await makeHost(db, deps.authAdmin(effective), email, password);
 		await setHost(db, email, { name: options.firstAdminName, admin: true });
+		await db.query('commit');
 	} catch (error) {
+		await db.query('rollback').catch(() => undefined);
 		deps.remove(FIRST_ADMIN_FILE);
-		const message = redact(failure(error), [password]);
-		const again = `npm run setup -- --first-admin-email ${asked}${account ? ' --force' : ''}`;
-		return step('hosts.first_admin', 'failed', `${message}. The password file was removed.${account ? ' The account already existed, so its password may have been reset: run again with --force to set a fresh one.' : ' Run setup again to retry from the start.'}`, [{ kind: 'run', command: again, text: `Once the cause above is fixed, run: ${again}` }]);
+		const exists = await db.query('select 1 from auth.users where lower(email) = $1', [email]).then((found) => found.rows.length > 0, () => false);
+		const again = `npm run setup -- --first-admin-email ${asked}${exists ? ' --force' : ''}`;
+		const state = exists ? 'The Supabase account exists but is not a host (its password may have been reset), so a rerun needs --force to set a fresh one.' : 'No account was made, so a plain rerun starts from the beginning.';
+		return step('hosts.first_admin', 'failed', `${redact(failure(error), [password])}. The password file was removed. ${state}`, [{ kind: 'run', command: again, text: `Once the cause above is fixed, run: ${again}` }]);
 	}
 	return step('hosts.first_admin', 'done', `Created ${email} as an admin host. The first password is in ${FIRST_ADMIN_FILE} (permissions 0600); it was not printed.`, [humanNext(`Give the person the password in ${FIRST_ADMIN_FILE} privately (read the file, don't paste it into a chat log), have them sign in at the site root and keep it in a password manager, then delete the file.`)]);
 }

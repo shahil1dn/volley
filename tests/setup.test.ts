@@ -3,7 +3,7 @@
 // the TEST database (rolled back or cleaned up). Nothing here can reach production.
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -392,17 +392,24 @@ test('--disable-signup needs an access token, and says plainly what a person doe
 // ---- the first admin, on a fake database: the order of steps and what a failure leaves behind ----
 
 type HostState = { host?: { is_admin: boolean }; account?: boolean };
+type WorldOptions = { failWrite?: boolean; failCreate?: boolean; failPromote?: boolean; hostsTableMissing?: boolean; files?: Record<string, string> };
 
-function fakeAdminWorld(state: HostState, over: { failWrite?: boolean; failCreate?: boolean } = {}) {
+function fakeAdminWorld(state: HostState, over: WorldOptions = {}) {
 	const log: string[] = [];
 	const db = {
 		query: async (sql: string) => {
 			const text = sql.replace(/\s+/g, ' ').trim();
+			if (/^(begin|commit|rollback)$/.test(text)) { log.push(`db:${text}`); return { rows: [], rowCount: 0 }; }
+			if (over.hostsTableMissing && /public\.hosts/.test(text)) throw Object.assign(new Error('relation "public.hosts" does not exist'), { code: '42P01' });
 			if (/select is_admin from public\.hosts/.test(text)) return { rows: state.host ? [state.host] : [], rowCount: state.host ? 1 : 0 };
 			if (/select 1 from auth\.users/.test(text)) return { rows: state.account ? [{}] : [], rowCount: state.account ? 1 : 0 };
 			if (/select id from auth\.users/.test(text)) return { rows: state.account ? [{ id: 'u-existing' }] : [], rowCount: state.account ? 1 : 0 };
 			if (/^insert into public\.hosts/.test(text)) { log.push('db:insert host'); return { rows: [], rowCount: 1 }; }
-			if (/^update public\.hosts/.test(text)) { log.push('db:update host'); return { rows: [], rowCount: 1 }; }
+			if (/^update public\.hosts/.test(text)) {
+				if (over.failPromote) throw new Error('deadlock detected');
+				log.push('db:update host');
+				return { rows: [], rowCount: 1 };
+			}
 			throw new Error(`unexpected SQL in this fake: ${text}`);
 		},
 		end: async () => undefined,
@@ -410,14 +417,16 @@ function fakeAdminWorld(state: HostState, over: { failWrite?: boolean; failCreat
 	const authAdmin = (): Deps['authAdmin'] extends (e: never) => infer A ? A : never => ({
 		createUser: async () => {
 			log.push('auth:createUser');
-			return state.account || over.failCreate ? { data: { user: null }, error: { message: 'boom: password pw-SECRET rejected' } } : { data: { user: { id: 'u-new' } }, error: null };
+			if (state.account || over.failCreate) return { data: { user: null }, error: { message: 'boom: password pw-SECRET rejected' } };
+			state.account = true; // the account now exists in the (fake) auth service
+			return { data: { user: { id: 'u-new' } }, error: null };
 		},
 		updateUserById: async () => {
 			log.push('auth:setPassword');
 			return { error: null };
 		},
 	});
-	const root = folder();
+	const root = folder(over.files);
 	const over2: Partial<Deps> = {
 		connectOwner: async () => db,
 		authAdmin,
@@ -643,6 +652,100 @@ test('--push-vercel-env help says it sends THIS machine\'s Supabase values to Pr
 	const text = help.stdout.replace(/\s+/g, ' ');
 	assert.match(text, /--push-vercel-env .*Production/);
 	assert.match(text, /test (Supabase )?(project|database).*production (would )?use/i);
+});
+
+test('first admin: a failed password-file write leaves an existing file alone (the write is atomic, so there is nothing to clean up)', async () => {
+	const world = fakeAdminWorld({}, { failWrite: true, files: { [FIRST_ADMIN_FILE]: 'old password file\n' } });
+	const result = await runSetup({ ...ADMIN_OPTIONS, force: true }, world.deps);
+	assert.equal(result.steps.find((s) => s.id === 'hosts.first_admin')?.status, 'failed');
+	assert.equal(readFileSync(join(world.root, FIRST_ADMIN_FILE), 'utf8'), 'old password file\n', 'a possibly valid file was deleted for nothing');
+});
+
+test('first admin: account and host row are made in ONE transaction; a failure rolls back and the advice matches what a rerun does', async () => {
+	// The account is made, then the host step fails: rolled back, the account exists but is not a host, a rerun needs --force.
+	const world = fakeAdminWorld({}, { failPromote: true });
+	const result = await runSetup(ADMIN_OPTIONS, world.deps);
+	const step = result.steps.find((s) => s.id === 'hosts.first_admin');
+	assert.equal(step?.status, 'failed');
+	assert.ok(world.log.includes('db:begin') && world.log.includes('db:rollback') && !world.log.includes('db:commit'), world.log.join(' → '));
+	assert.equal(existsSync(join(world.root, FIRST_ADMIN_FILE)), false);
+	assert.equal(step?.next[0].command, 'npm run setup -- --first-admin-email new.person@example.com --force', 'the account now exists, so a plain rerun would be refused');
+	// And what the advice says is true: the rerun without --force really is refused, with --force it works.
+	const state: HostState = { account: true };
+	const plain = await runSetup(ADMIN_OPTIONS, fakeAdminWorld(state).deps);
+	assert.equal(plain.steps.find((s) => s.id === 'hosts.first_admin')?.status, 'failed');
+
+	// The account could not be made at all: nothing exists, so a plain rerun is the right advice.
+	const none = fakeAdminWorld({}, { failCreate: true });
+	const failed = await runSetup(ADMIN_OPTIONS, none.deps);
+	assert.equal(failed.steps.find((s) => s.id === 'hosts.first_admin')?.next[0].command, 'npm run setup -- --first-admin-email new.person@example.com');
+});
+
+test('first admin: a database without the hosts table is a step, not a crash: "would" in a dry run, "failed" otherwise', async () => {
+	const dry = await runSetup({ ...ADMIN_OPTIONS, dryRun: true }, fakeAdminWorld({}, { hostsTableMissing: true }).deps);
+	const would = dry.steps.find((s) => s.id === 'hosts.first_admin');
+	assert.equal(would?.status, 'would');
+	assert.match(would?.detail ?? '', /migrations/);
+
+	const real = await runSetup(ADMIN_OPTIONS, fakeAdminWorld({}, { hostsTableMissing: true }).deps);
+	const failed = real.steps.find((s) => s.id === 'hosts.first_admin');
+	assert.equal(failed?.status, 'failed');
+	assert.match(failed?.detail ?? '', /hosts table/);
+	assert.ok(failed?.next.every((next) => next.kind === 'human'));
+	assert.equal(real.exitCode, 2);
+});
+
+test('first admin: any other database error while looking the host up is also a step with the message scrubbed', async () => {
+	const { client } = scriptedDb([[/public\.hosts/, () => new Error('connection terminated: postgres://u:pw-DBPASS-0123@h.invalid:5432/db')]]);
+	const result = await runSetup(ADMIN_OPTIONS, depsFor(folder(), DB_ENV, { connectOwner: async () => client }));
+	const step = result.steps.find((s) => s.id === 'hosts.first_admin');
+	assert.equal(step?.status, 'failed');
+	assert.ok(!JSON.stringify(result).includes('pw-DBPASS-0123'));
+});
+
+test('--env-out must stay inside the repo: absolute, ../ and empty paths are refused, and the SAME relative path is checked and written', async () => {
+	const outside = mkdtempSync(join(tmpdir(), 'volley-outside-'));
+	for (const envFile of [join(outside, 'creds'), '../escape', '/scripts/creds', '.', '']) {
+		const root = folder();
+		const result = await runSetup({ ...OPTIONS, envFile }, depsFor(root, { ...STORE_ENV }));
+		assert.equal(result.steps.find((s) => s.id === 'env.out')?.status, 'failed', JSON.stringify(envFile));
+		assert.equal(existsSync(join(outside, 'creds')), false, 'secrets were written outside the repo');
+		assert.deepEqual(readdirSync(root), [], `something was written under the repo for ${JSON.stringify(envFile)}`);
+	}
+	// An absolute path that lands inside the repo is fine, and git is asked about the path that is written.
+	const root = folder();
+	const asked: string[] = [];
+	await runSetup({ ...OPTIONS, envFile: join(root, 'sub', '..', '.env.inside') }, depsFor(root, {}, { isIgnored: (path) => (asked.push(path), true) }));
+	assert.deepEqual(asked, ['.env.inside']);
+	assert.equal(existsSync(join(root, '.env.inside')), true);
+});
+
+test('the real isIgnored fails closed: outside the repo, through a symlinked folder, or when git cannot answer inside a repo', () => {
+	const hooks = { connectOwner: connectOwnerWith, authAdmin: () => admin(), exec: () => ({ status: 0, stdout: '', stderr: '' }), vercelLink: () => null, doctor: async () => { throw new Error('unused'); } };
+	const elsewhere = folder();
+	const repo = folder({ '.gitignore': '.env*\n' });
+	assert.equal(spawnSync('git', ['init', '-q'], { cwd: repo }).status, 0);
+	symlinkSync(elsewhere, join(repo, 'link'));
+	const inRepo = realDeps(repo, {}, hooks);
+	assert.equal(inRepo.isIgnored('.env.fine'), true);
+	assert.equal(inRepo.isIgnored('../escape'), false, 'a path outside the repo');
+	assert.equal(inRepo.isIgnored('link/.env.x'), false, 'git exits 128 beyond a symlink: that is not "ignored"');
+	assert.equal(inRepo.isIgnored('/scripts/creds'), false);
+
+	// No repo at all: nothing can be committed, but the file must still land inside the folder.
+	const bare = folder();
+	symlinkSync(elsewhere, join(bare, 'link'));
+	const noRepo = realDeps(bare, {}, hooks);
+	assert.equal(noRepo.isIgnored('.env.fine'), true);
+	assert.equal(noRepo.isIgnored('link/.env.x'), false, 'a symlinked folder leads outside');
+});
+
+test('an error that escapes setup is scrubbed of the values it read from the env file and the import, not only process.env', async () => {
+	const root = folder({ '.env.local': 'SUPABASE_SECRET_KEY=sb_secret_FROM_THE_ENV_FILE_123\n', '.env.pulled.local': 'POSTGRES_URL=postgres://u:pw-IMPORTED-456@h:6543/db\n' });
+	const boom: Deps['doctor'] = async () => {
+		throw new Error('doctor blew up near sb_secret_FROM_THE_ENV_FILE_123 and pw-IMPORTED-456');
+	};
+	await assert.rejects(runSetup({ ...OPTIONS, fromEnvFile: '.env.pulled.local' }, depsFor(root, {}, { doctor: boom })), (error: Error) => /doctor blew up/.test(error.message) && !error.message.includes('sb_secret_FROM_THE_ENV_FILE_123') && !error.message.includes('pw-IMPORTED-456'));
 });
 
 // ---- the database steps, on the TEST database ----

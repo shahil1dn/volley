@@ -11,6 +11,11 @@ test('any setting that mentions the production ref is found, whatever its name',
 	assert.equal(productionSetting({ SOMETHING_NEW: `https://${PRODUCTION_REF}.supabase.co` }), 'SOMETHING_NEW');
 });
 
+test('the ref is matched whatever its letter case (host names are case-insensitive)', () => {
+	assert.equal(productionSetting({ POSTGRES_URL: `postgres://u:p@db.${PRODUCTION_REF.toUpperCase()}.supabase.co:5432/postgres` }), 'POSTGRES_URL');
+	assert.equal(productionSetting({ X: `https://${PRODUCTION_REF.slice(0, 5).toUpperCase()}${PRODUCTION_REF.slice(5)}.supabase.co` }), 'X');
+});
+
 // The real preload, in a real process: with a production setting, nothing
 // after it runs.
 function runWithPreload(env: Record<string, string>) {
