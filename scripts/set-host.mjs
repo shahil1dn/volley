@@ -2,6 +2,7 @@
 // without touching their password. Run it after add-host for the first host.
 //   npm run set-host -- <email> [--name "Your name"] [--admin]
 import { connectAsOwner } from './pg-connect.ts';
+import { setHost } from './lib/make-host.ts';
 
 const args = process.argv.slice(2);
 const email = (args[0] ?? '').trim().toLowerCase();
@@ -16,11 +17,7 @@ if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || (name !== null && (name.length 
 
 const db = await connectAsOwner();
 try {
-	const { rowCount } = await db.query(
-		'update public.hosts set name = coalesce($2, name), is_admin = is_admin or $3 where email = $1',
-		[email, name, makeAdmin],
-	);
-	if (rowCount === 0) {
+	if (!(await setHost(db, email, { name, admin: makeAdmin }))) {
 		console.error(`${email} isn't a host yet. Add them first with npm run add-host.`);
 		process.exitCode = 1;
 	} else {

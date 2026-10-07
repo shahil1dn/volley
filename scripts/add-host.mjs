@@ -6,6 +6,7 @@
 import { randomBytes } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { connectAsOwner } from './pg-connect.ts';
+import { makeHost } from './lib/make-host.ts';
 
 const email = (process.argv[2] ?? '').trim().toLowerCase();
 if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -23,24 +24,8 @@ const password = randomBytes(24).toString('base64url');
 
 const db = await connectAsOwner();
 try {
-	const existing = await db.query('select id from auth.users where lower(email) = $1', [email]);
-	let userId = existing.rows[0]?.id;
-	if (userId) {
-		const { error } = await admin.updateUserById(userId, { password, email_confirm: true });
-		if (error) throw new Error(`Could not reset the password: ${error.message}`);
-	} else {
-		// Created already confirmed, so Supabase sends no confirmation email.
-		const { data, error } = await admin.createUser({ email, password, email_confirm: true });
-		if (error) throw new Error(`Could not create the account: ${error.message}`);
-		userId = data.user.id;
-	}
-	await db.query(
-		// A new password ends every older session (ADR-011).
-		`insert into public.hosts (user_id, email, sessions_valid_after) values ($1, $2, now())
-		 on conflict (user_id) do update set email = excluded.email, sessions_valid_after = now()`,
-		[userId, email],
-	);
-	console.log(`Host ready: ${email} (${existing.rows[0] ? 'password reset' : 'new account'})`);
+	const { created } = await makeHost(db, admin, email, password);
+	console.log(`Host ready: ${email} (${created ? 'new account' : 'password reset'})`);
 	console.log(`Password: ${password}`);
 	console.log('Shown once. Pass it to the host; they sign in at the site root (/).');
 } finally {
