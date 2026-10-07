@@ -1,5 +1,5 @@
 // What this app reads from its environment, in one place: doctor checks it, setup
-// fills it in, .env.example documents it, and tests/setup-env.test.ts fails if
+// fills it in, .env.example documents it, and tests/doctor.test.ts fails if
 // src/ reads a name that is missing here (found by grepping, not from memory).
 import { randomBytes } from 'node:crypto';
 import { parseEnv } from 'node:util';
@@ -43,10 +43,41 @@ export const publicName = (name: string): string => name.replace(/^NEXT_PUBLIC_/
 export const nextPublicNames = (env: Record<string, string | undefined>): string[] =>
 	Object.keys(env).filter((name) => name.startsWith('NEXT_PUBLIC_') && env[name]);
 
-// Replaces the line for `name`, or appends one, leaving every other line as it was.
+// A setting name as setup reads and writes it: nothing a RegExp or a shell would treat specially.
+export const ENV_NAME = /^[A-Z_][A-Z0-9_]*$/;
+
+// What to write after `NAME=` so that `parse` reads exactly `value` back, or null when no form
+// of quoting can carry it (a line break, or all three kinds of quote). Each candidate is proved
+// by parsing it, not assumed: Node's parser does not process backslash escapes, for example.
+export function quoteValue(value: string): string | null {
+	if (/[\r\n\0]/.test(value)) return null;
+	const plain = /^[A-Za-z0-9_@%+=:,./~-]*$/.test(value) ? [value] : [];
+	return [...plain, `'${value}'`, `"${value}"`, `\`${value}\``].find((form) => parseEnv(`A=${form}`).A === value) ?? null;
+}
+
+// Replaces the line for `name` (keeping an `export ` prefix and the file's line endings), or
+// appends one. Every other line is left as it was. A name that appears twice is collapsed to one
+// line, so the file says what `parse` reads (the last one wins there).
 export function setLine(text: string, name: string, value: string): string {
-	const line = `${name}=${/[\s#"'$]/.test(value) ? JSON.stringify(value) : value}`;
-	const pattern = new RegExp(`^(export\\s+)?${name}\\s*=.*$`, 'm');
-	if (pattern.test(text)) return text.replace(pattern, line);
-	return `${text}${text === '' || text.endsWith('\n') ? '' : '\n'}${line}\n`;
+	if (!ENV_NAME.test(name)) throw new Error(`"${name}" isn't a valid setting name.`);
+	const quoted = quoteValue(value);
+	if (quoted === null) throw new Error(`The value for ${name} can't be stored safely in an env file (it has a line break, or quotes of every kind), so it was not written.`);
+	// `name` passed ENV_NAME above: letters, digits and _ only, so it can't change the pattern.
+	const pattern = new RegExp(`^(\\s*(?:export\\s+)?)${name}\\s*=`);
+	const lines = text.split('\n');
+	let placed = false;
+	const out: string[] = [];
+	for (const line of lines) {
+		const found = pattern.exec(line);
+		if (!found) {
+			out.push(line);
+			continue;
+		}
+		if (placed) continue;
+		placed = true;
+		out.push(`${found[1]}${name}=${quoted}${line.endsWith('\r') ? '\r' : ''}`);
+	}
+	if (placed) return out.join('\n');
+	const eol = text.includes('\r\n') ? '\r\n' : '\n';
+	return `${text}${text === '' || text.endsWith('\n') ? '' : eol}${name}=${quoted}${eol}`;
 }

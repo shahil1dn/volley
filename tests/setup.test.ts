@@ -3,7 +3,7 @@
 // the TEST database (rolled back or cleaned up). Nothing here can reach production.
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -161,6 +161,38 @@ test('--dry-run changes nothing and says what it would do; --from-env-file only 
 	assert.equal(written.POSTGRES_URL, 'postgres://x', 'a missing name was imported');
 	assert.equal(written.SUPABASE_URL, undefined, 'a name that was already set is left alone');
 	assert.equal(written.STRAY_NAME, undefined, 'names the app does not read are ignored');
+});
+
+test('--from-env-file only imports names shaped like settings, and a value with $ patterns arrives unmangled', async () => {
+	const tricky = 'postgres://u:p$&w$`z@h:5432/postgres';
+	const root = folder({ '.env.pulled.local': `POSTGRES_URL_NON_POOLING='${tricky}'\nPUBLIC_lowercase=1\nNEXT_PUBLIC_A-B=2\nPUBLIC_OK=3\n` });
+	await runSetup({ ...OPTIONS, fromEnvFile: '.env.pulled.local' }, depsFor(root, {}));
+	const written = parse(readFileSync(join(root, '.env.local'), 'utf8'));
+	assert.equal(written.POSTGRES_URL_NON_POOLING, tricky);
+	assert.equal(written.PUBLIC_OK, '3');
+	assert.equal(written.PUBLIC_lowercase, undefined, 'a lowercase name is not a setting');
+	assert.equal(written['NEXT_PUBLIC_A-B'], undefined, 'nor is a name with a dash');
+});
+
+test('an imported value that cannot be written back faithfully stops setup before anything is written', async () => {
+	const root = folder({ '.env.pulled.local': 'POSTGRES_URL="first line\\nsecond line"\n' });
+	const result = await runSetup({ ...OPTIONS, fromEnvFile: '.env.pulled.local' }, depsFor(root, {}));
+	const failed = result.steps.find((s) => s.id === 'env.file');
+	assert.equal(failed?.status, 'failed');
+	assert.match(failed?.detail ?? '', /POSTGRES_URL/);
+	assert.ok(!everything(result, OPTIONS).includes('second line'), 'the value was printed');
+	assert.equal(existsSync(join(root, '.env.local')), false, 'no half-written file');
+	assert.equal(result.exitCode, 2);
+});
+
+test('the real write is private from the start: an existing world-readable .env.local ends up 0600 and complete', async () => {
+	const root = folder({ '.env.local': '# mine\nKEEP=1\n' });
+	chmodSync(join(root, '.env.local'), 0o644);
+	const hooks = { connectOwner: connectOwnerWith, authAdmin: () => admin(), exec: () => ({ status: 0, stdout: '[]', stderr: '' }), vercelLink: () => null, doctor: async (e: Record<string, string | undefined>) => depsFor(root, e).doctor(e) };
+	await runSetup(OPTIONS, { ...realDeps(root, {}, hooks), isIgnored: () => true });
+	assert.equal(statSync(join(root, '.env.local')).mode & 0o777, 0o600);
+	assert.match(readFileSync(join(root, '.env.local'), 'utf8'), /^# mine\nKEEP=1\nHOST_SESSION_SECRET=/);
+	assert.deepEqual(readdirSync(root).filter((name) => name.endsWith('.tmp')), []);
 });
 
 test('setup refuses to run against this repo\'s production database, before writing anything', async () => {

@@ -2,14 +2,15 @@
 // it never asks a question, never overwrites a value it didn't make unless --force, never prints
 // a secret value, and ends by running doctor so its last line is the verdict.
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type pg from 'pg';
 import { productionSetting, refuseProduction } from '../production-guard.ts';
 import { exitCode, publicRenames, runChecks, type Check, type Ctx, type Next } from './checks.ts';
 import { EMAIL, makeHost, setHost } from './make-host.ts';
 import { applyMigrations, pendingMigrations } from './migrations.ts';
-import { VARS, makeSecret, mask, parse, setLine } from './env.ts';
+import { ENV_NAME, VARS, makeSecret, mask, parse, setLine } from './env.ts';
+import { writePrivate } from './private-file.ts';
 import { addEnv, setProtectionPreviewOnly, vercelProbe, type Exec } from './vercel.ts';
 
 export type Options = {
@@ -65,10 +66,7 @@ export const realDeps = (root: string, env: Record<string, string | undefined>, 
 	now: () => Date.now(),
 	exists: (path) => existsSync(join(root, path)),
 	read: (path) => (existsSync(join(root, path)) ? readFileSync(join(root, path), 'utf8') : null),
-	write: (path, text, mode) => {
-		writeFileSync(join(root, path), text, { mode });
-		chmodSync(join(root, path), mode); // mode only applies to a new file; make an existing one private too
-	},
+	write: (path, text, mode) => writePrivate(join(root, path), text, mode),
 	remove: (path) => rmSync(join(root, path), { force: true }),
 	isIgnored: (path) => {
 		// 0: ignored. 1: not ignored. Anything else (no repo, no git): nothing can be committed.
@@ -99,8 +97,16 @@ export async function runSetup(options: Options, deps: Deps): Promise<{ steps: S
 		return finish(steps, options, deps, effective);
 	}
 
+	// A value that can't be written to an env file so it reads back the same is refused, never written
+	// mangled. Only the NAME is kept for the message: the value may be a secret.
+	const unsafe: string[] = [];
 	const put = (name: string, value: string) => {
-		fileText = setLine(fileText, name, value);
+		try {
+			fileText = setLine(fileText, name, value);
+		} catch {
+			unsafe.push(name);
+			return;
+		}
 		effective = { ...effective, [name]: value };
 		writes.push(name);
 	};
@@ -112,7 +118,7 @@ export async function runSetup(options: Options, deps: Deps): Promise<{ steps: S
 		if (text === null) steps.push(step('env.import', 'failed', `The file ${options.fromEnvFile} doesn't exist.`, [{ kind: 'run', command: 'vercel env pull .env.pulled.local', text: 'Make it with: vercel env pull .env.pulled.local (needs a linked project; every .env* name is git-ignored), or write the Supabase values into it.' }]));
 		else {
 			const incoming = parse(text);
-			const names = Object.keys(incoming).filter((name) => (VARS.some((spec) => spec.name === name) || name.startsWith('NEXT_PUBLIC_') || name.startsWith('PUBLIC_')) && incoming[name] && !effective[name]);
+			const names = Object.keys(incoming).filter((name) => ENV_NAME.test(name) && (VARS.some((spec) => spec.name === name) || name.startsWith('NEXT_PUBLIC_') || name.startsWith('PUBLIC_')) && incoming[name] && !effective[name]);
 			imported = Object.fromEntries(names.map((name) => [name, incoming[name]]));
 			if (!options.dryRun) for (const name of names) put(name, incoming[name]);
 			steps.push(step('env.import', names.length === 0 ? 'unchanged' : options.dryRun ? 'would' : 'done', names.length === 0 ? `Nothing to import from ${options.fromEnvFile}: every name it has is already set.` : `${options.dryRun ? 'Would import' : 'Imported'} ${names.join(', ')} from ${options.fromEnvFile}.`));
@@ -151,6 +157,11 @@ export async function runSetup(options: Options, deps: Deps): Promise<{ steps: S
 	} catch (error) {
 		steps.push(step('guard.production', 'failed', failure(error), [humanNext('Point the settings (.env.local and any --from-env-file) at a test or fresh Supabase project, not production.')]));
 		return finish(steps, options, deps, { ...effective, ...imported });
+	}
+
+	if (unsafe.length > 0) {
+		steps.push(step('env.file', 'failed', `Nothing was written to ${options.envFile}: the value of ${[...new Set(unsafe)].join(', ')} can't be stored in an env file so it reads back the same (a line break, or quotes of every kind).`, [humanNext(`Fix the value of ${[...new Set(unsafe)].join(', ')} at its source (Supabase dashboard → Connect for the connection strings), then run \`npm run setup\` again.`)]));
+		return finish(steps, options, deps, effective);
 	}
 
 	// Write the env file once, private to the owner.
