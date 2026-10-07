@@ -6,3 +6,6 @@ node_modules
 test-results
 playwright-report
 screenshots
+
+# The first admin host's password, written by `npm run setup -- --first-admin-email`
+.volley-first-admin.txt

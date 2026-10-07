@@ -12,7 +12,8 @@
     "test:e2e": "node --env-file-if-exists=.env.local node_modules/@playwright/test/cli.js test",
     "add-host": "node --env-file-if-exists=.env.local scripts/add-host.mjs",
     "set-host": "node --env-file-if-exists=.env.local scripts/set-host.mjs",
-    "doctor": "node --env-file-if-exists=.env.local scripts/doctor.ts"
+    "doctor": "node --env-file-if-exists=.env.local scripts/doctor.ts",
+    "setup": "node --env-file-if-exists=.env.local scripts/setup.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
