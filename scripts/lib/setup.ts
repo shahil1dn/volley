@@ -1,5 +1,6 @@
 // `npm run setup`: gets a copy of Volley ready, safe to run again. Built for an AI agent first:
-// it never asks a question, never overwrites a value it didn't make unless --force, never prints
+// it never asks a question, never overwrites a value it didn't make unless --force (and never the first admin
+// without --reset-first-admin), never prints
 // a secret value, and ends by running doctor so its last line is the verdict.
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync, rmSync } from 'node:fs';
@@ -17,7 +18,8 @@ import { addEnv, setProtectionPreviewOnly, vercelProbe, type Exec } from './verc
 
 export type Options = {
 	dryRun: boolean;
-	force: boolean;
+	force: boolean; // replace generated secrets and values already on Vercel. Never touches the first admin.
+	resetFirstAdmin: boolean; // reset an existing account's password / make an existing host an admin / replace the password file
 	envFile: string; // where values are written, relative to the repo root
 	fromEnvFile?: string;
 	firstAdminEmail?: string;
@@ -311,22 +313,25 @@ async function firstAdmin(db: pg.Client, options: Options, deps: Deps, effective
 	// The text is never echoed back: it came from outside and ends up in the report.
 	if (!EMAIL.test(email)) return step('hosts.first_admin', 'failed', "That isn't a plain email address (letters, digits and . _ % + - only, one @, a real domain).", [humanNext('Ask the person for the email they will sign in with, then run the template with it.', EMAIL_TEMPLATE)]);
 	const asked = shellQuote(email);
-	const forceNext = (): Next => ({ kind: 'run', command: `npm run setup -- --first-admin-email ${asked} --force`, text: `If that is the right person: run npm run setup -- --first-admin-email ${asked} --force` });
+	// Never --force here: it also regenerates every secret, which signs all hosts out and makes phones look new.
+	const resetCommand = `npm run setup -- --first-admin-email ${asked} --reset-first-admin`;
+	const resetNext = (): Next => ({ kind: 'run', command: resetCommand, text: `If that is the right person: run ${resetCommand}` });
+	const forceWarning = ' (Not --force: that regenerates the secrets, which signs every host out and makes phones look new.)';
 	const host = (await db.query('select is_admin from public.hosts where email = $1', [email])).rows[0];
 	if (host?.is_admin) return step('hosts.first_admin', 'unchanged', `${email} is already an admin host. Nothing changed (no password was touched).`);
 	if (host) {
-		if (!options.force) return step('hosts.first_admin', 'failed', `${email} is already a host but not an admin. Making them one gives them power over every host, so setup won't without --force.`, [forceNext()]);
+		if (!options.resetFirstAdmin) return step('hosts.first_admin', 'failed', `${email} is already a host but not an admin. Making them one gives them power over every host, so setup won't without --reset-first-admin.${forceWarning}`, [resetNext()]);
 		if (options.dryRun) return step('hosts.first_admin', 'would', `Would make the existing host ${email} an admin.`);
 		await setHost(db, email, { name: options.firstAdminName, admin: true });
 		return step('hosts.first_admin', 'done', `${email} was already a host; made them an admin. Their password was not touched.`);
 	}
 	const account = (await db.query('select 1 from auth.users where lower(email) = $1', [email])).rows.length > 0;
-	if (account && !options.force) {
-		return step('hosts.first_admin', 'failed', `A Supabase account for ${email} already exists but isn't a host. Making it a host resets its password, so setup won't do that without --force.`, [forceNext()]);
+	if (account && !options.resetFirstAdmin) {
+		return step('hosts.first_admin', 'failed', `A Supabase account for ${email} already exists but isn't a host. Making it a host resets its password, so setup won't do that without --reset-first-admin.${forceWarning}`, [resetNext()]);
 	}
 	if (options.dryRun) return step('hosts.first_admin', 'would', `Would create ${email} as an admin host and write the first password to ${FIRST_ADMIN_FILE} (never to the screen).`);
 	if (!deps.isIgnored(FIRST_ADMIN_FILE)) return step('hosts.first_admin', 'failed', `${FIRST_ADMIN_FILE} isn't ignored by git, so a password written there could be committed. Nothing was made.`, [{ kind: 'edit', text: `Add ${FIRST_ADMIN_FILE} to .gitignore, then run setup again.` }]);
-	if (deps.exists(FIRST_ADMIN_FILE) && !options.force) return step('hosts.first_admin', 'failed', `${FIRST_ADMIN_FILE} already exists, and setup won't overwrite a file that may hold a password.`, [{ kind: 'run', command: `rm ${FIRST_ADMIN_FILE}`, text: `If you have already used it: delete it (rm ${FIRST_ADMIN_FILE}) and run setup again.` }]);
+	if (deps.exists(FIRST_ADMIN_FILE) && !options.resetFirstAdmin) return step('hosts.first_admin', 'failed', `${FIRST_ADMIN_FILE} already exists, and setup won't overwrite a file that may hold a password.${forceWarning}`, [{ kind: 'run', command: `rm ${FIRST_ADMIN_FILE}`, text: `If you have already used it: delete it (rm ${FIRST_ADMIN_FILE}) and run setup again.` }]);
 
 	// The file first, the account second: a password that exists only after a failed write would leave an
 	// account nobody can sign in to, and a rerun would call it "unchanged".
@@ -348,8 +353,8 @@ async function firstAdmin(db: pg.Client, options: Options, deps: Deps, effective
 		await db.query('rollback').catch(() => undefined);
 		deps.remove(FIRST_ADMIN_FILE);
 		const exists = await db.query('select 1 from auth.users where lower(email) = $1', [email]).then((found) => found.rows.length > 0, () => false);
-		const again = `npm run setup -- --first-admin-email ${asked}${exists ? ' --force' : ''}`;
-		const state = exists ? 'The Supabase account exists but is not a host (its password may have been reset), so a rerun needs --force to set a fresh one.' : 'No account was made, so a plain rerun starts from the beginning.';
+		const again = `npm run setup -- --first-admin-email ${asked}${exists ? ' --reset-first-admin' : ''}`;
+		const state = exists ? `The Supabase account exists but is not a host (its password may have been reset), so a rerun needs --reset-first-admin to set a fresh one.${forceWarning}` : 'No account was made, so a plain rerun starts from the beginning.';
 		return step('hosts.first_admin', 'failed', `${redact(failure(error), [password])}. The password file was removed. ${state}`, [{ kind: 'run', command: again, text: `Once the cause above is fixed, run: ${again}` }]);
 	}
 	return step('hosts.first_admin', 'done', `Created ${email} as an admin host. The first password is in ${FIRST_ADMIN_FILE} (permissions 0600); it was not printed.`, [humanNext(`Give the person the password in ${FIRST_ADMIN_FILE} privately (read the file, don't paste it into a chat log), have them sign in at the site root and keep it in a password manager, then delete the file.`)]);

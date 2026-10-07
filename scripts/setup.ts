@@ -16,14 +16,19 @@ migrations (which also turns on pg_cron and schedules the hourly purge), and, if
 first admin host. It ends by running \`npm run doctor\` and printing its verdict.
 
 It never asks a question: everything comes from the environment (.env.local) and these flags.
-It never overwrites a value it did not make unless you pass --force, never prints a secret value
+It never overwrites a value it did not make unless you pass --force (and never touches an existing
+account without --reset-first-admin), never prints a secret value
 (only "set (N chars)"), and refuses to touch this repo's production database.
 
 Flags:
   --dry-run                 show what would happen; change nothing
-  --force                   allow overwriting: regenerates the secrets (signs every host out) and lets
-                            --first-admin-email reset an existing account's password or make an existing
-                            host an admin
+  --force                   allow overwriting generated values: regenerates HOST_SESSION_SECRET,
+                            PARTICIPANT_SECRET and CRON_SECRET (signs every host out, phones look new) and
+                            replaces settings already on Vercel with --push-vercel-env. It never touches the
+                            first admin.
+  --reset-first-admin       lets --first-admin-email act on an account that already exists: reset its
+                            password (and make it a host), make an existing non-admin host an admin, or
+                            replace .volley-first-admin.txt. It never regenerates the secrets.
   --yes                     accepted and ignored: setup never prompts
   --from-env-file <path>    fill missing settings from another env file (e.g. one \`vercel env pull\` made)
   --env-out <path>          the file setup writes to (default .env.local)
@@ -53,7 +58,7 @@ if (args.includes('--help') || args.includes('-h')) {
 }
 
 const FLAGS_WITH_VALUE = ['--from-env-file', '--env-out', '--first-admin-email', '--first-admin-name', '--vercel-env'];
-const FLAGS = ['--dry-run', '--force', '--yes', '--skip-migrate', '--push-vercel-env', '--vercel-protection', '--disable-signup', '--json', ...FLAGS_WITH_VALUE];
+const FLAGS = ['--dry-run', '--force', '--reset-first-admin', '--yes', '--skip-migrate', '--push-vercel-env', '--vercel-protection', '--disable-signup', '--json', ...FLAGS_WITH_VALUE];
 const value = (flag: string): string | undefined => {
 	const at = args.indexOf(flag);
 	if (at < 0) return undefined;
@@ -73,6 +78,7 @@ if (unknown.length > 0) {
 const options: Options = {
 	dryRun: args.includes('--dry-run'),
 	force: args.includes('--force'),
+	resetFirstAdmin: args.includes('--reset-first-admin'),
 	envFile: value('--env-out') ?? '.env.local',
 	fromEnvFile: value('--from-env-file'),
 	firstAdminEmail: value('--first-admin-email'),

@@ -531,7 +531,7 @@ person need not read the output.
 - **`npm run setup`** is idempotent. It copies `NEXT_PUBLIC_…` names to `PUBLIC_…`,
   generates the three secrets, applies migrations (0008 turns on `pg_cron`), and with
   `--first-admin-email` makes the first admin. It never replaces a value it didn't make
-  without `--force`, and ends by running doctor. Vercel (`--push-vercel-env`,
+  without `--force` (secrets, values already on Vercel), and ends by running doctor. Vercel (`--push-vercel-env`,
   `--vercel-protection`) and Supabase (`--disable-signup`) changes happen only with their
   own flag, through the Vercel CLI for the project linked in `.vercel/`.
 - **Secrets are never printed**: output says `set (64 chars)`. The env file is written
@@ -550,8 +550,12 @@ person need not read the output.
   `.env.example`; `--env-out` refuses any other), are written to a 0600 temp file and
   renamed into place, and every report string is scrubbed of known secret values.
 - **Failure behaviour.** The first admin's password file is written before the account
-  is touched and removed if the account step fails; making an existing non-admin host an
-  admin needs `--force`. `--dry-run` only reads. `--vercel-protection` rewrites only
+  is touched and removed if the account step fails. Anything that acts on an account that
+  already exists (reset its password, make an existing non-admin host an admin, replace
+  the password file) needs its own flag, `--reset-first-admin`. `--force` never touches the
+  first admin, and `--reset-first-admin` never regenerates secrets: `--force` signs every
+  host out and makes phones look new, so no printed advice for the account case may
+  suggest it. `--dry-run` only reads. `--vercel-protection` rewrites only
   `all` (All Deployments), the one mode Vercel documents as covering production domains;
   Standard Protection and unknown modes are a warning for a person. A command that needs
   a person's input (an email) is a `human` step with a separate `template` field, never a
