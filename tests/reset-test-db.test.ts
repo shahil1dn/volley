@@ -83,7 +83,9 @@ test('the wipe touches only Volley\'s objects in public, our cron job, and auth 
 	assert.match(all, /delete from auth\.users/);
 	assert.match(all, /volley-purge-expired/);
 	assert.doesNotMatch(all, /drop schema/i, 'schemas are never dropped');
-	assert.doesNotMatch(all, /drop extension/i);
+	// A new project has no pg_cron, and migration 0008's grants fail if they run over an old install: so exactly this one extension goes.
+	assert.match(all, /drop extension if exists pg_cron\b/);
+	assert.deepEqual([...all.matchAll(/drop extension[^;\n]*/gi)].map((match) => match[0].trim().toLowerCase()), ['drop extension if exists pg_cron']);
 	assert.doesNotMatch(all, /truncate/i);
 	for (const statement of db.sql) {
 		for (const managed of ['storage', 'realtime', 'extensions', 'vault', 'graphql', 'pgsodium', 'supabase_functions', 'pg_catalog', 'information_schema']) {
