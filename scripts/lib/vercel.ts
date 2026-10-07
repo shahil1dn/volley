@@ -12,7 +12,10 @@ export const realExec = (cwd: string, timeoutMs = 60_000): Exec => (args, input)
 	const run = spawnSync('vercel', [...args, '--non-interactive'], { cwd, input, encoding: 'utf8', timeout: timeoutMs });
 	// No status means the CLI never ran to an end. That is not "a command that failed", and the fix is different.
 	if ((run.error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') throw new Error("the Vercel CLI isn't installed (install it with: npm i -g vercel)");
-	if (run.status === null) throw new Error(`the Vercel CLI did not finish within ${timeoutMs / 1000} seconds${run.signal ? ` (stopped by ${run.signal})` : ''}`);
+	const code = (run.error as NodeJS.ErrnoException | undefined)?.code;
+	if (code === 'ETIMEDOUT' || (run.status === null && run.signal)) throw new Error(`the Vercel CLI did not finish within ${timeoutMs / 1000} seconds${run.signal ? ` (stopped by ${run.signal})` : ''}`);
+	if (run.error) throw new Error(`the Vercel CLI could not be run (${code ?? run.error.message})`);
+	if (run.status === null) throw new Error('the Vercel CLI stopped without an exit code');
 	return { status: run.status, stdout: run.stdout ?? '', stderr: run.stderr ?? '' };
 };
 

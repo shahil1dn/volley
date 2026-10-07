@@ -34,6 +34,14 @@ test('a Vercel CLI that does not answer in time says so, not "exit 1"', () => {
 	assert.throws(() => withPath(`${dir}:/usr/bin:/bin`, () => exec(['env', 'ls'])), /did not finish within 0\.3 seconds/);
 });
 
+test('a Vercel CLI that cannot be run for another reason says what, and is not called a timeout', () => {
+	const dir = emptyDir();
+	writeFileSync(join(dir, 'vercel'), '#!/bin/sh\nexit 0\n');
+	chmodSync(join(dir, 'vercel'), 0o644); // present, but not executable
+	const exec = realExec(process.cwd());
+	assert.throws(() => withPath(dir, () => exec(['env', 'ls'])), (error: Error) => /could not be run \(EACCES\)/.test(error.message) && !/did not finish/.test(error.message));
+});
+
 test('a Vercel CLI that runs and fails is still an ordinary failure with its own first line', () => {
 	const dir = emptyDir();
 	writeFileSync(join(dir, 'vercel'), '#!/bin/sh\necho "Error: not logged in" >&2\nexit 1\n');
