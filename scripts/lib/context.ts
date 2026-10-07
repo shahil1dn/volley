@@ -4,6 +4,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import pg from 'pg';
 import { SUPABASE_ROOT_CA } from '../../src/lib/server/supabase-ca.ts';
+import { productionSetting, refuseProduction } from '../production-guard.ts';
 import type { Ctx } from './checks.ts';
 import { realExec, vercelProbe } from './vercel.ts';
 
@@ -29,6 +30,8 @@ export const reason = (error: unknown) => {
 
 // A direct connection as the owner, from the given settings (not only the process environment).
 export async function connectOwnerWith(env: Record<string, string | undefined>): Promise<pg.Client> {
+	// Here, at the one place every owner connection is made, so no caller can forget the guard.
+	refuseProduction(env, 'a database connection', 'Scripts never connect to the production database.');
 	const url = new URL(env.POSTGRES_URL_NON_POOLING ?? '');
 	url.searchParams.delete('sslmode');
 	const client = new pg.Client({ connectionString: url.toString(), ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 8000 });
@@ -41,7 +44,9 @@ export function realContext(root: string, env: Record<string, string | undefined
 	let owner: pg.Client | null = null;
 	let pooler: pg.Client | null = null;
 
+	const blocked = productionSetting(env) ? `${productionSetting(env)} points at the production database, so this check was not run.` : undefined;
 	const connectOwner: Ctx['connectOwner'] = async () => {
+		if (blocked) return { ok: false, reason: blocked };
 		if (owner) return { ok: true };
 		try {
 			// Same as scripts/pg-connect.ts: encrypted, certificate not checked (a laptop script).
@@ -55,6 +60,7 @@ export function realContext(root: string, env: Record<string, string | undefined
 	};
 
 	const connectPooler: Ctx['connectPooler'] = async () => {
+		if (blocked) return { ok: false, reason: blocked };
 		if (pooler) return { ok: true };
 		try {
 			const url = new URL(env.POSTGRES_URL ?? '');
@@ -81,6 +87,7 @@ export function realContext(root: string, env: Record<string, string | undefined
 			return { status: response.status, body: await response.json().catch(() => null) };
 		},
 		async query(sql) {
+			if (blocked) throw new Error(blocked);
 			if (!owner && !pooler) {
 				await connectOwner();
 				if (!owner) await connectPooler();
@@ -97,6 +104,7 @@ export function realContext(root: string, env: Record<string, string | undefined
 		},
 		connectOwner,
 		connectPooler,
+		blocked,
 		vercel: withVercel ? vercelProbe(realExec(root), () => readVercelLink(root)) : undefined,
 	};
 	return { ctx, close: async () => void (await Promise.all(clients.map((client) => client.end().catch(() => undefined)))) };

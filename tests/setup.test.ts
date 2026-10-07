@@ -12,10 +12,10 @@ import { createClient } from '@supabase/supabase-js';
 import type pg from 'pg';
 import { PRODUCTION_REF } from '../scripts/production-guard.ts';
 import { runChecks, type Ctx } from '../scripts/lib/checks.ts';
-import { connectOwnerWith } from '../scripts/lib/context.ts';
+import { connectOwnerWith, realContext } from '../scripts/lib/context.ts';
 import { parse } from '../scripts/lib/env.ts';
 import { toText } from '../scripts/lib/report.ts';
-import { FIRST_ADMIN_FILE, runSetup, summaryText, type Deps, type Options } from '../scripts/lib/setup.ts';
+import { FIRST_ADMIN_FILE, realDeps, runSetup, summaryText, type Deps, type Options } from '../scripts/lib/setup.ts';
 import { skipWithoutDatabase as skip } from './db-helpers.ts';
 
 const REF = 'abcdefghijklmnopqrst';
@@ -53,6 +53,8 @@ function depsFor(root: string, env: Record<string, string | undefined>, over: Pa
 		write: (path, text, mode) => {
 			writeFileSync(join(root, path), text, { mode });
 		},
+		isIgnored: () => true,
+		remove: (path) => rmSync(join(root, path), { force: true }),
 		connectOwner: async () => {
 			throw new Error('this test must not connect to a database');
 		},
@@ -169,6 +171,77 @@ test('setup refuses to run against this repo\'s production database, before writ
 	assert.match(result.steps[0].detail, /points at the production database/);
 	assert.equal(existsSync(join(root, '.env.local')), false);
 	assert.ok(!everything(result, OPTIONS).includes(`postgres.${PRODUCTION_REF}:pw`), 'the connection string was printed');
+});
+
+test('a production address that arrives ONLY through --from-env-file is refused: nothing written, no connection, no Vercel call, doctor skips its database checks', async () => {
+	const root = folder({ '.env.pulled.local': `POSTGRES_URL_NON_POOLING=postgres://postgres.${PRODUCTION_REF}:pw-IMPORTED@127.0.0.1:1/postgres\n` });
+	const calls: Calls = { exec: [], fetches: [] };
+	let connects = 0;
+	let doctorConnects = 0;
+	const doctor: Deps['doctor'] = async (e) => ({
+		ctx: {
+			env: e, readFile: () => null, migrationsOnDisk: () => [], fetchJson: async () => ({ status: 200, body: { disable_signup: true } }),
+			query: async () => { doctorConnects++; return []; },
+			connectOwner: async () => { doctorConnects++; return { ok: true }; },
+			connectPooler: async () => { doctorConnects++; return { ok: true }; },
+		},
+		close: async () => undefined,
+	});
+	const deps = depsFor(root, { ...STORE_ENV }, { doctor, vercelLink: () => ({ projectId: 'p', orgId: 't' }), connectOwner: async () => { connects++; throw new Error('connected'); } }, calls);
+	const result = await runSetup({ ...OPTIONS, skipMigrate: false, firstAdminEmail: 'a@example.com', pushVercelEnv: true, vercelProtection: true, fromEnvFile: '.env.pulled.local' }, deps);
+	const guard = result.steps.find((s) => s.id === 'guard.production');
+	assert.equal(guard?.status, 'failed');
+	assert.match(guard?.detail ?? '', /POSTGRES_URL_NON_POOLING points at the production database/);
+	assert.equal(connects, 0, 'setup connected to production');
+	assert.equal(doctorConnects, 0, 'doctor connected to production');
+	assert.equal(calls.exec.length, 0, 'nothing was pushed to Vercel');
+	assert.equal(existsSync(join(root, '.env.local')), false, 'the production address was not written to the env file');
+	assert.ok(!everything(result, OPTIONS).includes('pw-IMPORTED'), 'the connection string was printed');
+	for (const id of ['db.connect', 'db.pooler_tls', 'db.migrations', 'db.pg_cron', 'hosts.first_admin']) assert.equal(result.checks.find((c) => c.id === id)?.status, 'skipped', id);
+	assert.equal(result.exitCode, 2, 'only a person can fix this');
+});
+
+test('the database connection itself refuses production, so a future step cannot skip the guard', async () => {
+	await assert.rejects(connectOwnerWith({ POSTGRES_URL_NON_POOLING: `postgres://postgres.${PRODUCTION_REF}:pw@127.0.0.1:1/postgres` }), /production database/);
+	const env = { POSTGRES_URL: `postgres://postgres.${PRODUCTION_REF}:pw@127.0.0.1:1/postgres`, POSTGRES_URL_NON_POOLING: `postgres://postgres.${PRODUCTION_REF}:pw@127.0.0.1:1/postgres` };
+	const { ctx, close } = realContext(process.cwd(), env, false);
+	try {
+		const checks = await runChecks(ctx);
+		for (const id of ['db.connect', 'db.pooler_tls', 'db.migrations', 'db.pg_cron']) assert.equal(checks.find((c) => c.id === id)?.status, 'skipped', `${id}: a real attempt to 127.0.0.1:1 would have failed, not skipped`);
+	} finally {
+		await close();
+	}
+});
+
+test('.gitignore covers every .env* name except .env.example, including the names setup suggests', () => {
+	const ignored = (name: string) => spawnSync('git', ['check-ignore', '-q', '--no-index', name], { encoding: 'utf8' }).status === 0;
+	for (const name of ['.env', '.env.local', '.env.pulled', '.env.pulled.local', '.env.production', '.env.nothing']) assert.ok(ignored(name), `${name} is not ignored`);
+	assert.equal(ignored('.env.example'), false, '.env.example is meant to be committed');
+	for (const name of [FIRST_ADMIN_FILE, `${FIRST_ADMIN_FILE}.123.tmp`]) assert.ok(ignored(name), `${name} is not ignored`);
+});
+
+test('--env-out refuses a path git does not ignore: nothing written, nothing printed', async () => {
+	const root = folder();
+	const result = await runSetup({ ...OPTIONS, envFile: '.env.custom' }, depsFor(root, { ...STORE_ENV }, { isIgnored: () => false }));
+	const refused = result.steps.find((s) => s.id === 'env.out');
+	assert.equal(refused?.status, 'failed');
+	assert.match(refused?.detail ?? '', /\.env\.custom/);
+	assert.equal(refused?.next[0].command, 'npm run setup -- --env-out .env.local');
+	assert.equal(existsSync(join(root, '.env.custom')), false);
+	assert.ok(!result.steps.some((s) => s.id === 'env.file'));
+	const allowed = await runSetup({ ...OPTIONS, envFile: '.env.custom' }, depsFor(root, { ...STORE_ENV }, { isIgnored: () => true }));
+	assert.ok(allowed.steps.some((s) => s.id === 'env.file' && s.status === 'done'));
+});
+
+test('the real isIgnored asks git: ignored in a repo that ignores it, not ignored otherwise, and allowed where there is no repo', () => {
+	const repo = folder({ '.gitignore': '.env*\n!.env.example\n' });
+	assert.equal(spawnSync('git', ['init', '-q'], { cwd: repo }).status, 0);
+	const hooks = { connectOwner: connectOwnerWith, authAdmin: () => admin(), exec: () => ({ status: 0, stdout: '', stderr: '' }), vercelLink: () => null, doctor: async () => { throw new Error('unused'); } };
+	const deps = realDeps(repo, {}, hooks);
+	assert.equal(deps.isIgnored('.env.pulled'), true);
+	assert.equal(deps.isIgnored('.env.example'), false);
+	assert.equal(deps.isIgnored('notes.txt'), false);
+	assert.equal(realDeps(folder(), {}, hooks).isIgnored('anything.txt'), true, 'no repo, nothing to commit to');
 });
 
 test('setup with no TTY and a missing flag value stops with a message naming the flag, and never waits for input', () => {

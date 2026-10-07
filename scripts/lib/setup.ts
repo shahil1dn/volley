@@ -1,10 +1,11 @@
 // `npm run setup`: gets a copy of Volley ready, safe to run again. Built for an AI agent first:
 // it never asks a question, never overwrites a value it didn't make unless --force, never prints
 // a secret value, and ends by running doctor so its last line is the verdict.
-import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type pg from 'pg';
-import { refuseProduction } from '../production-guard.ts';
+import { productionSetting, refuseProduction } from '../production-guard.ts';
 import { exitCode, publicRenames, runChecks, type Check, type Ctx, type Next } from './checks.ts';
 import { EMAIL, makeHost, setHost } from './make-host.ts';
 import { applyMigrations, pendingMigrations } from './migrations.ts';
@@ -38,6 +39,9 @@ export type Deps = {
 	exists(path: string): boolean;
 	read(path: string): string | null;
 	write(path: string, text: string, mode: number): void;
+	remove(path: string): void;
+	// Does git ignore this path? True also where there is no git repo (nothing to commit to).
+	isIgnored(path: string): boolean;
 	connectOwner(env: Record<string, string | undefined>): Promise<pg.Client>;
 	authAdmin(env: Record<string, string | undefined>): AuthAdmin;
 	exec: Exec;
@@ -65,6 +69,12 @@ export const realDeps = (root: string, env: Record<string, string | undefined>, 
 		writeFileSync(join(root, path), text, { mode });
 		chmodSync(join(root, path), mode); // mode only applies to a new file; make an existing one private too
 	},
+	remove: (path) => rmSync(join(root, path), { force: true }),
+	isIgnored: (path) => {
+		// 0: ignored. 1: not ignored. Anything else (no repo, no git): nothing can be committed.
+		const run = spawnSync('git', ['check-ignore', '-q', '--', path], { cwd: root });
+		return run.status !== 1;
+	},
 	fetch,
 	...hooks,
 });
@@ -83,6 +93,12 @@ export async function runSetup(options: Options, deps: Deps): Promise<{ steps: S
 		return finish(steps, options, deps, effective);
 	}
 
+	// Secrets go only to a file git ignores, so a later `git add .` can't publish them.
+	if (!deps.isIgnored(options.envFile)) {
+		steps.push(step('env.out', 'failed', `${options.envFile} isn't ignored by git, so secrets written there could be committed. Nothing was written.`, [{ kind: 'run', command: 'npm run setup -- --env-out .env.local', text: 'Write to a file git ignores: npm run setup -- --env-out .env.local (every .env* name is ignored except .env.example).' }]));
+		return finish(steps, options, deps, effective);
+	}
+
 	const put = (name: string, value: string) => {
 		fileText = setLine(fileText, name, value);
 		effective = { ...effective, [name]: value };
@@ -90,12 +106,14 @@ export async function runSetup(options: Options, deps: Deps): Promise<{ steps: S
 	};
 
 	// 1. Values from another env file (for example one `vercel env pull` made). Fills gaps only.
+	let imported: Record<string, string> = {}; // also in a dry run, so the production guard sees what would arrive
 	if (options.fromEnvFile) {
 		const text = deps.read(options.fromEnvFile);
-		if (text === null) steps.push(step('env.import', 'failed', `The file ${options.fromEnvFile} doesn't exist.`, [{ kind: 'run', command: 'vercel env pull .env.pulled', text: 'Make it with: vercel env pull .env.pulled (needs a linked project), or write the Supabase values into it.' }]));
+		if (text === null) steps.push(step('env.import', 'failed', `The file ${options.fromEnvFile} doesn't exist.`, [{ kind: 'run', command: 'vercel env pull .env.pulled.local', text: 'Make it with: vercel env pull .env.pulled.local (needs a linked project; every .env* name is git-ignored), or write the Supabase values into it.' }]));
 		else {
 			const incoming = parse(text);
 			const names = Object.keys(incoming).filter((name) => (VARS.some((spec) => spec.name === name) || name.startsWith('NEXT_PUBLIC_') || name.startsWith('PUBLIC_')) && incoming[name] && !effective[name]);
+			imported = Object.fromEntries(names.map((name) => [name, incoming[name]]));
 			if (!options.dryRun) for (const name of names) put(name, incoming[name]);
 			steps.push(step('env.import', names.length === 0 ? 'unchanged' : options.dryRun ? 'would' : 'done', names.length === 0 ? `Nothing to import from ${options.fromEnvFile}: every name it has is already set.` : `${options.dryRun ? 'Would import' : 'Imported'} ${names.join(', ')} from ${options.fromEnvFile}.`));
 		}
@@ -125,6 +143,15 @@ export async function runSetup(options: Options, deps: Deps): Promise<{ steps: S
 		made.length > 0 ? `${options.dryRun ? 'Would generate' : 'Generated'} ${made.map((name) => `${name}${options.dryRun ? '' : ` (${mask(effective[name])})`}`).join(', ')}${options.force ? ' (--force replaced any existing value: hosts are signed out and phones look new)' : ''}.` : '',
 		kept.length > 0 ? `Kept as they were: ${kept.join(', ')}.` : '',
 	].filter(Boolean).join(' ')));
+
+	// The guard again, on the FINAL values: an address that only arrived through the import (or a
+	// rename) must be refused before anything is written, connected to or pushed.
+	try {
+		refuseProduction({ ...effective, ...imported }, 'setup', 'Setup never writes to the production database; ask the owner to run it with their approval.');
+	} catch (error) {
+		steps.push(step('guard.production', 'failed', failure(error), [humanNext('Point the settings (.env.local and any --from-env-file) at a test or fresh Supabase project, not production.')]));
+		return finish(steps, options, deps, { ...effective, ...imported });
+	}
 
 	// Write the env file once, private to the owner.
 	if (writes.length > 0 && !options.dryRun) {
@@ -179,7 +206,13 @@ export async function runSetup(options: Options, deps: Deps): Promise<{ steps: S
 async function finish(steps: Step[], options: Options, deps: Deps, effective: Record<string, string | undefined>) {
 	// The last thing setup does is ask doctor, on the values as they are now.
 	const env = { ...effective };
-	const { ctx, close } = await deps.doctor(env);
+	const { ctx: made, close } = await deps.doctor(env);
+	// If the values point at production, doctor skips every database and Supabase check: it never connects.
+	const blocked = productionSetting(env) ? `${productionSetting(env)} points at the production database, so this check was not run.` : undefined;
+	const refuse = async () => {
+		throw new Error(blocked);
+	};
+	const ctx: Ctx = blocked ? { ...made, blocked, query: refuse, connectOwner: async () => ({ ok: false, reason: blocked }), connectPooler: async () => ({ ok: false, reason: blocked }) } : made;
 	try {
 		const checks = await runChecks(ctx);
 		const stepsFailed = steps.some((entry) => entry.status === 'failed');

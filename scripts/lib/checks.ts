@@ -36,7 +36,12 @@ export type Ctx = {
 	connectPooler(): Promise<{ ok: true } | { ok: false; reason: string }>;
 	// Only when --vercel was asked for; otherwise undefined and those checks are skipped.
 	vercel?: VercelProbe;
+	// Set when the settings point at this repo's production database: every database check is
+	// skipped with this sentence and nothing connects.
+	blocked?: string;
 };
+
+const blockedCheck = (ctx: Ctx, id: string): Check | null => (ctx.blocked ? { id, status: 'skipped', summary: ctx.blocked, next: [] } : null);
 
 // Vercel function regions the app can be pinned to, and the AWS region Supabase names for the
 // same place (Vercel's regions list; the pooler host carries the AWS name). The pairs are the
@@ -186,6 +191,8 @@ function dbRegion(ctx: Ctx): Check {
 }
 
 async function dbConnect(ctx: Ctx): Promise<Check> {
+	const blocked = blockedCheck(ctx, 'db.connect');
+	if (blocked) return blocked;
 	if (!ctx.env.POSTGRES_URL_NON_POOLING) return { id: 'db.connect', status: 'skipped', summary: 'POSTGRES_URL_NON_POOLING is not set (see env.required).', next: [] };
 	const result = await ctx.connectOwner();
 	if (result.ok) return { id: 'db.connect', status: 'ok', summary: 'Connected to the database as its owner (the address scripts use).', next: [] };
@@ -193,6 +200,8 @@ async function dbConnect(ctx: Ctx): Promise<Check> {
 }
 
 async function dbPoolerTls(ctx: Ctx): Promise<Check> {
+	const blocked = blockedCheck(ctx, 'db.pooler_tls');
+	if (blocked) return blocked;
 	if (!ctx.env.POSTGRES_URL) return { id: 'db.pooler_tls', status: 'skipped', summary: 'POSTGRES_URL is not set (see env.required).', next: [] };
 	const result = await ctx.connectPooler();
 	if (result.ok) return { id: 'db.pooler_tls', status: 'ok', summary: "Connected through the pooler, verifying its certificate against the app's pinned Supabase root CA.", next: [] };
@@ -210,6 +219,8 @@ async function dbPoolerTls(ctx: Ctx): Promise<Check> {
 const tableMissing = (error: unknown) => (error as { code?: string })?.code === '42P01' || /does not exist/i.test(String((error as Error)?.message));
 
 async function dbMigrations(ctx: Ctx): Promise<Check> {
+	const blocked = blockedCheck(ctx, 'db.migrations');
+	if (blocked) return blocked;
 	const onDisk = ctx.migrationsOnDisk();
 	let applied: string[];
 	try {
@@ -229,6 +240,8 @@ async function dbMigrations(ctx: Ctx): Promise<Check> {
 }
 
 async function dbPgCron(ctx: Ctx): Promise<Check> {
+	const blocked = blockedCheck(ctx, 'db.pg_cron');
+	if (blocked) return blocked;
 	let rows: Rows;
 	try {
 		rows = await ctx.query("select active, schedule from cron.job where jobname = 'volley-purge-expired'");
@@ -272,6 +285,8 @@ async function authSignup(ctx: Ctx): Promise<Check> {
 }
 
 async function hostsFirstAdmin(ctx: Ctx): Promise<Check> {
+	const blocked = blockedCheck(ctx, 'hosts.first_admin');
+	if (blocked) return blocked;
 	let rows: Rows;
 	try {
 		rows = await ctx.query('select count(*)::int as total, count(*) filter (where is_admin)::int as admins from public.hosts');

@@ -1,5 +1,6 @@
 .vercel
-.env*.local
+.env*
+!.env.example
 node_modules
 .svelte-kit
 *.tsbuildinfo
@@ -8,4 +9,4 @@ playwright-report
 screenshots
 
 # The first admin host's password, written by `npm run setup -- --first-admin-email`
-.volley-first-admin.txt
+.volley-first-admin.txt*
