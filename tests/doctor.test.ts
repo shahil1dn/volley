@@ -348,7 +348,7 @@ test('the JSON has a stable shape: ids, status, summary, next actions, counts, e
 		assert.ok(['ok', 'fail', 'warn', 'skipped'].includes(check.status));
 		for (const next of check.next) {
 			assert.ok(['run', 'edit', 'human'].includes(next.kind));
-			assert.ok(Object.keys(next).every((key) => ['kind', 'text', 'command', 'template'].includes(key)), `unexpected field in ${JSON.stringify(next)}`);
+			assert.ok(Object.keys(next).every((key) => ['kind', 'text', 'command', 'template', 'confirm'].includes(key)), `unexpected field in ${JSON.stringify(next)}`);
 		}
 	}
 	assert.equal(toJson(await runChecks(ctxWith())).exitCode, 0);
@@ -366,6 +366,44 @@ test('a `run` command is always something that can be executed as written: no pl
 			for (const next of check.next) if (next.kind === 'run') assert.ok(next.command && !/[<>]/.test(next.command), `${check.id}: ${next.command}`);
 		}
 	}
+});
+
+// Commands that change a person's account or destroy something. An agent must get a yes before running them,
+// so each carries `confirm`, and nothing else does.
+const NEEDS_CONFIRM = /--force|--reset-first-admin|--disable-signup|vercel link|--push-vercel-env|--vercel-protection/;
+
+test('every run step that changes an account or destroys something says so with `confirm`, and no other step does', async () => {
+	const linked = { projectId: 'p', orgId: 't' };
+	const vercel = (over: { link?: typeof linked | null; protection?: string | null; names?: Record<string, string[]> }): Ctx['vercel'] => ({ linked: () => (over.link === undefined ? linked : over.link), envNames: async () => over.names ?? {}, protection: async () => (over.protection === undefined ? null : over.protection) });
+	const scenarios: [string, Over, string][] = [
+		['weak secret', { env: { ...GOOD_ENV, HOST_SESSION_SECRET: 'short' } }, 'destructive'],
+		['sign-up on, token set', { env: { ...GOOD_ENV, SUPABASE_ACCESS_TOKEN: 'sbp_x' }, settings: { status: 200, body: { disable_signup: false } } }, 'account'],
+		['not linked', { vercel: vercel({ link: null }) }, 'account'],
+		['missing on vercel', { vercel: vercel({ names: { production: [], preview: [] } }) }, 'account'],
+		['protection covers production', { vercel: vercel({ protection: 'all' }) }, 'account'],
+	];
+	const seen = new Set<string>();
+	for (const [label, over, kind] of scenarios) {
+		const checks = await runChecks(ctxWith(over));
+		const flagged = checks.flatMap((check) => check.next).filter((next) => next.kind === 'run' && NEEDS_CONFIRM.test(next.command ?? ''));
+		assert.ok(flagged.length > 0, `${label}: expected a sensitive run step`);
+		for (const next of flagged) {
+			assert.equal(next.confirm, kind, `${label}: ${next.command}`);
+			seen.add(next.command ?? '');
+		}
+	}
+	assert.equal(seen.size, 5, `five different sensitive commands were exercised: ${[...seen].join(' | ')}`);
+	// The reverse: `confirm` appears on nothing else, in any scenario.
+	for (const [, over] of scenarios.concat([['plain', { hosts: { total: 0, admins: 0 } }, ''], ['pending', { applied: [] }, '']])) {
+		for (const next of (await runChecks(ctxWith(over))).flatMap((check) => check.next)) {
+			if (next.confirm) assert.match(next.command ?? '', NEEDS_CONFIRM, `unexpected confirm on ${next.command}`);
+		}
+	}
+});
+
+test('the text report tells an agent to ask first on a step that needs a yes', async () => {
+	const text = toText(await runChecks(ctxWith({ env: { ...GOOD_ENV, HOST_SESSION_SECRET: 'short' } })));
+	assert.match(text, /-> Run: npm run setup -- --force[^\n]*\[ask the person first\]/);
 });
 
 test('no result, in text or JSON, ever contains a secret value, however many checks fail', async () => {

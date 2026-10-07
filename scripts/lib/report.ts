@@ -25,7 +25,7 @@ export function toText(checks: Check[]): string {
 	for (const check of checks) {
 		lines.push(`[${MARK[check.status]}] ${check.id}: ${check.summary}`);
 		if (check.status === 'fail' || check.status === 'warn' || (check.status === 'skipped' && check.next.length > 0)) {
-			for (const next of check.next) lines.push(`        -> ${next.text}`);
+			for (const next of check.next) lines.push(`        -> ${next.text}${next.confirm ? ' [ask the person first]' : ''}`);
 		}
 	}
 	const { counts, exitCode: code } = toJson(checks);

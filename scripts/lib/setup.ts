@@ -363,14 +363,14 @@ async function firstAdmin(db: pg.Client, options: Options, deps: Deps, effective
 		const exists = await db.query('select 1 from auth.users where lower(email) = $1', [email]).then((found) => found.rows.length > 0, () => false);
 		const again = `npm run setup -- --first-admin-email ${asked}${exists ? ' --reset-first-admin' : ''}`;
 		const state = exists ? `The Supabase account exists but is not a host (its password may have been reset), so a rerun needs --reset-first-admin to set a fresh one.${forceWarning}` : 'No account was made, so a plain rerun starts from the beginning.';
-		return step('hosts.first_admin', 'failed', `${redact(failure(error), [password])}. The password file was removed. ${state}`, [{ kind: 'run', command: again, text: `Once the cause above is fixed, run: ${again}` }]);
+		return step('hosts.first_admin', 'failed', `${redact(failure(error), [password])}. The password file was removed. ${state}`, [{ kind: 'run', command: again, text: `Once the cause above is fixed, run: ${again}`, ...(exists ? { confirm: 'destructive' as const } : {}) }]);
 	}
 	return step('hosts.first_admin', 'done', `Created ${email} as an admin host. The first password is in ${FIRST_ADMIN_FILE} (permissions 0600); it was not printed.`, [humanNext(`Give the person the password in ${FIRST_ADMIN_FILE} privately (read the file, don't paste it into a chat log), have them sign in at the site root and keep it in a password manager, then delete the file.`)]);
 }
 
 async function pushVercelEnv(options: Options, deps: Deps, effective: Record<string, string | undefined>): Promise<Step> {
 	const link = deps.vercelLink();
-	if (!link) return step('vercel.env', 'failed', 'This folder is not linked to a Vercel project, so there is nowhere to push to.', [{ kind: 'run', command: 'vercel link', text: 'Run: vercel link (pick the project), then run setup again with --push-vercel-env.' }]);
+	if (!link) return step('vercel.env', 'failed', 'This folder is not linked to a Vercel project, so there is nowhere to push to.', [{ kind: 'run', command: 'vercel link', text: 'Run: vercel link (pick the project), then run setup again with --push-vercel-env.', confirm: 'account' }]);
 	let present: Record<string, string[]>;
 	try {
 		present = await vercelProbe(deps.exec, () => link).envNames();
@@ -403,7 +403,7 @@ async function pushVercelEnv(options: Options, deps: Deps, effective: Record<str
 
 async function protectionStep(options: Options, deps: Deps): Promise<Step> {
 	const link = deps.vercelLink();
-	if (!link) return step('vercel.protection', 'failed', 'This folder is not linked to a Vercel project.', [{ kind: 'run', command: 'vercel link', text: 'Run: vercel link, then run setup again with --vercel-protection.' }]);
+	if (!link) return step('vercel.protection', 'failed', 'This folder is not linked to a Vercel project.', [{ kind: 'run', command: 'vercel link', text: 'Run: vercel link, then run setup again with --vercel-protection.', confirm: 'account' }]);
 	try {
 		const current = await vercelProbe(deps.exec, () => link).protection();
 		if (current === null || current === 'preview') return step('vercel.protection', 'unchanged', 'Vercel Authentication already covers preview deployments only (or is off).');
@@ -445,7 +445,7 @@ export function summaryText(steps: Step[], options: Options): string {
 	const lines = [options.dryRun ? 'DRY RUN: nothing was changed. This is what setup would do.' : 'Setup summary:'];
 	for (const entry of steps) {
 		lines.push(`[${entry.status.padEnd(9)}] ${entry.id}: ${entry.detail}`);
-		for (const next of entry.next) lines.push(`             -> ${next.text}`);
+		for (const next of entry.next) lines.push(`             -> ${next.text}${next.confirm ? ' [ask the person first]' : ''}`);
 	}
 	return lines.join('\n');
 }

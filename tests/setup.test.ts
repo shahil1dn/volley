@@ -517,6 +517,19 @@ test('first admin: the password file must be git-ignored before anything is made
 	assert.deepEqual(unignored.log, [], 'nothing written, nothing created');
 });
 
+test('setup\'s own account-changing run steps carry `confirm`: vercel link, and a --reset-first-admin rerun (but not a plain rerun)', async () => {
+	const unlinked = await runSetup({ ...OPTIONS, pushVercelEnv: true, vercelProtection: true }, depsFor(folder(), {}));
+	for (const id of ['vercel.env', 'vercel.protection']) {
+		const next = unlinked.steps.find((s) => s.id === id)?.next.find((n) => n.command === 'vercel link');
+		assert.equal(next?.confirm, 'account', id);
+	}
+	const account = await runSetup(ADMIN_OPTIONS, fakeAdminWorld({}, { failPromote: true }).deps);
+	assert.equal(account.steps.find((s) => s.id === 'hosts.first_admin')?.next[0].confirm, 'destructive', 'the rerun resets an account that exists');
+	const none = await runSetup(ADMIN_OPTIONS, fakeAdminWorld({}, { failCreate: true }).deps);
+	assert.equal(none.steps.find((s) => s.id === 'hosts.first_admin')?.next[0].confirm, undefined, 'a plain rerun changes nothing that exists');
+	assert.match(summaryText(account.steps, ADMIN_OPTIONS), /\[ask the person first\]/);
+});
+
 test('first admin: a bad email is refused without echoing it, and the fix is a person\'s step with a template, never a command', async () => {
 	const hostile = 'a@b.com; touch /tmp/pwned #';
 	const world = fakeAdminWorld({});

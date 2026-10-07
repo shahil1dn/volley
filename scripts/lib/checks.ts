@@ -8,10 +8,12 @@ export type Status = 'ok' | 'fail' | 'warn' | 'skipped';
 // run: a command the agent can run, exactly as written (`command`, never with a placeholder in it).
 // edit: a file change the agent can make. human: a person must. `template` is a command with a
 // <PLACEHOLDER> that only a person can fill in (an email, say): never run it as it stands.
-export type Next = { kind: 'run' | 'edit' | 'human'; text: string; command?: string; template?: string };
+// `confirm`: a run step that changes a person's account ('account') or destroys something that can't be
+// brought back ('destructive'). The agent must have the person's yes before running it.
+export type Next = { kind: 'run' | 'edit' | 'human'; text: string; command?: string; template?: string; confirm?: 'account' | 'destructive' };
 export type Check = { id: string; status: Status; summary: string; next: Next[] };
 
-const run = (command: string, text = ''): Next => ({ kind: 'run', command, text: text || `Run: ${command}` });
+const run = (command: string, text = '', confirm?: Next['confirm']): Next => ({ kind: 'run', command, text: text || `Run: ${command}`, ...(confirm ? { confirm } : {}) });
 const edit = (text: string): Next => ({ kind: 'edit', text });
 export const human = (text: string, template?: string): Next => ({
 	kind: 'human',
@@ -118,7 +120,7 @@ function envSecrets(ctx: Ctx): Check {
 			id: 'env.secrets',
 			status: 'fail',
 			summary: `Too short to be safe: ${weak.map((spec) => `${spec.name} (needs ${spec.minLength}+ characters)`).join(', ')}.`,
-			next: [run('npm run setup -- --force', 'Run: npm run setup -- --force (replaces them with fresh ones; this signs every host out and makes phones look new).')],
+			next: [run('npm run setup -- --force', 'Run: npm run setup -- --force (replaces them with fresh ones; this signs every host out and makes phones look new).', 'destructive')],
 		};
 	}
 	if (!ctx.env.CRON_SECRET) {
@@ -285,7 +287,7 @@ async function authSignup(ctx: Ctx): Promise<Check> {
 			status: 'fail',
 			summary: 'Anyone on the internet can create a Supabase account on this project (public sign-up is on). The app refuses such accounts, but switch it off.',
 			next: [
-				...(ctx.env.SUPABASE_ACCESS_TOKEN ? [run('npm run setup -- --disable-signup', 'Run: npm run setup -- --disable-signup (SUPABASE_ACCESS_TOKEN is set, so it can ask the Supabase Management API to switch sign-up off).')] : []),
+				...(ctx.env.SUPABASE_ACCESS_TOKEN ? [run('npm run setup -- --disable-signup', 'Run: npm run setup -- --disable-signup (SUPABASE_ACCESS_TOKEN is set, so it can ask the Supabase Management API to switch sign-up off).', 'account')] : []),
 				human('Supabase dashboard → your project → Authentication → Sign In / Providers → turn off "Allow new users to sign up" → Save. (Menu wording as best known; not confirmed in the docs.) Then run `npm run doctor` again.'),
 			],
 		};
@@ -327,7 +329,7 @@ function vercelLinked(ctx: Ctx): Check {
 		id: 'vercel.linked',
 		status: 'fail',
 		summary: 'This folder is not linked to a Vercel project, so nothing can be checked or set there.',
-		next: [run('vercel link', 'Run: vercel link (pick or create the project).'), human('If the CLI says you are not logged in: run `vercel login` and approve the sign-in in the browser it opens.')],
+		next: [run('vercel link', 'Run: vercel link (pick or create the project).', 'account'), human('If the CLI says you are not logged in: run `vercel login` and approve the sign-in in the browser it opens.')],
 	};
 }
 
@@ -346,7 +348,7 @@ async function vercelEnv(ctx: Ctx): Promise<Check> {
 	const fromGenerated = missing.filter((entry) => VARS.find((spec) => spec.name === entry.name)?.origin !== 'supabase');
 	const fromSupabase = missing.filter((entry) => VARS.find((spec) => spec.name === entry.name)?.origin === 'supabase');
 	const next: Next[] = [];
-	if (fromGenerated.length > 0) next.push(run('npm run setup -- --push-vercel-env', 'Run: npm run setup -- --push-vercel-env (adds the generated secrets to the targets that lack them; never overwrites).'));
+	if (fromGenerated.length > 0) next.push(run('npm run setup -- --push-vercel-env', 'Run: npm run setup -- --push-vercel-env (adds the generated secrets to the targets that lack them; never overwrites).', 'account'));
 	if (fromSupabase.length > 0) next.push(human('Vercel dashboard → Storage → connect the Supabase project to this Vercel project for Production and Preview (it sets SUPABASE_URL, POSTGRES_URL … for you). The publishable key then needs the PUBLIC_ name: run `npm run setup -- --push-vercel-env` afterwards.'));
 	return { id: 'vercel.env', status: 'fail', summary: `Missing on Vercel: ${missing.map((entry) => `${entry.name} (${entry.target})`).join(', ')}.`, next };
 }
@@ -368,7 +370,7 @@ async function vercelProtection(ctx: Ctx): Promise<Check> {
 			id: 'vercel.protection',
 			status: 'fail',
 			summary: 'Vercel Authentication is on for All Deployments, production included; the daily keep-alive cron then gets a login page instead of the app and Supabase can pause the project.',
-			next: [run('npm run setup -- --vercel-protection', 'Run: npm run setup -- --vercel-protection (sets Vercel Authentication to preview deployments only).'), human('Or by hand: Vercel dashboard → the project → Settings → Deployment Protection → Vercel Authentication → choose "Only Preview Deployments" → Save.')],
+			next: [run('npm run setup -- --vercel-protection', 'Run: npm run setup -- --vercel-protection (sets Vercel Authentication to preview deployments only).', 'account'), human('Or by hand: Vercel dashboard → the project → Settings → Deployment Protection → Vercel Authentication → choose "Only Preview Deployments" → Save.')],
 		};
 	}
 	const standard = type === 'prod_deployment_urls_and_all_previews';
