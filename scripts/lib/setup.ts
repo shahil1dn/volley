@@ -7,7 +7,7 @@ import { existsSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { dirname, join, sep } from 'node:path';
 import type pg from 'pg';
 import { productionSetting, refuseProduction } from '../production-guard.ts';
-import { exitCode, human, publicRenames, runChecks, type Check, type Ctx, type Next } from './checks.ts';
+import { cliMissing, exitCode, human, publicRenames, runChecks, vercelProblemNext, type Check, type Ctx, type Next } from './checks.ts';
 import { EMAIL, makeHost, setHost } from './make-host.ts';
 import { applyMigrations, pendingMigrationsReadOnly } from './migrations.ts';
 import { ENV_NAME, VARS, makeSecret, mask, parse, redact, redactDeep, secretValues, setLine } from './env.ts';
@@ -375,7 +375,7 @@ async function pushVercelEnv(options: Options, deps: Deps, effective: Record<str
 	try {
 		present = await vercelProbe(deps.exec, () => link).envNames();
 	} catch (error) {
-		return step('vercel.env', 'failed', failure(error), [humanNext('Run `vercel login` and approve it in the browser, then run setup again.')]);
+		return step('vercel.env', 'failed', failure(error), [vercelProblemNext(error, 'run setup again')]);
 	}
 	const todo: { name: string; target: string; replace: boolean }[] = [];
 	for (const target of options.vercelTargets) {
@@ -396,7 +396,7 @@ async function pushVercelEnv(options: Options, deps: Deps, effective: Record<str
 			} else addEnv(deps.exec, entry.name, entry.target, effective[entry.name] as string, SENSITIVE.has(entry.name));
 		}
 	} catch (error) {
-		return step('vercel.env', 'failed', failure(error), [humanNext('Run `vercel login` if it is not logged in; otherwise add the setting in the Vercel dashboard → Project → Settings → Environment Variables.')]);
+		return step('vercel.env', 'failed', failure(error), [cliMissing(error) ? vercelProblemNext(error, 'run setup again') : humanNext('Run `vercel login` if it is not logged in; otherwise add the setting in the Vercel dashboard → Project → Settings → Environment Variables.')]);
 	}
 	return step('vercel.env', 'done', `Added to the linked project: ${todo.map((entry) => `${entry.name} (${entry.target})`).join(', ')}. These are THIS machine's values, now live on those targets (a test database here means the deployment uses the test database). Values went in through stdin; none were printed.`);
 }
@@ -414,7 +414,7 @@ async function protectionStep(options: Options, deps: Deps): Promise<Step> {
 		setProtectionPreviewOnly(deps.exec, link);
 		return step('vercel.protection', 'done', 'Changed Vercel Authentication from "all" to preview deployments only, so the keep-alive cron can reach production.');
 	} catch (error) {
-		return step('vercel.protection', 'failed', failure(error), [humanNext('Vercel dashboard → the project → Settings → Deployment Protection → Vercel Authentication → "Only Preview Deployments" → Save.')]);
+		return step('vercel.protection', 'failed', failure(error), [cliMissing(error) ? vercelProblemNext(error, 'run setup again') : humanNext('Vercel dashboard → the project → Settings → Deployment Protection → Vercel Authentication → "Only Preview Deployments" → Save.')]);
 	}
 }
 

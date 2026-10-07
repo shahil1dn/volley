@@ -15,6 +15,13 @@ export type Check = { id: string; status: Status; summary: string; next: Next[] 
 
 const run = (command: string, text = '', confirm?: Next['confirm']): Next => ({ kind: 'run', command, text: text || `Run: ${command}`, ...(confirm ? { confirm } : {}) });
 const edit = (text: string): Next => ({ kind: 'edit', text });
+// What a person does after a Vercel CLI call failed: install the CLI if it is not there, else log in.
+export const cliMissing = (error: unknown): boolean => /isn't installed/.test((error as Error).message);
+export const vercelProblemNext = (error: unknown, then: string): Next =>
+	cliMissing(error)
+		? human(`Install the Vercel CLI (\`npm i -g vercel\`), run \`vercel login\` and approve it in the browser, then ${then}.`)
+		: human(`Run \`vercel login\` and approve it in the browser, then ${then}.`);
+
 export const human = (text: string, template?: string): Next => ({
 	kind: 'human',
 	text: `HUMAN: ${text}${template ? ` Template (replace the placeholder; never run it as it stands): ${template}` : ''}`,
@@ -340,7 +347,7 @@ async function vercelEnv(ctx: Ctx): Promise<Check> {
 	try {
 		names = await ctx.vercel.envNames();
 	} catch (error) {
-		return { id: 'vercel.env', status: 'fail', summary: `Could not list the project's environment variables: ${(error as Error).message}`, next: [human('Run `vercel login` and approve it in the browser, then run `npm run doctor -- --vercel` again.')] };
+		return { id: 'vercel.env', status: 'fail', summary: `Could not list the project's environment variables: ${(error as Error).message}`, next: [vercelProblemNext(error, 'run `npm run doctor -- --vercel` again')] };
 	}
 	const need = (target: string) => VARS.filter((spec) => spec.required === true || (spec.required === 'production' && target === 'production')).map((spec) => spec.name);
 	const missing = ['production', 'preview'].flatMap((target) => need(target).filter((name) => !(names[target] ?? []).includes(name)).map((name) => ({ target, name })));
@@ -360,7 +367,7 @@ async function vercelProtection(ctx: Ctx): Promise<Check> {
 	try {
 		type = await ctx.vercel.protection();
 	} catch (error) {
-		return { id: 'vercel.protection', status: 'fail', summary: `Could not read the project's deployment protection: ${(error as Error).message}`, next: [human('Run `vercel login` and approve it in the browser, then run `npm run doctor -- --vercel` again.')] };
+		return { id: 'vercel.protection', status: 'fail', summary: `Could not read the project's deployment protection: ${(error as Error).message}`, next: [vercelProblemNext(error, 'run `npm run doctor -- --vercel` again')] };
 	}
 	if (type === null || type === 'preview') return { id: 'vercel.protection', status: 'ok', summary: type === null ? 'No Vercel Authentication, so the cron can reach production.' : 'Vercel Authentication covers preview deployments only, so the cron can reach production.', next: [] };
 	// Vercel's Deployment Protection page: "All Deployments" protects production domains too, Standard

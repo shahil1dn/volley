@@ -8,9 +8,12 @@ import type { VercelProbe } from './checks.ts';
 
 export type Exec = (args: string[], input?: string) => { status: number; stdout: string; stderr: string };
 
-export const realExec = (cwd: string): Exec => (args, input) => {
-	const run = spawnSync('vercel', [...args, '--non-interactive'], { cwd, input, encoding: 'utf8', timeout: 60_000 });
-	return { status: run.status ?? 1, stdout: run.stdout ?? '', stderr: run.stderr ?? '' };
+export const realExec = (cwd: string, timeoutMs = 60_000): Exec => (args, input) => {
+	const run = spawnSync('vercel', [...args, '--non-interactive'], { cwd, input, encoding: 'utf8', timeout: timeoutMs });
+	// No status means the CLI never ran to an end. That is not "a command that failed", and the fix is different.
+	if ((run.error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') throw new Error("the Vercel CLI isn't installed (install it with: npm i -g vercel)");
+	if (run.status === null) throw new Error(`the Vercel CLI did not finish within ${timeoutMs / 1000} seconds${run.signal ? ` (stopped by ${run.signal})` : ''}`);
+	return { status: run.status, stdout: run.stdout ?? '', stderr: run.stderr ?? '' };
 };
 
 export const TARGETS = ['production', 'preview', 'development'] as const;
