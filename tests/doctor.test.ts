@@ -307,6 +307,32 @@ test('exit codes: 0 all fine, 1 when the agent can fix something, 2 when only a 
 	assert.equal(exitCode(await runChecks(ctxWith({ applied: [], settings: { status: 200, body: { disable_signup: false } } }))), 1);
 });
 
+test('exitCode can set aside "run npm run setup" suggestions, so a setup that already failed is not sent round in a circle', async () => {
+	const loop = await runChecks(ctxWith({ applied: [] }));
+	assert.equal(exitCode(loop), 1);
+	assert.equal(exitCode(loop, { ignoreSetup: true }), 2, 'nothing else the agent can do');
+	const edit = await runChecks(ctxWith({ applied: [], files: { 'svelte.config.js': "adapter({ regions: ['iad1'] })" } }));
+	assert.equal(exitCode(edit, { ignoreSetup: true }), 1, 'a file edit is still the agent\'s to make');
+});
+
+test('every failure reason is scrubbed of the secrets in the environment, however it got into the text', async () => {
+	const leaky: Over = {
+		owner: { ok: false, reason: `password authentication failed for ${GOOD_ENV.POSTGRES_URL_NON_POOLING}` },
+		pooler: { ok: false, reason: `server said pw-${SECRET} is wrong` },
+		settings: new Error(`GET failed with apikey ${GOOD_ENV.PUBLIC_SUPABASE_PUBLISHABLE_KEY}`),
+		vercel: {
+			linked: () => ({ projectId: 'p', orgId: 't' }),
+			envNames: async () => { throw new Error(`cli said ${GOOD_ENV.SUPABASE_SECRET_KEY}`); },
+			protection: async () => { throw new Error(`cli said cron-${SECRET}`); },
+		},
+	};
+	const checks = await runChecks(ctxWith(leaky));
+	const text = toText(checks) + JSON.stringify(toJson(checks));
+	assert.ok(!text.includes(SECRET), 'a secret value leaked into the report');
+	assert.match(text, /\[hidden\]/, 'the message survives with the secret blanked');
+	assert.match(byId(checks, 'db.connect').summary, /password authentication failed/);
+});
+
 test('the JSON has a stable shape: ids, status, summary, next actions, counts, exit code', async () => {
 	const result = toJson(await runChecks(ctxWith({ applied: [] })));
 	assert.deepEqual(Object.keys(result).sort(), ['checks', 'counts', 'exitCode', 'ok']);

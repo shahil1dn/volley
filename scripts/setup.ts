@@ -2,6 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { redact, secretValues } from './lib/env.ts';
 import { toJson, toText, EXIT_HELP } from './lib/report.ts';
 import { connectOwnerWith, readVercelLink, realContext } from './lib/context.ts';
 import { realExec } from './lib/vercel.ts';
@@ -21,7 +22,8 @@ It never overwrites a value it did not make unless you pass --force, never print
 Flags:
   --dry-run                 show what would happen; change nothing
   --force                   allow overwriting: regenerates the secrets (signs every host out) and lets
-                            --first-admin-email reset an existing account's password
+                            --first-admin-email reset an existing account's password or make an existing
+                            host an admin
   --yes                     accepted and ignored: setup never prompts
   --from-env-file <path>    fill missing settings from another env file (e.g. one \`vercel env pull\` made)
   --env-out <path>          the file setup writes to (default .env.local)
@@ -30,7 +32,10 @@ Flags:
   --first-admin-name <n>    their display name, 1 to 40 characters
   --skip-migrate            don't touch the database schema
   --push-vercel-env         add the settings to the Vercel project linked in .vercel/ (never overwrites
-                            without --force)
+                            without --force). WARNING: these are THIS machine's Supabase values and they go
+                            to Production (and Preview) as they are: if .env.local points at a test
+                            Supabase project, production would use the test database. Check with
+                            \`npm run doctor\` first.
   --vercel-env <list>       which targets for --push-vercel-env (default production,preview)
   --vercel-protection       set Vercel Authentication to preview deployments only (so the cron gets through)
   --disable-signup          switch Supabase public sign-up off via the Management API (needs
@@ -103,6 +108,6 @@ try {
 	else console.log(`${summaryText(result.steps, options)}\n\nDoctor, run just now${options.dryRun ? ' (on the current state: a dry run changes nothing)' : ''}:\n${toText(result.checks)}`);
 	process.exitCode = result.exitCode;
 } catch (error) {
-	console.error(`Setup stopped: ${(error as Error).message}`);
+	console.error(`Setup stopped: ${redact((error as Error).message, secretValues(process.env))}`);
 	process.exitCode = 1;
 }

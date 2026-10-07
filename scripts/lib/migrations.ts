@@ -22,6 +22,22 @@ export async function pendingMigrations(client: pg.Client, dir: URL): Promise<st
 	return files.filter((name) => !applied.has(name));
 }
 
+// What `pendingMigrations` finds, without writing anything (a dry run): no bookkeeping table means
+// every migration is pending. A database that can't be read throws; it is never "nothing pending".
+export async function pendingMigrationsReadOnly(client: pg.Client, dir: URL): Promise<string[]> {
+	const files = (await readdir(dir)).filter((name) => name.endsWith('.sql')).sort();
+	await client.query('begin read only');
+	try {
+		const { rows: found } = await client.query(`select to_regclass('public.schema_migrations') as "table"`);
+		if (found[0]?.table === null) return files;
+		const { rows } = await client.query('select filename from public.schema_migrations');
+		const applied = new Set(rows.map((row) => row.filename));
+		return files.filter((name) => !applied.has(name));
+	} finally {
+		await client.query('rollback');
+	}
+}
+
 export async function applyMigrations(client: pg.Client, dir: URL, log: (line: string) => void = () => undefined): Promise<string[]> {
 	const pending = await pendingMigrations(client, dir);
 	for (const name of pending) {

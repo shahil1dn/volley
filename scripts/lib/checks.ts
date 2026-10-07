@@ -2,7 +2,7 @@
 // has a stable id, a status, one plain sentence, and exact next actions that are
 // either something the agent can run or edit itself, or a step marked HUMAN: that
 // only a person can do. Nothing here ever puts a secret VALUE into a result.
-import { VARS, publicName, nextPublicNames, type VarSpec } from './env.ts';
+import { VARS, publicName, nextPublicNames, redactDeep, secretValues, type VarSpec } from './env.ts';
 
 export type Status = 'ok' | 'fail' | 'warn' | 'skipped';
 // run: a command the agent can run, exactly as written (`command`, never with a placeholder in it).
@@ -416,14 +416,18 @@ export async function runChecks(ctx: Ctx): Promise<Check[]> {
 			results.push({ id: IDS[index], status: 'fail', summary: `This check crashed: ${(error as Error).message}`, next: [human('Tell the maintainers: doctor itself failed on this check.')] });
 		}
 	}
-	return results;
+	// Whatever a driver, the network or the Vercel CLI said, no secret value goes into a report.
+	return redactDeep(results, secretValues(ctx.env));
 }
 
 // 1: the agent can fix something by running a command or editing a file. 2: only a person can.
 // 0: nothing failed. Warnings and skips never fail a run. If both kinds are present, the agent's
 // own fixes come first (1); once they are done the run reports the human steps (2).
-export function exitCode(checks: Check[]): 0 | 1 | 2 {
+// `ignoreSetup`: don't count "run npm run setup" as something the agent can do. Setup uses this after one
+// of its own steps failed, so a failure only a person can fix is not turned into "run setup again".
+const isSetupRun = (next: Next) => next.kind === 'run' && /^npm run setup(\s|$)/.test(next.command ?? '');
+export function exitCode(checks: Check[], options: { ignoreSetup?: boolean } = {}): 0 | 1 | 2 {
 	const failed = checks.filter((check) => check.status === 'fail');
 	if (failed.length === 0) return 0;
-	return failed.some((check) => check.next.some((next) => next.kind !== 'human')) ? 1 : 2;
+	return failed.some((check) => check.next.some((next) => next.kind !== 'human' && !(options.ignoreSetup && isSetupRun(next)))) ? 1 : 2;
 }

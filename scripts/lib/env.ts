@@ -81,3 +81,40 @@ export function setLine(text: string, name: string, value: string): string {
 	const eol = text.includes('\r\n') ? '\r\n' : '\n';
 	return `${text}${text === '' || text.endsWith('\n') ? '' : eol}${name}=${quoted}${eol}`;
 }
+
+// Every value that must never appear in a report: the settings above (except the public address),
+// the password inside each connection string, and any NEXT_PUBLIC_…KEY copy of a key.
+export function secretValues(env: Record<string, string | undefined>): string[] {
+	const found = new Set<string>();
+	for (const spec of VARS) if (spec.name !== 'SUPABASE_URL' && env[spec.name]) found.add(env[spec.name] as string);
+	for (const [name, value] of Object.entries(env)) if (value && /^(NEXT_)?PUBLIC_.*KEY$/.test(name)) found.add(value);
+	for (const name of ['POSTGRES_URL', 'POSTGRES_URL_NON_POOLING']) {
+		try {
+			const { password } = new URL(env[name] ?? '');
+			if (password) {
+				found.add(password);
+				found.add(decodeURIComponent(password));
+			}
+		} catch {
+			// not an address: the whole value is already in the set above
+		}
+	}
+	return [...found];
+}
+
+// Blanks every secret out of a piece of text. Anything shorter than 4 characters is left, or the
+// text would turn to noise.
+export function redact(text: string, secrets: string[]): string {
+	return secrets
+		.filter((secret) => secret.length >= 4)
+		.sort((a, b) => b.length - a.length)
+		.reduce((out, secret) => out.split(secret).join('[hidden]'), text);
+}
+
+// The same, through every string in a result (summaries, details, next-step text and commands).
+export function redactDeep<T>(value: T, secrets: string[]): T {
+	if (typeof value === 'string') return redact(value, secrets) as T;
+	if (Array.isArray(value)) return value.map((item) => redactDeep(item, secrets)) as T;
+	if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactDeep(item, secrets)])) as T;
+	return value;
+}

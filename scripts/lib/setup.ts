@@ -8,8 +8,8 @@ import type pg from 'pg';
 import { productionSetting, refuseProduction } from '../production-guard.ts';
 import { exitCode, human, publicRenames, runChecks, type Check, type Ctx, type Next } from './checks.ts';
 import { EMAIL, makeHost, setHost } from './make-host.ts';
-import { applyMigrations, pendingMigrations } from './migrations.ts';
-import { ENV_NAME, VARS, makeSecret, mask, parse, setLine } from './env.ts';
+import { applyMigrations, pendingMigrationsReadOnly } from './migrations.ts';
+import { ENV_NAME, VARS, makeSecret, mask, parse, redact, redactDeep, secretValues, setLine } from './env.ts';
 import { writePrivate } from './private-file.ts';
 import { shellQuote } from './shell.ts';
 import { addEnv, setProtectionPreviewOnly, vercelProbe, type Exec } from './vercel.ts';
@@ -186,18 +186,29 @@ export async function runSetup(options: Options, deps: Deps): Promise<{ steps: S
 	try {
 		if (db) {
 			if (options.skipMigrate) steps.push(step('db.migrate', 'skipped', '--skip-migrate was given.'));
-			else {
-				if (options.dryRun) {
-					const pending = await pendingMigrations(db, deps.migrationsDir).catch(() => []);
+			else if (options.dryRun) {
+				// Read only: a dry run must not create the bookkeeping table either.
+				try {
+					const pending = await pendingMigrationsReadOnly(db, deps.migrationsDir);
 					steps.push(step('db.migrate', pending.length === 0 ? 'unchanged' : 'would', pending.length === 0 ? 'All migrations are already applied.' : `Would apply ${pending.length}: ${pending.join(', ')}.`));
-				} else {
+				} catch (error) {
+					steps.push(step('db.migrate', 'failed', `Could not read which migrations are applied: ${failure(error)}`, [humanNext('Fix what the message says (usually the database address or password in POSTGRES_URL_NON_POOLING), then run again.')]));
+				}
+			} else {
+				let migrated = false;
+				try {
+					const applied = await applyMigrations(db, deps.migrationsDir);
+					migrated = true;
+					steps.push(step('db.migrate', applied.length === 0 ? 'unchanged' : 'done', applied.length === 0 ? 'All migrations are already applied.' : `Applied ${applied.length}: ${applied.join(', ')}.`));
+				} catch (error) {
+					steps.push(step('db.migrate', 'failed', failure(error), [humanNext('If the message says pg_cron can\'t be created: Supabase dashboard → Database → Extensions → search "pg_cron" → enable it, then run `npm run setup` again. Otherwise read the message and fix the SQL error it names.')]));
+				}
+				if (migrated) {
 					try {
-						const applied = await applyMigrations(db, deps.migrationsDir);
-						steps.push(step('db.migrate', applied.length === 0 ? 'unchanged' : 'done', applied.length === 0 ? 'All migrations are already applied.' : `Applied ${applied.length}: ${applied.join(', ')}.`));
-						const switchedOn = await ensureCronJob(db);
-						if (switchedOn) steps.push(step('db.pg_cron', 'done', 'Switched the hourly purge job (volley-purge-expired) back on.'));
+						const did = await ensureCronJob(db);
+						steps.push(step('db.pg_cron', did ? 'done' : 'unchanged', did === 'scheduled' ? 'Scheduled the hourly purge job (volley-purge-expired), as migration 0008 does.' : did === 'switched on' ? 'Switched the hourly purge job (volley-purge-expired) back on.' : 'The hourly purge job (volley-purge-expired) is scheduled and on.'));
 					} catch (error) {
-						steps.push(step('db.migrate', 'failed', failure(error), [humanNext('If the message says pg_cron can\'t be created: Supabase dashboard → Database → Extensions → search "pg_cron" → enable it, then run `npm run setup` again. Otherwise read the message and fix the SQL error it names.')]));
+						steps.push(step('db.pg_cron', 'failed', `Could not check or schedule the hourly purge job: ${failure(error)}`, [humanNext('Supabase dashboard → Database → Extensions → search "pg_cron" → enable it, then run `npm run setup` again.')]));
 					}
 				}
 			}
@@ -228,24 +239,27 @@ async function finish(steps: Step[], options: Options, deps: Deps, effective: Re
 	const ctx: Ctx = blocked ? { ...made, blocked, query: refuse, connectOwner: async () => ({ ok: false, reason: blocked }), connectPooler: async () => ({ ok: false, reason: blocked }) } : made;
 	try {
 		const checks = await runChecks(ctx);
-		const stepsFailed = steps.some((entry) => entry.status === 'failed');
-		const code = exitCode(checks);
 		const failed = steps.filter((entry) => entry.status === 'failed');
-		const stepCode = failed.length === 0 ? 0 : failed.some((entry) => entry.next.some((next) => next.kind !== 'human')) ? 1 : 2;
-		// 1 (the agent can act) beats 2 (a person is needed); 0 only when neither side failed.
-		const codes = [code, stepCode].filter((value) => value > 0);
-		return { steps, checks, exitCode: (codes.length === 0 ? 0 : Math.min(...codes)) as 0 | 1 | 2 };
+		let code: 0 | 1 | 2;
+		if (failed.some((entry) => entry.next.some((next) => next.kind !== 'human'))) code = 1; // setup's own failure the agent can act on
+		else if (failed.length > 0) code = exitCode(checks, { ignoreSetup: true }) === 1 ? 1 : 2; // only a person can fix it: "run setup" must not send the agent round again
+		else code = exitCode(checks);
+		return { steps: redactDeep(steps, secretValues(effective)), checks, exitCode: code };
 	} finally {
 		await close();
 	}
 }
 
-// If the purge job exists but is switched off, switches it on. Returns true if it did.
-async function ensureCronJob(db: pg.Client): Promise<boolean> {
+// Makes sure the hourly purge job exists and is on. The schedule call is migration 0008's, word for word.
+async function ensureCronJob(db: pg.Client): Promise<'scheduled' | 'switched on' | null> {
 	const { rows } = await db.query("select jobid, active from cron.job where jobname = 'volley-purge-expired'");
-	if (rows.length === 0 || rows[0].active !== false) return false;
+	if (rows.length === 0) {
+		await db.query("select cron.schedule('volley-purge-expired', '0 * * * *', 'select public.purge_expired()')");
+		return 'scheduled';
+	}
+	if (rows[0].active !== false) return null;
 	await db.query('select cron.alter_job(job_id := $1, active := true)', [rows[0].jobid]);
-	return true;
+	return 'switched on';
 }
 
 async function firstAdmin(db: pg.Client, options: Options, deps: Deps, effective: Record<string, string | undefined>): Promise<Step> {
@@ -277,15 +291,16 @@ async function firstAdmin(db: pg.Client, options: Options, deps: Deps, effective
 		deps.write(FIRST_ADMIN_FILE, `Volley first admin\nemail: ${email}\npassword: ${password}\nSign in at the site root (/). Delete this file once the password is saved somewhere safe.\n`, 0o600);
 	} catch (error) {
 		deps.remove(FIRST_ADMIN_FILE);
-		return step('hosts.first_admin', 'failed', `Could not write ${FIRST_ADMIN_FILE}: ${failure(error)}. No account was made or changed.`, [humanNext('Make the folder writable (or free some disk space), then run setup again.')]);
+		return step('hosts.first_admin', 'failed', `Could not write ${FIRST_ADMIN_FILE}: ${redact(failure(error), [password])}. No account was made or changed.`, [humanNext('Make the folder writable (or free some disk space), then run setup again.')]);
 	}
 	try {
 		await makeHost(db, deps.authAdmin(effective), email, password);
 		await setHost(db, email, { name: options.firstAdminName, admin: true });
 	} catch (error) {
 		deps.remove(FIRST_ADMIN_FILE);
+		const message = redact(failure(error), [password]);
 		const again = `npm run setup -- --first-admin-email ${asked}${account ? ' --force' : ''}`;
-		return step('hosts.first_admin', 'failed', `${failure(error)}. The password file was removed.${account ? ' The account already existed, so its password may have been reset: run again with --force to set a fresh one.' : ' Run setup again to retry from the start.'}`, [{ kind: 'run', command: again, text: `Once the cause above is fixed, run: ${again}` }]);
+		return step('hosts.first_admin', 'failed', `${message}. The password file was removed.${account ? ' The account already existed, so its password may have been reset: run again with --force to set a fresh one.' : ' Run setup again to retry from the start.'}`, [{ kind: 'run', command: again, text: `Once the cause above is fixed, run: ${again}` }]);
 	}
 	return step('hosts.first_admin', 'done', `Created ${email} as an admin host. The first password is in ${FIRST_ADMIN_FILE} (permissions 0600); it was not printed.`, [humanNext(`Give the person the password in ${FIRST_ADMIN_FILE} privately (read the file, don't paste it into a chat log), have them sign in at the site root and keep it in a password manager, then delete the file.`)]);
 }
@@ -320,7 +335,7 @@ async function pushVercelEnv(options: Options, deps: Deps, effective: Record<str
 	} catch (error) {
 		return step('vercel.env', 'failed', failure(error), [humanNext('Run `vercel login` if it is not logged in; otherwise add the setting in the Vercel dashboard → Project → Settings → Environment Variables.')]);
 	}
-	return step('vercel.env', 'done', `Added to the linked project: ${todo.map((entry) => `${entry.name} (${entry.target})`).join(', ')}. Values went in through stdin; none were printed.`);
+	return step('vercel.env', 'done', `Added to the linked project: ${todo.map((entry) => `${entry.name} (${entry.target})`).join(', ')}. These are THIS machine's values, now live on those targets (a test database here means the deployment uses the test database). Values went in through stdin; none were printed.`);
 }
 
 async function protectionStep(options: Options, deps: Deps): Promise<Step> {

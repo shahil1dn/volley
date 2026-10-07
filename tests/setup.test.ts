@@ -507,6 +507,144 @@ test('with no --first-admin-email, the skipped step asks a person for the email 
 	assert.match(step?.next[0].template ?? '', /<EMAIL>/);
 });
 
+// ---- migrations, pg_cron, exit codes and redaction, on a scripted fake database ----
+
+const MIGRATION_FILES = readdirSync(new URL('../db/migrations/', import.meta.url)).filter((name) => name.endsWith('.sql')).sort();
+const DB_ENV = { POSTGRES_URL_NON_POOLING: 'postgres://u:pw-DBPASS-0123@h.invalid:5432/db' };
+
+// A pg client that answers by pattern and records every statement; anything unlisted is an error.
+function scriptedDb(rules: [RegExp, (sql: string) => { rows: unknown[]; rowCount?: number } | Error][]) {
+	const log: string[] = [];
+	const client = {
+		query: async (sql: string) => {
+			const text = sql.replace(/\s+/g, ' ').trim();
+			log.push(text);
+			for (const [pattern, answer] of rules) {
+				if (!pattern.test(text)) continue;
+				const result = answer(text);
+				if (result instanceof Error) throw result;
+				return { rowCount: result.rows.length, ...result };
+			}
+			throw new Error(`unexpected SQL in this fake: ${text.slice(0, 80)}`);
+		},
+		end: async () => undefined,
+	} as unknown as pg.Client;
+	return { client, log };
+}
+
+const allApplied = (): [RegExp, () => { rows: unknown[] }] => [/^select filename from public\.schema_migrations/, () => ({ rows: MIGRATION_FILES.map((filename) => ({ filename })) })];
+const bookkeeping: [RegExp, () => { rows: unknown[] }] = [/^create table if not exists public\.schema_migrations/, () => ({ rows: [] })];
+
+test('--dry-run only reads: on a fresh database nothing is created and the plan names every migration', async () => {
+	const { client, log } = scriptedDb([[/^begin read only$/, () => ({ rows: [] })], [/to_regclass\('public\.schema_migrations'\)/, () => ({ rows: [{ table: null }] })], [/^rollback$/, () => ({ rows: [] })]]);
+	const result = await runSetup({ ...OPTIONS, skipMigrate: false, dryRun: true }, depsFor(folder(), DB_ENV, { connectOwner: async () => client }));
+	const step = result.steps.find((s) => s.id === 'db.migrate');
+	assert.equal(step?.status, 'would');
+	assert.match(step?.detail ?? '', new RegExp(`Would apply ${MIGRATION_FILES.length}: ${MIGRATION_FILES[0]}`));
+	assert.ok(log.every((sql) => /^(begin read only|rollback|select )/.test(sql)), `a dry run ran: ${log.join(' | ')}`);
+	assert.ok(!log.some((sql) => /create table|alter table|revoke/i.test(sql)));
+});
+
+test('--dry-run on a database it cannot read is a failed step, never "all migrations are already applied"', async () => {
+	const { client } = scriptedDb([[/^begin read only$/, () => ({ rows: [] })], [/to_regclass/, () => new Error('permission denied for schema public')], [/^rollback$/, () => ({ rows: [] })]]);
+	const result = await runSetup({ ...OPTIONS, skipMigrate: false, dryRun: true }, depsFor(folder(), DB_ENV, { connectOwner: async () => client }));
+	const step = result.steps.find((s) => s.id === 'db.migrate');
+	assert.equal(step?.status, 'failed');
+	assert.match(step?.detail ?? '', /permission denied/);
+	assert.doesNotMatch(summaryText(result.steps, OPTIONS), /already applied/);
+});
+
+test('pg_cron: a missing purge job is scheduled with exactly migration 0008\'s arguments; a switched-off one is switched on', async () => {
+	const migration = readFileSync(new URL(`../db/migrations/${MIGRATION_FILES.find((name) => name.startsWith('0008')) ?? 'missing'}`, import.meta.url), 'utf8').replace(/\s+/g, ' ');
+	const expected = /select cron\.schedule\([^;]*\)/.exec(migration)?.[0];
+	assert.ok(expected, 'found the schedule call in migration 0008');
+	const missing = scriptedDb([bookkeeping, allApplied(), [/from cron\.job/, () => ({ rows: [] })], [/^select cron\.schedule/, () => ({ rows: [{ schedule: 1 }] })]]);
+	const scheduled = await runSetup({ ...OPTIONS, skipMigrate: false }, depsFor(folder(), DB_ENV, { connectOwner: async () => missing.client }));
+	assert.equal(scheduled.steps.find((s) => s.id === 'db.pg_cron')?.status, 'done');
+	assert.ok(missing.log.includes(expected), `ran: ${missing.log.filter((sql) => /cron/.test(sql)).join(' | ')}`);
+
+	const off = scriptedDb([bookkeeping, allApplied(), [/from cron\.job/, () => ({ rows: [{ jobid: 7, active: false }] })], [/cron\.alter_job/, () => ({ rows: [{}] })]]);
+	const switched = await runSetup({ ...OPTIONS, skipMigrate: false }, depsFor(folder(), DB_ENV, { connectOwner: async () => off.client }));
+	assert.equal(switched.steps.find((s) => s.id === 'db.pg_cron')?.status, 'done');
+	assert.ok(off.log.some((sql) => /cron\.alter_job/.test(sql)));
+
+	const fine = scriptedDb([bookkeeping, allApplied(), [/from cron\.job/, () => ({ rows: [{ jobid: 7, active: true }] })]]);
+	const same = await runSetup({ ...OPTIONS, skipMigrate: false }, depsFor(folder(), DB_ENV, { connectOwner: async () => fine.client }));
+	assert.equal(same.steps.find((s) => s.id === 'db.pg_cron')?.status, 'unchanged');
+	assert.ok(!fine.log.some((sql) => /schedule|alter_job/.test(sql)));
+});
+
+test('a pg_cron failure after good migrations is its own step: step ids stay unique and the fix is a person\'s', async () => {
+	const { client } = scriptedDb([bookkeeping, allApplied(), [/from cron\.job/, () => Object.assign(new Error('schema "cron" does not exist'), { code: '3F000' })]]);
+	const result = await runSetup({ ...OPTIONS, skipMigrate: false }, depsFor(folder(), DB_ENV, { connectOwner: async () => client }));
+	const ids = result.steps.map((s) => s.id);
+	assert.equal(new Set(ids).size, ids.length, `duplicate step id in ${ids.join(', ')}`);
+	assert.equal(result.steps.find((s) => s.id === 'db.migrate')?.status, 'unchanged');
+	const cron = result.steps.find((s) => s.id === 'db.pg_cron');
+	assert.equal(cron?.status, 'failed');
+	assert.ok(cron?.next.every((next) => next.kind === 'human'));
+	assert.match(cron?.next[0].text ?? '', /pg_cron/);
+});
+
+// A doctor whose only complaint is "run npm run setup": the loop an agent would be stuck in.
+const SETUP_LOOP_DOCTOR: Deps['doctor'] = async (e) => ({
+	ctx: {
+		env: e, readFile: () => null, migrationsOnDisk: () => ['0001_a.sql'], fetchJson: async () => ({ status: 200, body: { disable_signup: true } }),
+		query: async () => { throw Object.assign(new Error('relation "public.schema_migrations" does not exist'), { code: '42P01' }); },
+		connectOwner: async () => ({ ok: true }), connectPooler: async () => ({ ok: true }),
+	},
+	close: async () => undefined,
+});
+
+test('exit code: a setup step that only a person can fix is exit 2 even when doctor also says "run setup"', async () => {
+	const result = await runSetup({ ...OPTIONS, skipMigrate: false }, depsFor(folder(), {}, { doctor: SETUP_LOOP_DOCTOR }));
+	assert.equal(result.steps.find((s) => s.id === 'db.connect')?.status, 'failed');
+	assert.ok(result.checks.some((c) => c.status === 'fail' && c.next.some((n) => n.kind === 'run' && n.command === 'npm run setup')), 'doctor does suggest running setup');
+	assert.equal(result.exitCode, 2, 'a loop: the agent would run setup again and get the same failure');
+});
+
+test('exit code: a failed step the agent can act on is exit 1, and a clean run with a clean doctor is 0', async () => {
+	const hasCommand = await runSetup({ ...OPTIONS, vercelProtection: true }, depsFor(folder(), {}, { doctor: SETUP_LOOP_DOCTOR }));
+	const link = hasCommand.steps.find((s) => s.id === 'vercel.protection');
+	assert.equal(link?.status, 'failed');
+	assert.ok(link?.next.some((n) => n.kind === 'run'), 'not linked: `vercel link` is something the agent runs');
+	assert.equal(hasCommand.exitCode, 1);
+});
+
+test('secrets in error text are replaced before anything is reported: a driver message, a CLI message and a Management API message', async () => {
+	const URL_WITH_PASSWORD = 'postgres://postgres.abcdefghijklmnopqrst:pw-LEAKY-PASSWORD-123@aws-0-eu-west-2.pooler.supabase.com:5432/postgres';
+	const env = { POSTGRES_URL_NON_POOLING: URL_WITH_PASSWORD, SUPABASE_ACCESS_TOKEN: 'sbp_LEAKY_TOKEN_456', SUPABASE_URL: `https://${REF}.supabase.co`, SUPABASE_SECRET_KEY: 'sb_secret_LEAKY_KEY_789', HOST_SESSION_SECRET: `host-${'h'.repeat(60)}` };
+	const calls: Calls = { exec: [], fetches: [] };
+	const exec: Deps['exec'] = (args) => (args[1] === 'ls' ? { status: 0, stdout: '[]', stderr: '' } : { status: 1, stdout: '', stderr: `Error: rejected value sb_secret_LEAKY_KEY_789 for ${args[2]}` });
+	const result = await runSetup({ ...OPTIONS, skipMigrate: false, pushVercelEnv: true, disableSignup: true }, depsFor(folder(), env, {
+		connectOwner: async () => { throw new Error(`password authentication failed for ${URL_WITH_PASSWORD}`); },
+		exec, vercelLink: () => ({ projectId: 'p', orgId: 't' }),
+		fetch: (async () => { throw new Error('request to Bearer sbp_LEAKY_TOKEN_456 failed'); }) as typeof fetch,
+	}, calls));
+	const out = everything(result, OPTIONS);
+	for (const secret of ['pw-LEAKY-PASSWORD-123', 'sbp_LEAKY_TOKEN_456', 'sb_secret_LEAKY_KEY_789', URL_WITH_PASSWORD]) assert.ok(!out.includes(secret), `leaked ${secret}`);
+	assert.ok(result.steps.some((s) => s.id === 'db.connect' && s.status === 'failed' && s.detail.includes('[hidden]')), 'the message is still there, minus the secret');
+});
+
+test('first admin: an auth error that repeats the generated password never reaches the report', async () => {
+	let seen = '';
+	const world = fakeAdminWorld({}, {});
+	const result = await runSetup(ADMIN_OPTIONS, { ...world.deps, authAdmin: () => ({
+		createUser: async (attrs: { password: string }) => { seen = attrs.password; return { data: { user: null }, error: { message: `password ${attrs.password} is too weak` } }; },
+		updateUserById: async () => ({ error: null }),
+	}) });
+	assert.ok(seen.length >= 32);
+	assert.ok(!everything(result, OPTIONS).includes(seen), 'the generated password leaked through the error text');
+	assert.equal(result.steps.find((s) => s.id === 'hosts.first_admin')?.status, 'failed');
+});
+
+test('--push-vercel-env help says it sends THIS machine\'s Supabase values to Production', () => {
+	const help = spawnSync(process.execPath, ['scripts/setup.ts', '--help'], { encoding: 'utf8', timeout: 15_000, env: { PATH: process.env.PATH ?? '' } });
+	const text = help.stdout.replace(/\s+/g, ' ');
+	assert.match(text, /--push-vercel-env .*Production/);
+	assert.match(text, /test (Supabase )?(project|database).*production (would )?use/i);
+});
+
 // ---- the database steps, on the TEST database ----
 
 const admin = () => createClient(process.env.SUPABASE_URL ?? '', process.env.SUPABASE_SECRET_KEY ?? '', { auth: { persistSession: false, autoRefreshToken: false } }).auth.admin;
