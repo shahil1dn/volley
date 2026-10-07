@@ -331,7 +331,7 @@ async function firstAdmin(db: pg.Client, options: Options, deps: Deps, effective
 	// A password file that is already there: replaced only on request, and only if it is for this same person.
 	const existingFile = deps.read(FIRST_ADMIN_FILE);
 	if (existingFile !== null) {
-		if (!options.resetFirstAdmin) return step('hosts.first_admin', 'failed', `${FIRST_ADMIN_FILE} already exists, and setup won't overwrite a file that may hold a password. Pass --reset-first-admin to replace it (only when it's for the same email), or delete it if you have already used it.${forceWarning}`, [{ kind: 'run', command: `rm ${FIRST_ADMIN_FILE}`, text: `If you have already used it: delete it (rm ${FIRST_ADMIN_FILE}) and run setup again.` }]);
+		if (!options.resetFirstAdmin) return step('hosts.first_admin', 'failed', `${FIRST_ADMIN_FILE} already exists, and setup won't overwrite a file that may hold a password. Pass --reset-first-admin to replace it (only when it's for the same email), or have a person delete it once the password has been handed over.${forceWarning}`, [humanNext(`The file may hold a password nobody has read. Find out whether it was handed over; if it was (or is no longer needed), delete it (rm ${FIRST_ADMIN_FILE}) and run setup again.`)]);
 		const owner = /^email: (\S+)$/m.exec(existingFile)?.[1]?.toLowerCase();
 		if (owner !== email) return step('hosts.first_admin', 'failed', `${FIRST_ADMIN_FILE} is for ${owner && EMAIL.test(owner) ? owner : "someone setup can't identify"}, not ${email}, so setup won't replace it.`, [humanNext(`Find out whether that password was handed over. If it was (or is no longer needed), delete ${FIRST_ADMIN_FILE} and run setup again.`)]);
 	}

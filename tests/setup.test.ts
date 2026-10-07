@@ -880,6 +880,18 @@ test('first admin: the password-file-in-the-way message names both ways out', as
 	assert.match(detail, /--reset-first-admin to replace it \(only when it's for the same email\)/);
 });
 
+test('first admin: deleting a password file that may hold an unread password is a person\'s step, not a command the agent runs', async () => {
+	const world = fakeAdminWorld({}, { files: { [FIRST_ADMIN_FILE]: passwordFileFor('new.person@example.com') } });
+	const result = await runSetup(ADMIN_OPTIONS, world.deps);
+	const step = result.steps.find((s) => s.id === 'hosts.first_admin');
+	assert.equal(step?.status, 'failed');
+	assert.ok(step?.next.length && step.next.every((next) => next.kind === 'human' && next.command === undefined), JSON.stringify(step?.next));
+	assert.match(step?.next[0].text ?? '', /may hold a password nobody has read/);
+	assert.match(step?.next[0].text ?? '', /rm \.volley-first-admin\.txt/);
+	assert.equal(result.exitCode, 2);
+	assert.equal(readFileSync(join(world.root, FIRST_ADMIN_FILE), 'utf8'), passwordFileFor('new.person@example.com'));
+});
+
 test('first admin: if the account appeared after setup looked, its password is NOT reset without the flag', async () => {
 	const world = fakeAdminWorld({}, { accountAppearsLate: true });
 	const result = await runSetup(ADMIN_OPTIONS, world.deps);
