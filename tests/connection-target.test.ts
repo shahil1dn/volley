@@ -14,8 +14,7 @@ import { HOSTILE } from './production-guard.test.ts';
 test('addressConfig returns the parts pg connects to, with no connection string and no query', () => {
 	const config = addressConfig('postgresql://postgres.abc:p%40ss@aws-0-eu-west-2.pooler.supabase.com:5432/postgres?sslmode=require&application_name=x&host=elsewhere.example.com&sslcert=/nonexistent');
 	assert.deepEqual({ host: config.host, port: config.port, user: config.user, password: config.password, database: config.database }, { host: 'aws-0-eu-west-2.pooler.supabase.com', port: 5432, user: 'postgres.abc', password: 'p@ss', database: 'postgres' });
-	assert.equal((config as Record<string, unknown>).connectionString, undefined);
-	assert.equal((config as Record<string, unknown>).application_name, undefined);
+	assert.deepEqual(Object.keys(config).sort(), ['database', 'host', 'password', 'port', 'user']);
 	assert.equal(config.ssl, undefined, 'the caller decides the TLS settings');
 });
 
