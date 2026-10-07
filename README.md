@@ -6,18 +6,29 @@ screen. Name, colours and logo are yours to set (see below).
 
 SvelteKit on Vercel (London), Supabase for the database.
 
-## Run locally
+## Set up a copy (made for an AI agent)
+
+You can hand this to an AI coding agent: it needs only this repository, a Supabase
+project and (to deploy) a Vercel project. Everything is a command with no prompts.
 
 ```bash
-vercel env pull .env.local --yes
-echo "PARTICIPANT_SECRET=\"$(openssl rand -base64 48)\"" >> .env.local
-echo "HOST_SESSION_SECRET=\"$(openssl rand -base64 48)\"" >> .env.local
 npm install
-npm run dev
+npm run doctor              # what is wrong, in plain English, with the exact fix for each
+npm run setup               # does the fixes it can, safe to run again; ends by running doctor
+npm run setup -- --first-admin-email you@example.com   # makes the first admin host
 ```
 
-`PARTICIPANT_SECRET` signs each phone's participant cookie and
-`HOST_SESSION_SECRET` signs host sessions. Keep both out of git.
+Both print only what is set or not (never a value). `npm run doctor -- --json` is the
+same in JSON. Exit code 0 means ready, 1 means the agent can fix something (run the
+command shown), 2 means a person has to do a step marked `HUMAN:` (a dashboard click,
+a password). `.env.example` lists every setting and where it comes from; `npm run
+setup -- --help` lists every flag. Setup never changes Vercel unless you pass
+`--push-vercel-env` or `--vercel-protection`, and only for the project linked in `.vercel/`.
+
+To run locally with the Vercel store's settings instead: `vercel env pull .env.local --yes`,
+then `npm run setup` (it copies the store's `NEXT_PUBLIC_…` names to the `PUBLIC_…` names
+SvelteKit reads and makes `PARTICIPANT_SECRET`, `HOST_SESSION_SECRET` and `CRON_SECRET`),
+then `npm run dev`.
 
 ## Hosts
 

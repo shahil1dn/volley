@@ -513,3 +513,44 @@ once; the host walks through them one by one. Migration 0015.
   it where it was left.
 - **Not done:** reordering by hand, picking a question out of order, and a
   "show this one" button per row. Next/Previous is the whole control for now.
+
+## ADR-014: `npm run setup` and `npm run doctor` are built for an AI agent first (2026-10-07)
+
+**Decision.** Setting up a copy is two commands, designed so an agent can run them and a
+person need not read the output.
+
+- **No prompts, ever.** Everything comes from the environment or a flag. A missing
+  value is an error that names the flag or variable, never a question; with no TTY
+  nothing waits.
+- **`npm run doctor`** is read-only. Each check has a stable id (`env.public_names`,
+  `db.region`, `db.migrations`, `auth.signup_disabled`, `hosts.first_admin`,
+  `vercel.protection` …), a status (ok / fail / warn / skipped), one plain sentence and
+  next actions. A next action is a command or file edit the agent can do itself, or a
+  step marked `HUMAN:` with the exact place to click. Exit 0 ready; 1 the agent can fix
+  something (it does that first); 2 only a person can. `--json` is the same data.
+- **`npm run setup`** is idempotent. It copies `NEXT_PUBLIC_…` names to `PUBLIC_…`,
+  generates the three secrets, applies migrations (0008 turns on `pg_cron`), and with
+  `--first-admin-email` makes the first admin. It never replaces a value it didn't make
+  without `--force`, and ends by running doctor. Vercel (`--push-vercel-env`,
+  `--vercel-protection`) and Supabase (`--disable-signup`) changes happen only with their
+  own flag, through the Vercel CLI for the project linked in `.vercel/`.
+- **Secrets are never printed**: output says `set (64 chars)`. The env file is written
+  0600. The first admin's password goes to `.volley-first-admin.txt` (0600, git- and
+  deploy-ignored), and handing it over is a `HUMAN:` step. This differs from
+  `add-host`, which prints the password once.
+- **One list of settings** (`scripts/lib/env.ts`) drives doctor, setup and
+  `.env.example`; a test greps `src/` and fails if the app reads a name that isn't in it.
+- **No new dependency**: Node's own `util.parseEnv`, `pg`, `supabase-js` and the Vercel CLI.
+  `add-host`, `set-host` and `migrate` now share their code with setup
+  (`scripts/lib/`), so there is one way to make a host and to migrate.
+- **Safety.** Setup refuses this repo's production database (the existing guard) and
+  has no flag to override it.
+
+**Not confirmed against live services** (checked only with fakes or the docs):
+the Vercel project API calls (`vercel api` for `ssoProtection.deploymentType`, `vercel env
+ls --format json`, `vercel env add … --sensitive` over stdin), the Supabase Management API
+`PATCH /v1/projects/{ref}/config/auth` body (`disable_signup`), and the Vercel Supabase
+store's exact `NEXT_PUBLIC_…` names (both the publishable and the older anon name are
+accepted). The region table pairs Vercel and AWS regions from Vercel's region list. Doctor
+reads the database region from the pooler host only.
+

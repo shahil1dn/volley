@@ -403,8 +403,8 @@ In this order (owner, 2026-09-30):
    AI Builders from `src/` (A16). Done on branch `m4-theme` by a second build
    session, merged 2026-09-30, live 2026-10-01 (ADR-012; `src/lib/brand.ts`,
    `tests/brand.test.ts`).
-2. `npm run setup` and `npm run doctor` (A14), built to remove the snags met
-   going live: the store's `NEXT_PUBLIC_…` names against SvelteKit's
+2. [x] `npm run setup` and `npm run doctor` (A14), built agent-first (ADR-014)
+   on branch `m4-setup`, to remove the snags met going live: the store's `NEXT_PUBLIC_…` names against SvelteKit's
    `PUBLIC_…`; the pooler URL; the pinned CA; migrations and `pg_cron`; the
    first host; preview-only deployment protection so the cron gets through;
    generating the secrets.
