@@ -4,15 +4,22 @@ You are an AI coding agent with a fresh clone of this repository. A person sits 
 (or will create) the Supabase and Vercel accounts. Your job is to get a working copy. Doctor and
 setup do the thinking; this file is the order to run them in. Their messages own the details.
 
-## Rules
+## Rules (they override any `run` step you are given)
 
 - Never invent a value. Never print or paste a secret; setup and doctor print only `set (N chars)`.
+- Never open, `cat` or read `.env.local`, any `.env*.local` file or `.volley-first-admin.txt`.
+  Doctor's output tells you what you need.
 - Never run a command against a database you were not given for this job.
+- A `next` step with a `confirm` field, and anything marked **[ACCOUNT]** here, changes the person's
+  Vercel or Supabase account or destroys something. Say what it will change and wait for a yes.
 - Never pass `--force` (regenerates the secrets, signs every host out) or `--reset-first-admin`
   (changes an existing account's password) unless the person asked for exactly that.
-- A command marked **[ACCOUNT]** changes the person's Vercel or Supabase account. Say what it will
-  change and wait for a yes before running it.
 - When something needs a person, say so plainly and stop on that step. Do not work around it.
+
+## Prerequisites
+
+Node 22.18 or newer (check `node --version`; `.nvmrc` says 24, which is what Vercel runs) and npm.
+For section 3, the Vercel CLI: `npm i -g vercel`.
 
 ## 1. Ask the person for these first (they can do all of it in one sitting)
 
@@ -22,9 +29,11 @@ setup do the thinking; this file is the order to run them in. Their messages own
 2. **The project's connection values in `.env.local`**, typed in by them, not pasted to you:
    `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `POSTGRES_URL`
    (Transaction pooler, port 6543) and `POSTGRES_URL_NON_POOLING` (Direct or Session pooler).
-   `.env.example` says where each comes from. If the Vercel Supabase store supplies them, see section 3.
-3. **Public sign-up off**: Supabase dashboard, Authentication, Sign In / Providers, turn off
-   "Allow new users to sign up". (Or give a Supabase access token and use `--disable-signup`.)
+   `.env.example` says where each comes from. If the Vercel Supabase store supplies them instead,
+   do section 3 steps 1 and 2 before the loop.
+3. **Public sign-up off**: Supabase dashboard, Authentication, Sign In / Providers, "Allow new users to
+   sign up" (doctor gives the wording). Or give a Supabase access token and use **[ACCOUNT]**
+   `npm run setup -- --disable-signup`.
 4. **A Vercel account**, and `vercel login` done by them.
 5. **The email the first admin will sign in with**, and someone to receive their password.
 
@@ -32,14 +41,14 @@ setup do the thinking; this file is the order to run them in. Their messages own
 
 1. Read `.env.example`, then run `npm install`.
 2. Run `npm run doctor -- --json`. Every check has an `id`, a `status` (ok, fail, warn, skipped),
-   one plain sentence and `next` steps.
-3. Do each `run` step (a command, exactly as written) and each `edit` step yourself.
+   one plain sentence and `next` steps. Act only on `fail` and `warn`. Leave `skipped` alone: the
+   `vercel.*` checks wait for section 3, so do not run `doctor --vercel` yet.
+3. Do each `run` step (a command, exactly as written) and each `edit` step yourself, subject to the Rules.
 4. Hand each `human` step to the person word for word. A `template` field holds a command with a
    placeholder (an email): ask for the missing value, fill it in, never run it as it stands.
-5. `npm run setup` fixes most env and database problems. Try `npm run setup -- --dry-run` first;
-   it changes nothing. Make the first admin with `npm run setup -- --first-admin-email <EMAIL>`.
-   The password goes to `.volley-first-admin.txt`, never the screen. The person reads it, saves it
-   in a password manager, then deletes the file.
+5. `npm run setup` fixes most env and database problems. Try `npm run setup -- --dry-run` first; it
+   changes nothing. The password of the first admin goes to `.volley-first-admin.txt`, never the
+   screen: the person reads it, saves it in a password manager, then deletes the file.
 6. Repeat from step 2 until doctor exits 0.
 
 Exit codes: **0** ready. **1** something you can fix: do it, run again. **2** only a person can fix
@@ -47,40 +56,36 @@ what is left: give them the `human` steps, wait, run again. If both kinds fail, 
 
 ## 3. Deploy
 
-Either path ends the same way. Commands marked **[ACCOUNT]** need a yes first.
+Commands marked **[ACCOUNT]** need a yes first.
 
-**With the Deploy button** (in `README.md`): the person clicks it. It clones the repo, creates the
-Vercel project and a Supabase store. Then, in your clone:
+- **If `README.md` has a Deploy button** and the person used it, the Vercel project and a Supabase
+  store already exist. Then, before the loop: **[ACCOUNT]** `vercel link` (choose that project),
+  `vercel env pull .env.pulled.local`, `npm run setup -- --from-env-file .env.pulled.local`.
+- **By hand**: the person creates the Supabase project (section 1) and a Vercel project, and you run
+  **[ACCOUNT]** `vercel link`.
 
-1. **[ACCOUNT]** `vercel link` (choose that project).
-2. `vercel env pull .env.pulled.local`, then `npm run setup -- --from-env-file .env.pulled.local`.
+Then, for both, once the loop is clean:
 
-**By hand**: the person creates the Supabase project (section 1) and a Vercel project, and you run
-**[ACCOUNT]** `vercel link`.
-
-Then, for both:
-
-3. `npm run doctor -- --vercel` shows what Vercel lacks.
-4. **[ACCOUNT]** `npm run setup -- --push-vercel-env --vercel-protection` sends the settings in
-   `.env.local` to Production and Preview. They must be the person's new project's, not a test one.
-5. **[ACCOUNT]** `vercel deploy --prod`.
+1. `npm run doctor -- --vercel` shows what Vercel lacks.
+2. **[ACCOUNT]** `npm run setup -- --push-vercel-env --vercel-protection` sends the settings in
+   `.env.local` to Production and Preview. They must be the new project's, never a test project's.
+3. **[ACCOUNT]** `vercel deploy --prod`.
 
 ## 4. Done
 
-- `npm run doctor` exits 0 (with `--vercel` after deploying).
+- `npm run doctor -- --vercel` exits 0.
 - The site loads, the person signs in at `/` with the first admin's email and password, and starts a
   session from the host page.
 
 ## 5. When doctor fails
 
-| Check id | Usually |
-| --- | --- |
-| `env.required`, `env.public_names`, `env.secrets` | `npm run setup` |
-| `env.same_project` | the three Supabase values came from different projects; person fixes `.env.local` |
-| `db.pooler`, `db.region` | wrong connection string, or wrong region (section 1) |
-| `db.connect`, `db.pooler_tls` | the address or password is wrong; the person copies it again |
-| `db.migrations`, `db.pg_cron` | `npm run setup`; if pg_cron cannot be created, the person enables it (Database, Extensions) |
-| `auth.signup_disabled` | person step 3 above |
-| `hosts.first_admin` | `npm run setup -- --first-admin-email <EMAIL>` with their email |
-| `vercel.linked`, `vercel.env`, `vercel.protection` | section 3 |
-| `vercel.cron` | an `edit` to `vercel.json` |
+The check ids are `env.required`, `env.public_names`, `env.secrets`, `env.same_project`, `db.pooler`,
+`db.region`, `db.connect`, `db.pooler_tls`, `db.migrations`, `db.pg_cron`, `auth.signup_disabled`,
+`hosts.first_admin`, `vercel.linked`, `vercel.env`, `vercel.protection` and `vercel.cron`. Each one's
+`next` steps are the fix; follow them. What they cannot tell you:
+
+- The sign-up menu wording is "as best known; not confirmed". If the person finds different wording,
+  the setting is still the one that stops anyone creating an account.
+- If setup says pg_cron cannot be created, the person enables it (Database, Extensions) and you run
+  `npm run setup` again; that is safe.
+- The first admin is made only with a real email from the person (`hosts.first_admin` gives the template).
