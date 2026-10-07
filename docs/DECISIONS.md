@@ -569,3 +569,18 @@ store's exact `NEXT_PUBLIC_…` names (both the publishable and the older anon n
 accepted). The region table pairs Vercel and AWS regions from Vercel's region list. Doctor
 reads the database region from the pooler host only.
 
+## Exception: migration 0008 was edited after it was applied (2026-10-07)
+
+**Rule broken.** Never edit an applied migration. **Why this once.** Running the setup trial
+(reset, then setup) on the test project showed that `create extension if not exists pg_cron`
+fails whenever pg_cron is already installed: Supabase has an event trigger on every
+`CREATE EXTENSION pg_cron`, firing even when the statement does nothing, and it re-grants
+to `postgres` with grant option, which Postgres refuses ("grant options cannot be granted
+back to your own grantor"). A person who enables pg_cron in the dashboard first, which
+doctor tells them to do when setup cannot create it, would then hit that error on every
+setup. The migration now creates the extension only when `pg_extension` lacks it.
+**Why production and test are unaffected.** Both already recorded 0008 in
+`schema_migrations`, and the migrator applies each file once, so neither re-runs it; the
+change only matters to a database that has not applied 0008 yet. The statement's effect on
+a fresh database is the same. `tests/migration-pg-cron.test.ts` runs the file over an
+installed pg_cron in a rolled-back transaction.

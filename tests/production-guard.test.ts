@@ -16,6 +16,16 @@ test('the ref is matched whatever its letter case (host names are case-insensiti
 	assert.equal(productionSetting({ X: `https://${PRODUCTION_REF.slice(0, 5).toUpperCase()}${PRODUCTION_REF.slice(5)}.supabase.co` }), 'X');
 });
 
+test('an encoded or overridden production ref is found: the guard reads the address the way pg does', () => {
+	const encoded = `postgresql://postgres:pw@db.%71eheedlsskaurqshmueb.supabase.co:5432/postgres`;
+	assert.equal(productionSetting({ POSTGRES_URL_NON_POOLING: encoded }), 'POSTGRES_URL_NON_POOLING');
+	assert.equal(productionSetting({ X: `postgresql://postgres:pw@aws-0-eu-west-2.pooler.supabase.com:5432/postgres?host=db.%71eheedlsskaurqshmueb.supabase.co` }), 'X', '?host= with an encoded ref');
+	assert.equal(productionSetting({ X: `postgresql://postgres.%71eheedlsskaurqshmueb:pw@aws-0-eu-west-2.pooler.supabase.com:5432/postgres` }), 'X', 'an encoded ref in the user');
+	assert.equal(productionSetting({ X: `https://%51EHEEDLSSKAURQSHMUEB.supabase.co` }), 'X', 'encoded and upper case');
+	assert.equal(productionSetting({ X: `postgresql://postgres:pw@db.%2571eheedlsskaurqshmueb.supabase.co/postgres` }), 'X', 'encoded twice');
+	assert.equal(productionSetting({ X: 'postgresql://postgres:p%zz@db.abcdefghijklmnopqrst.supabase.co/postgres', Y: 'not a url at all %' }), null, 'malformed values neither crash nor match');
+});
+
 // The real preload, in a real process: with a production setting, nothing
 // after it runs.
 function runWithPreload(env: Record<string, string>) {

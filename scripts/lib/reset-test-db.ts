@@ -2,28 +2,66 @@
 // can start from nothing. It wipes data, so every guard runs BEFORE anything connects: only the
 // one test project (by exact ref, any letter case) is ever accepted, production is named and
 // refused, and a confirmation flag must be given. Supabase's managed schemas and extensions are never touched.
-import type pg from 'pg';
+import pg from 'pg';
+import { parse } from 'pg-connection-string';
 import { PRODUCTION_REF, productionSetting } from '../production-guard.ts';
 import { projectRefOf } from './checks.ts';
-import { connectOwnerWith } from './context.ts';
 
 export const TEST_REF = 'gzwzfjukswcifikbsufm';
 export const CONFIRM_FLAG = '--yes-wipe-volley-test-db';
-const ADDRESSES = ['SUPABASE_URL', 'POSTGRES_URL', 'POSTGRES_URL_NON_POOLING'];
+const ADDRESSES = ['SUPABASE_URL', 'POSTGRES_URL'];
 
-// Why this must not run, or null when every guard passes.
-export function wipeableRefusal(env: Record<string, string | undefined>, args: string[]): string | null {
+// The only two addresses the test project has: its direct host with the plain user, or any region's
+// pooler with the project-qualified user.
+const DIRECT_HOST = `db.${TEST_REF}.supabase.co`;
+const POOLER_HOST = /^aws-\d+-[a-z0-9-]+\.pooler\.supabase\.com$/;
+
+type Target = { config: pg.ClientConfig } | { refusal: string };
+
+// Reads POSTGRES_URL_NON_POOLING ONCE, with the parser pg itself uses, and accepts only what that parser
+// resolves to one of the two shapes above. A regex over the text is not enough: percent-encoding, ?host=,
+// ?user= and a longer host name each read differently to a pattern than to pg. The returned config is what gets
+// connected to, so what is checked is what is used.
+function readTarget(raw: string): Target {
+	const refuse = (why: string): Target => ({ refusal: `POSTGRES_URL_NON_POOLING isn't the test project's address (${TEST_REF}): ${why}. Nothing was touched.` });
+	const at = raw.indexOf('?');
+	const keys = at < 0 ? [] : [...new URLSearchParams(raw.slice(at + 1)).keys()];
+	const stray = keys.find((key) => key.toLowerCase() !== 'sslmode');
+	if (stray !== undefined) return refuse(`the query parameter "${stray}" is not allowed (it can change where pg connects; only sslmode is)`);
+	let config: pg.ClientConfig;
+	try {
+		config = parse(at < 0 ? raw : raw.slice(0, at)) as pg.ClientConfig;
+	} catch {
+		return refuse('it cannot be read as a connection address');
+	}
+	const host = String(config.host ?? '').toLowerCase();
+	const user = String(config.user ?? '').toLowerCase();
+	const direct = host === DIRECT_HOST && user === 'postgres';
+	const pooler = POOLER_HOST.test(host) && user === `postgres.${TEST_REF}`;
+	if (!direct && !pooler) return refuse(`it resolves to host "${host || '(none)'}" and user "${user || '(none)'}"`);
+	return { config };
+}
+
+function checkTarget(env: Record<string, string | undefined>, args: string[]): Target {
 	const production = productionSetting(env);
-	if (production) return `${production} points at the production database (${PRODUCTION_REF}). This script only ever wipes the test project (${TEST_REF}).`;
-	if (!env.POSTGRES_URL_NON_POOLING) return `POSTGRES_URL_NON_POOLING is not set, so there is nothing to confirm is the test project (${TEST_REF}).`;
+	if (production) return { refusal: `${production} points at the production database (${PRODUCTION_REF}). This script only ever wipes the test project (${TEST_REF}).` };
+	if (!env.POSTGRES_URL_NON_POOLING) return { refusal: `POSTGRES_URL_NON_POOLING is not set, so there is nothing to confirm is the test project (${TEST_REF}).` };
+	const target = readTarget(env.POSTGRES_URL_NON_POOLING);
+	if ('refusal' in target) return target;
 	for (const name of ADDRESSES) {
 		const value = env[name];
 		if (!value) continue;
 		const ref = projectRefOf(value.toLowerCase());
-		if (ref !== TEST_REF) return `${name} ${ref ? `belongs to project ${ref}` : 'has no readable project ref'}, which isn't the test project (${TEST_REF}). Nothing was touched.`;
+		if (ref !== TEST_REF) return { refusal: `${name} ${ref ? `belongs to project ${ref}` : 'has no readable project ref'}, which isn't the test project (${TEST_REF}). Nothing was touched.` };
 	}
-	if (!args.includes(CONFIRM_FLAG)) return `This wipes every table, function, auth user and Volley cron job in the test project. Pass ${CONFIRM_FLAG} to confirm.`;
-	return null;
+	if (!args.includes(CONFIRM_FLAG)) return { refusal: `This wipes every table, function, auth user and Volley cron job in the test project. Pass ${CONFIRM_FLAG} to confirm.` };
+	return target;
+}
+
+// Why this must not run, or null when every guard passes.
+export function wipeableRefusal(env: Record<string, string | undefined>, args: string[]): string | null {
+	const target = checkTarget(env, args);
+	return 'refusal' in target ? target.refusal : null;
 }
 
 // Drops what Volley's migrations create in `public` (never an extension's own objects), our one cron
@@ -59,16 +97,23 @@ begin
 end
 $wipe$`;
 
+// Encrypted, certificate not checked: the same trade-off as the other scripts (a laptop, Supabase's own CA).
+const connectWith = async (config: pg.ClientConfig): Promise<pg.Client> => {
+	const client = new pg.Client({ ...config, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 8000 });
+	await client.connect();
+	return client;
+};
+
 export type Left = { objects: number; users: number; jobs: number };
 
 export async function resetTestDb(
 	env: Record<string, string | undefined>,
 	args: string[],
-	connect: (env: Record<string, string | undefined>) => Promise<pg.Client> = connectOwnerWith,
+	connect: (config: pg.ClientConfig) => Promise<pg.Client> = connectWith,
 ): Promise<Left> {
-	const refusal = wipeableRefusal(env, args);
-	if (refusal) throw new Error(refusal);
-	const db = await connect(env);
+	const target = checkTarget(env, args);
+	if ('refusal' in target) throw new Error(target.refusal);
+	const db = await connect(target.config);
 	try {
 		await db.query('begin');
 		try {

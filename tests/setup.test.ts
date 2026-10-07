@@ -245,6 +245,21 @@ test('the database connection itself refuses production, so a future step cannot
 	}
 });
 
+test('the connection guard reads the address the way pg does: an encoded or overridden production ref is refused before any connection', async () => {
+	for (const address of [
+		'postgresql://postgres:pw@db.%71eheedlsskaurqshmueb.supabase.co:5432/postgres',
+		'postgresql://postgres:pw@aws-0-eu-west-2.pooler.supabase.com:5432/postgres?host=db.%71eheedlsskaurqshmueb.supabase.co',
+	]) {
+		await assert.rejects(connectOwnerWith({ POSTGRES_URL_NON_POOLING: address }), /production database/, address);
+		const { ctx, close } = realContext(process.cwd(), { POSTGRES_URL: address, POSTGRES_URL_NON_POOLING: address }, false);
+		try {
+			assert.equal((await runChecks(ctx)).find((c) => c.id === 'db.connect')?.status, 'skipped', 'doctor must not connect either');
+		} finally {
+			await close();
+		}
+	}
+});
+
 test('.gitignore covers every .env* name except .env.example, including the names setup suggests', () => {
 	const ignored = (name: string) => spawnSync('git', ['check-ignore', '-q', '--no-index', name], { encoding: 'utf8' }).status === 0;
 	for (const name of ['.env', '.env.local', '.env.pulled', '.env.pulled.local', '.env.production', '.env.nothing']) assert.ok(ignored(name), `${name} is not ignored`);

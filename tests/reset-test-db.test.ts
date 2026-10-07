@@ -105,7 +105,8 @@ test('a failure rolls the whole wipe back and still closes the connection', asyn
 
 test('the command line refuses before connecting: a wrong ref at an unreachable address says "isn\'t the test project", not "connection refused"', () => {
 	const run = (env: Record<string, string>, ...args: string[]) => spawnSync(process.execPath, ['scripts/reset-test-db.ts', ...args], { encoding: 'utf8', timeout: 30_000, env: { PATH: process.env.PATH ?? '', ...env } });
-	const unreachable = (ref: string) => ({ POSTGRES_URL_NON_POOLING: `postgres://postgres.${ref}:pw@127.0.0.1:1/postgres`, SUPABASE_URL: `https://${ref}.supabase.co` });
+	// Real-looking addresses: a refusal happens before any lookup, so nothing here touches the network.
+	const unreachable = (ref: string) => ({ POSTGRES_URL_NON_POOLING: `postgres://postgres.${ref}:pw@aws-0-eu-west-2.pooler.supabase.com:5432/postgres`, SUPABASE_URL: `https://${ref}.supabase.co` });
 	const wrong = run(unreachable('abcdefghijklmnopqrst'), CONFIRM_FLAG);
 	assert.notEqual(wrong.status, 0);
 	assert.match(wrong.stderr, /isn't the test project/);
@@ -118,10 +119,53 @@ test('the command line refuses before connecting: a wrong ref at an unreachable 
 	assert.match(noFlag.stderr, /--yes-wipe-volley-test-db/);
 	assert.doesNotMatch(noFlag.stderr, /ECONNREFUSED/);
 	assert.ok(!wrong.stdout.includes('pw'), 'no password printed');
-	// Allowed by the guards, so it tries to connect to 127.0.0.1:1 and fails there, which proves the guards let the test project through.
-	const allowed = run(unreachable(TEST_REF), CONFIRM_FLAG);
-	assert.notEqual(allowed.status, 0);
-	assert.match(allowed.stderr, /ECONNREFUSED|connect/i);
+});
+
+// What pg-connection-string (the parser pg itself uses) makes of these is NOT what a regex sees: each
+// one below reads as the test project to a pattern match and points somewhere else once parsed.
+const CRAFTED: [string, string][] = [
+	['a percent-encoded production ref in the host, with ?user= overriding the user', `postgresql://postgres.${TEST_REF}:pw@db.%71eheedlsskaurqshmueb.supabase.co:5432/postgres?user=postgres`],
+	['?host= overriding the host', `postgresql://postgres.${TEST_REF}:pw@aws-0-eu-west-2.pooler.supabase.com:5432/postgres?host=other.example.com`],
+	['the test host as the start of a longer, hostile one', `postgresql://postgres:pw@db.${TEST_REF}.supabase.co.evil.com:5432/postgres`],
+	['an IPv6 literal', `postgresql://postgres.${TEST_REF}:pw@[::1]:5432/postgres`],
+	['an IPv4 literal', `postgresql://postgres.${TEST_REF}:pw@127.0.0.1:5432/postgres`],
+	['the ref hidden in a query parameter', `postgresql://postgres:pw@10.0.0.9:5432/postgres?application_name=//${TEST_REF}.supabase.co`],
+	['a query parameter that is not sslmode, on an otherwise right address', `postgresql://postgres.${TEST_REF}:pw@aws-0-eu-west-2.pooler.supabase.com:5432/postgres?options=-c%20search_path%3Dx`],
+	['the right user on a host that merely ENDS like a pooler', `postgresql://postgres.${TEST_REF}:pw@evil.aws-0-eu-west-2.pooler.supabase.com:5432/postgres`],
+	['the right user on a pooler-lookalike host', `postgresql://postgres.${TEST_REF}:pw@aws-0-eu-west-2.pooler.supabase.com.evil.com:5432/postgres`],
+	['the direct host with the pooler user', `postgresql://postgres.${TEST_REF}:pw@db.${TEST_REF}.supabase.co:5432/postgres`],
+	['the pooler host with the direct user', `postgresql://postgres:pw@aws-0-eu-west-2.pooler.supabase.com:5432/postgres`],
+	['a unix socket path', `postgresql://postgres.${TEST_REF}:pw@%2Fvar%2Frun%2Fpostgresql/postgres`],
+];
+
+test('addresses that only LOOK like the test project are refused, and nothing connects', async () => {
+	for (const [label, address] of CRAFTED) {
+		const env = { POSTGRES_URL_NON_POOLING: address, SUPABASE_URL: `https://${TEST_REF}.supabase.co`, POSTGRES_URL: urls(TEST_REF).POSTGRES_URL };
+		assert.ok(wipeableRefusal(env, [CONFIRM_FLAG]), `the guard accepted: ${label}`);
+		let connects = 0;
+		await assert.rejects(resetTestDb(env, [CONFIRM_FLAG], async () => (connects++, recordingDb().client)), /./, label);
+		assert.equal(connects, 0, `connected for: ${label}`);
+	}
+});
+
+test('the two accepted shapes, with sslmode as the only query parameter, pass; and the connection gets the parsed fields, not a string', async () => {
+	const accepted = [
+		`postgresql://postgres:pw@db.${TEST_REF}.supabase.co:5432/postgres`,
+		`postgresql://postgres:pw@db.${TEST_REF.toUpperCase()}.supabase.co:5432/postgres?sslmode=require`,
+		`postgresql://postgres.${TEST_REF}:pw@aws-0-eu-west-2.pooler.supabase.com:5432/postgres?sslmode=require`,
+		`postgresql://postgres.${TEST_REF}:pw@aws-1-us-east-1.pooler.supabase.com:6543/postgres`,
+	];
+	for (const address of accepted) {
+		const env = { POSTGRES_URL_NON_POOLING: address, SUPABASE_URL: `https://${TEST_REF}.supabase.co` };
+		assert.equal(wipeableRefusal(env, [CONFIRM_FLAG]), null, address);
+		let seen: Record<string, unknown> | null = null;
+		await resetTestDb(env, [CONFIRM_FLAG], async (config) => ((seen = config as Record<string, unknown>), recordingDb().client));
+		assert.ok(seen, address);
+		const config = seen as Record<string, unknown>;
+		assert.equal(config.connectionString, undefined, 'the string must not be parsed a second time by pg');
+		assert.match(String(config.host).toLowerCase(), /^(db\.gzwzfjukswcifikbsufm\.supabase\.co|aws-\d+-[a-z0-9-]+\.pooler\.supabase\.com)$/);
+		assert.match(String(config.user).toLowerCase(), /^postgres(\.gzwzfjukswcifikbsufm)?$/);
+	}
 });
 
 test('the script is not an npm script, so nobody runs it by accident', async () => {
