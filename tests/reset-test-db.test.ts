@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import type pg from 'pg';
 import { PRODUCTION_REF } from '../scripts/production-guard.ts';
 import { CONFIRM_FLAG, TEST_REF, resetTestDb, wipeableRefusal } from '../scripts/lib/reset-test-db.ts';
+import { HOSTILE } from './production-guard.test.ts';
 
 const urls = (ref: string, host = 'aws-0-eu-west-2.pooler.supabase.com') => ({
 	SUPABASE_URL: `https://${ref}.supabase.co`,
@@ -145,6 +146,38 @@ test('addresses that only LOOK like the test project are refused, and nothing co
 		let connects = 0;
 		await assert.rejects(resetTestDb(env, [CONFIRM_FLAG], async () => (connects++, recordingDb().client)), /./, label);
 		assert.equal(connects, 0, `connected for: ${label}`);
+	}
+});
+
+test('the hostile production probes are refused by the wipe too, and so is whitespace anywhere in the address', async () => {
+	for (const [label, address] of HOSTILE) {
+		const env = { POSTGRES_URL_NON_POOLING: address, SUPABASE_URL: `https://${TEST_REF}.supabase.co` };
+		assert.ok(wipeableRefusal(env, [CONFIRM_FLAG]), label);
+		let connects = 0;
+		await assert.rejects(resetTestDb(env, [CONFIRM_FLAG], async () => (connects++, recordingDb().client)), /./, label);
+		assert.equal(connects, 0, label);
+	}
+	// A tab or newline inside the TEST host is not "the test project" either: the address must be plain.
+	for (const odd of [`db.gzwz\tfjukswcifikbsufm.supabase.co`, `db.gzwzfjukswcifikbsufm.supabase.co\n`, `db.gzwzfjukswcifikbsufm.supabase.co `]) {
+		const env = { POSTGRES_URL_NON_POOLING: `postgresql://postgres:pw@${odd}:5432/postgres`, SUPABASE_URL: `https://${TEST_REF}.supabase.co` };
+		assert.match(wipeableRefusal(env, [CONFIRM_FLAG]) ?? '', /whitespace or control characters/, JSON.stringify(odd));
+	}
+});
+
+test('a refusal never prints any part of the password, a query value, or anything it cannot call a host name', () => {
+	const marker = 'Mark3rSecretTail';
+	const cases = [
+		`postgresql://postgres:Secr?etTail${marker}@db.${TEST_REF}.supabase.co:5432/postgres`,
+		`postgresql://postgres:${marker}@evil.example.com:5432/postgres`,
+		`postgresql://postgres:${marker}@db.${TEST_REF}.supabase.co:5432/postgres?${marker}=1`,
+		`postgresql://postgres:${marker}@db.${TEST_REF}.supabase.co:5432/postgres?application_name=${marker}`,
+		`postgresql://${marker}:pw@db.${TEST_REF}.supabase.co:5432/postgres`,
+		`postgresql://postgres.${TEST_REF}:${marker}@${marker}.example.com:5432/postgres`,
+	];
+	for (const address of cases) {
+		const refusal = wipeableRefusal({ POSTGRES_URL_NON_POOLING: address, SUPABASE_URL: `https://${TEST_REF}.supabase.co` }, [CONFIRM_FLAG]) ?? '';
+		assert.ok(refusal, address);
+		assert.ok(!/etTail|Mark3r|Secr/.test(refusal.replace(/evil\.example\.com/g, '')), `leaked in: ${refusal}`);
 	}
 });
 

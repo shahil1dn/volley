@@ -4,8 +4,9 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import pg from 'pg';
 import { SUPABASE_ROOT_CA } from '../../src/lib/server/supabase-ca.ts';
-import { productionSetting, refuseProduction } from '../production-guard.ts';
+import { productionSetting, refuseProduction, refuseProductionConfig } from '../production-guard.ts';
 import type { Ctx } from './checks.ts';
+import { addressConfig } from './connection-target.ts';
 import { realExec, vercelProbe } from './vercel.ts';
 
 export const MIGRATIONS_DIR = 'db/migrations';
@@ -31,10 +32,12 @@ export const reason = (error: unknown) => {
 // A direct connection as the owner, from the given settings (not only the process environment).
 export async function connectOwnerWith(env: Record<string, string | undefined>): Promise<pg.Client> {
 	// Here, at the one place every owner connection is made, so no caller can forget the guard.
-	refuseProduction(env, 'a database connection', 'Scripts never connect to the production database.');
-	const url = new URL(env.POSTGRES_URL_NON_POOLING ?? '');
-	url.searchParams.delete('sslmode');
-	const client = new pg.Client({ connectionString: url.toString(), ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 8000 });
+	const instead = 'Scripts never connect to the production database.';
+	refuseProduction(env, 'a database connection', instead);
+	// The fields below are what gets connected to, and the guard has just looked at those same fields.
+	const config = addressConfig(env.POSTGRES_URL_NON_POOLING ?? '');
+	refuseProductionConfig(config, 'a database connection', instead);
+	const client = new pg.Client({ ...config, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 8000 });
 	await client.connect();
 	return client;
 }
@@ -63,11 +66,10 @@ export function realContext(root: string, env: Record<string, string | undefined
 		if (blocked) return { ok: false, reason: blocked };
 		if (pooler) return { ok: true };
 		try {
-			const url = new URL(env.POSTGRES_URL ?? '');
-			url.searchParams.delete('sslmode');
-			url.searchParams.delete('supa');
+			const config = addressConfig(env.POSTGRES_URL ?? '');
+			refuseProductionConfig(config, 'a database connection', 'Scripts never connect to the production database.');
 			// Exactly the app's settings (src/lib/server/db.ts): the pinned root CA, verification on.
-			const client = new pg.Client({ connectionString: url.toString(), ssl: { ca: SUPABASE_ROOT_CA, rejectUnauthorized: true }, connectionTimeoutMillis: 8000 });
+			const client = new pg.Client({ ...config, ssl: { ca: SUPABASE_ROOT_CA, rejectUnauthorized: true }, connectionTimeoutMillis: 8000 });
 			await client.connect();
 			await client.query('select 1');
 			clients.push(client);

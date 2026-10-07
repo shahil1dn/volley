@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { addressConfig } from './lib/connection-target.ts';
 
 // Connects as the database owner from .env.local, for scripts and database tests
 // run from a developer laptop. The app itself never uses this.
@@ -8,12 +9,7 @@ export async function connectAsOwner(): Promise<pg.Client> {
 
 	// Supabase signs with its own certificate authority, which Node does not ship.
 	// The link stays encrypted; only the certificate check is skipped.
-	const withoutSslMode = new URL(url);
-	withoutSslMode.searchParams.delete('sslmode');
-	const client = new pg.Client({
-		connectionString: withoutSslMode.toString(),
-		ssl: { rejectUnauthorized: false },
-	});
+	const client = new pg.Client({ ...addressConfig(url), ssl: { rejectUnauthorized: false } });
 	await client.connect();
 	return client;
 }

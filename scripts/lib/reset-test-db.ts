@@ -3,7 +3,7 @@
 // one test project (by exact ref, any letter case) is ever accepted, production is named and
 // refused, and a confirmation flag must be given. Supabase's managed schemas and extensions are never touched.
 import pg from 'pg';
-import { parse } from 'pg-connection-string';
+import { addressConfig } from './connection-target.ts';
 import { PRODUCTION_REF, productionSetting } from '../production-guard.ts';
 import { projectRefOf } from './checks.ts';
 
@@ -18,27 +18,30 @@ const POOLER_HOST = /^aws-\d+-[a-z0-9-]+\.pooler\.supabase\.com$/;
 
 type Target = { config: pg.ClientConfig } | { refusal: string };
 
-// Reads POSTGRES_URL_NON_POOLING ONCE, with the parser pg itself uses, and accepts only what that parser
-// resolves to one of the two shapes above. A regex over the text is not enough: percent-encoding, ?host=,
-// ?user= and a longer host name each read differently to a pattern than to pg. The returned config is what gets
-// connected to, so what is checked is what is used.
+// Reads POSTGRES_URL_NON_POOLING ONCE (addressConfig: the one reading every owner connection uses) and
+// accepts only what it resolves to: one of the two shapes above. A regex over the text is not enough:
+// percent-encoding, ?host=, ?user= and a longer host name each read differently to a pattern than to pg.
+// The returned config is what gets connected to, so what is checked is what is used. A refusal never
+// prints a piece of the address (a password can sit anywhere in it), only fixed text.
 function readTarget(raw: string): Target {
 	const refuse = (why: string): Target => ({ refusal: `POSTGRES_URL_NON_POOLING isn't the test project's address (${TEST_REF}): ${why}. Nothing was touched.` });
-	const at = raw.indexOf('?');
-	const keys = at < 0 ? [] : [...new URLSearchParams(raw.slice(at + 1)).keys()];
-	const stray = keys.find((key) => key.toLowerCase() !== 'sslmode');
-	if (stray !== undefined) return refuse(`the query parameter "${stray}" is not allowed (it can change where pg connects; only sslmode is)`);
-	let config: pg.ClientConfig;
+	if (/[\s\x00-\x1f\x7f]/.test(raw)) return refuse('it contains whitespace or control characters');
+	let config: pg.ClientConfig & { host: string };
+	let query: URLSearchParams;
 	try {
-		config = parse(at < 0 ? raw : raw.slice(0, at)) as pg.ClientConfig;
+		config = addressConfig(raw);
+		query = new URL(raw).searchParams;
 	} catch {
 		return refuse('it cannot be read as a connection address');
 	}
-	const host = String(config.host ?? '').toLowerCase();
+	for (const key of query.keys()) {
+		if (key.toLowerCase() !== 'sslmode') return refuse('it has a query parameter other than sslmode (a parameter can change where pg connects)');
+	}
+	const host = config.host.toLowerCase();
 	const user = String(config.user ?? '').toLowerCase();
 	const direct = host === DIRECT_HOST && user === 'postgres';
 	const pooler = POOLER_HOST.test(host) && user === `postgres.${TEST_REF}`;
-	if (!direct && !pooler) return refuse(`it resolves to host "${host || '(none)'}" and user "${user || '(none)'}"`);
+	if (!direct && !pooler) return refuse(`its host and user are not the project's direct host (${DIRECT_HOST}, user postgres) or a Supabase pooler host (user postgres.${TEST_REF})`);
 	return { config };
 }
 
