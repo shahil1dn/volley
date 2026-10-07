@@ -100,11 +100,7 @@ remote yet.
 
 ## 3. Exact next pickup point
 
-1. **Small follow-up to step 2:** split setup's `--force`. Today the advice
-   "rerun with --force to reset the first admin" also regenerates every secret,
-   which signs all hosts out and makes phones look new. Give the account reset
-   its own flag.
-2. **Milestone 4 step 3**: `AGENTS.md`, a Deploy button, and a fresh AI agent
+1. **Milestone 4 step 3**: `AGENTS.md`, a Deploy button, and a fresh AI agent
    setting up a copy from `AGENTS.md` alone (A15). Setup and doctor are done
    (ADR-014, `npm run doctor -- --help`). Doctor's HUMAN steps and the build
    session's 2026-10-07 list are the input. Step 3 needs new Supabase and Vercel
