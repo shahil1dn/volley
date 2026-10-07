@@ -11,7 +11,8 @@
     "test": "node --env-file-if-exists=.env.local --import ./tests/refuse-production.ts --test --test-concurrency=1 tests/*.test.ts",
     "test:e2e": "node --env-file-if-exists=.env.local node_modules/@playwright/test/cli.js test",
     "add-host": "node --env-file-if-exists=.env.local scripts/add-host.mjs",
-    "set-host": "node --env-file-if-exists=.env.local scripts/set-host.mjs"
+    "set-host": "node --env-file-if-exists=.env.local scripts/set-host.mjs",
+    "doctor": "node --env-file-if-exists=.env.local scripts/doctor.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
