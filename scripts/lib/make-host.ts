@@ -12,10 +12,14 @@ type AuthAdmin = {
 export const EMAIL = /^(?=.{3,254}$)[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
 
 // Creates the account (already confirmed) or resets the password of an existing one, then makes it
-// a host. A new password ends every older session (ADR-011).
-export async function makeHost(db: pg.Client, admin: AuthAdmin, email: string, password: string): Promise<{ userId: string; created: boolean }> {
+// a host. A new password ends every older session (ADR-011). A caller that already looked can say what
+// it saw with `expectExisting`; if the account is not in that state now (it appeared, or vanished,
+// in between), nothing is changed, so a password is never reset that the caller didn't mean to reset.
+export async function makeHost(db: pg.Client, admin: AuthAdmin, email: string, password: string, options: { expectExisting?: boolean } = {}): Promise<{ userId: string; created: boolean }> {
 	const existing = await db.query('select id from auth.users where lower(email) = $1', [email]);
 	let userId = existing.rows[0]?.id;
+	if (options.expectExisting === false && userId) throw new Error(`The account for ${email} already exists (it appeared while setup was running), so its password was not reset`);
+	if (options.expectExisting === true && !userId) throw new Error(`The account for ${email} isn't there any more, so nothing was changed`);
 	if (userId) {
 		const { error } = await admin.updateUserById(userId, { password, email_confirm: true });
 		if (error) throw new Error(`Could not reset the password: ${error.message}`);

@@ -41,7 +41,6 @@ export type Deps = {
 	env: Record<string, string | undefined>;
 	migrationsDir: URL;
 	now(): number;
-	exists(path: string): boolean;
 	read(path: string): string | null;
 	write(path: string, text: string, mode: number): void;
 	remove(path: string): void;
@@ -69,7 +68,6 @@ export const realDeps = (root: string, env: Record<string, string | undefined>, 
 	env,
 	migrationsDir: new URL('../../db/migrations/', import.meta.url),
 	now: () => Date.now(),
-	exists: (path) => existsSync(join(root, path)),
 	read: (path) => (existsSync(join(root, path)) ? readFileSync(join(root, path), 'utf8') : null),
 	write: (path, text, mode) => writePrivate(join(root, path), text, mode),
 	remove: (path) => rmSync(join(root, path), { force: true }),
@@ -315,7 +313,8 @@ async function firstAdmin(db: pg.Client, options: Options, deps: Deps, effective
 	const asked = shellQuote(email);
 	// Never --force here: it also regenerates every secret, which signs all hosts out and makes phones look new.
 	const resetCommand = `npm run setup -- --first-admin-email ${asked} --reset-first-admin`;
-	const resetNext = (): Next => ({ kind: 'run', command: resetCommand, text: `If that is the right person: run ${resetCommand}` });
+	// A person's decision, not the agent's: a mistyped email that matches someone else would otherwise be promoted or reset.
+	const resetNext = (): Next => humanNext(`Confirm ${email} is the right person, then run: ${resetCommand}`);
 	const forceWarning = ' (Not --force: that regenerates the secrets, which signs every host out and makes phones look new.)';
 	const host = (await db.query('select is_admin from public.hosts where email = $1', [email])).rows[0];
 	if (host?.is_admin) return step('hosts.first_admin', 'unchanged', `${email} is already an admin host. Nothing changed (no password was touched).`);
@@ -329,9 +328,18 @@ async function firstAdmin(db: pg.Client, options: Options, deps: Deps, effective
 	if (account && !options.resetFirstAdmin) {
 		return step('hosts.first_admin', 'failed', `A Supabase account for ${email} already exists but isn't a host. Making it a host resets its password, so setup won't do that without --reset-first-admin.${forceWarning}`, [resetNext()]);
 	}
-	if (options.dryRun) return step('hosts.first_admin', 'would', `Would create ${email} as an admin host and write the first password to ${FIRST_ADMIN_FILE} (never to the screen).`);
+	// A password file that is already there: replaced only on request, and only if it is for this same person.
+	const existingFile = deps.read(FIRST_ADMIN_FILE);
+	if (existingFile !== null) {
+		if (!options.resetFirstAdmin) return step('hosts.first_admin', 'failed', `${FIRST_ADMIN_FILE} already exists, and setup won't overwrite a file that may hold a password. Pass --reset-first-admin to replace it (only when it's for the same email), or delete it if you have already used it.${forceWarning}`, [{ kind: 'run', command: `rm ${FIRST_ADMIN_FILE}`, text: `If you have already used it: delete it (rm ${FIRST_ADMIN_FILE}) and run setup again.` }]);
+		const owner = /^email: (\S+)$/m.exec(existingFile)?.[1]?.toLowerCase();
+		if (owner !== email) return step('hosts.first_admin', 'failed', `${FIRST_ADMIN_FILE} is for ${owner && EMAIL.test(owner) ? owner : "someone setup can't identify"}, not ${email}, so setup won't replace it.`, [humanNext(`Find out whether that password was handed over. If it was (or is no longer needed), delete ${FIRST_ADMIN_FILE} and run setup again.`)]);
+	}
+	if (options.dryRun) {
+		if (account) return step('hosts.first_admin', 'would', `Would reset the password of the existing account ${email}, make it an admin host${existingFile !== null ? ` and replace the existing ${FIRST_ADMIN_FILE}` : ''}, with the new password written to ${FIRST_ADMIN_FILE} (never to the screen).`);
+		return step('hosts.first_admin', 'would', `Would create ${email} as an admin host and write the first password to ${FIRST_ADMIN_FILE} (never to the screen).`);
+	}
 	if (!deps.isIgnored(FIRST_ADMIN_FILE)) return step('hosts.first_admin', 'failed', `${FIRST_ADMIN_FILE} isn't ignored by git, so a password written there could be committed. Nothing was made.`, [{ kind: 'edit', text: `Add ${FIRST_ADMIN_FILE} to .gitignore, then run setup again.` }]);
-	if (deps.exists(FIRST_ADMIN_FILE) && !options.resetFirstAdmin) return step('hosts.first_admin', 'failed', `${FIRST_ADMIN_FILE} already exists, and setup won't overwrite a file that may hold a password.${forceWarning}`, [{ kind: 'run', command: `rm ${FIRST_ADMIN_FILE}`, text: `If you have already used it: delete it (rm ${FIRST_ADMIN_FILE}) and run setup again.` }]);
 
 	// The file first, the account second: a password that exists only after a failed write would leave an
 	// account nobody can sign in to, and a rerun would call it "unchanged".
@@ -346,7 +354,7 @@ async function firstAdmin(db: pg.Client, options: Options, deps: Deps, effective
 	// its API and can't be rolled back, so afterwards we look at what really exists and advise from that.)
 	try {
 		await db.query('begin');
-		await makeHost(db, deps.authAdmin(effective), email, password);
+		await makeHost(db, deps.authAdmin(effective), email, password, { expectExisting: account });
 		await setHost(db, email, { name: options.firstAdminName, admin: true });
 		await db.query('commit');
 	} catch (error) {

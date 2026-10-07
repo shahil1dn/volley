@@ -26,7 +26,8 @@ setup -- --help` lists every flag. Setup never changes Vercel unless you pass
 `--push-vercel-env` or `--vercel-protection`, and only for the project linked in `.vercel/`.
 
 Two flags overwrite things, and each does one job: `--force` regenerates the generated secrets
-(this signs every host out), `--reset-first-admin` lets `--first-admin-email` act on an account
+(this signs every host out) and, with `--push-vercel-env`, replaces settings already on Vercel;
+`--reset-first-admin` lets `--first-admin-email` act on an account
 that already exists (new password, or admin for an existing host). Neither does the other's job.
 
 Setup writes secrets only to files git ignores (every `.env*` name except `.env.example`);

@@ -14,6 +14,7 @@ import { PRODUCTION_REF } from '../scripts/production-guard.ts';
 import { runChecks, type Ctx } from '../scripts/lib/checks.ts';
 import { connectOwnerWith, realContext } from '../scripts/lib/context.ts';
 import { parse } from '../scripts/lib/env.ts';
+import { makeHost } from '../scripts/lib/make-host.ts';
 import { toText } from '../scripts/lib/report.ts';
 import { FIRST_ADMIN_FILE, realDeps, runSetup, summaryText, type Deps, type Options } from '../scripts/lib/setup.ts';
 import { skipWithoutDatabase as skip } from './db-helpers.ts';
@@ -48,7 +49,6 @@ function depsFor(root: string, env: Record<string, string | undefined>, over: Pa
 		env,
 		migrationsDir: new URL('../db/migrations/', import.meta.url),
 		now: () => 0,
-		exists: (path) => existsSync(join(root, path)),
 		read: (path) => (existsSync(join(root, path)) ? readFileSync(join(root, path), 'utf8') : null),
 		write: (path, text, mode) => {
 			writeFileSync(join(root, path), text, { mode });
@@ -392,18 +392,22 @@ test('--disable-signup needs an access token, and says plainly what a person doe
 // ---- the first admin, on a fake database: the order of steps and what a failure leaves behind ----
 
 type HostState = { host?: { is_admin: boolean }; account?: boolean };
-type WorldOptions = { failWrite?: boolean; failCreate?: boolean; failPromote?: boolean; hostsTableMissing?: boolean; files?: Record<string, string> };
+type WorldOptions = { accountAppearsLate?: boolean; failWrite?: boolean; failCreate?: boolean; failPromote?: boolean; hostsTableMissing?: boolean; files?: Record<string, string> };
 
 function fakeAdminWorld(state: HostState, over: WorldOptions = {}) {
 	const log: string[] = [];
+	let checked = 0;
 	const db = {
 		query: async (sql: string) => {
 			const text = sql.replace(/\s+/g, ' ').trim();
 			if (/^(begin|commit|rollback)$/.test(text)) { log.push(`db:${text}`); return { rows: [], rowCount: 0 }; }
 			if (over.hostsTableMissing && /public\.hosts/.test(text)) throw Object.assign(new Error('relation "public.hosts" does not exist'), { code: '42P01' });
 			if (/select is_admin from public\.hosts/.test(text)) return { rows: state.host ? [state.host] : [], rowCount: state.host ? 1 : 0 };
-			if (/select 1 from auth\.users/.test(text)) return { rows: state.account ? [{}] : [], rowCount: state.account ? 1 : 0 };
-			if (/select id from auth\.users/.test(text)) return { rows: state.account ? [{ id: 'u-existing' }] : [], rowCount: state.account ? 1 : 0 };
+			if (/select 1 from auth\.users/.test(text)) {
+				const there = state.account || (over.accountAppearsLate && checked++ > 0); // the first look says no, later ones say yes
+				return { rows: there ? [{}] : [], rowCount: there ? 1 : 0 };
+			}
+			if (/select id from auth\.users/.test(text)) return { rows: state.account || over.accountAppearsLate ? [{ id: 'u-existing' }] : [], rowCount: state.account || over.accountAppearsLate ? 1 : 0 };
 			if (/^insert into public\.hosts/.test(text)) { log.push('db:insert host'); return { rows: [], rowCount: 1 }; }
 			if (/^update public\.hosts/.test(text)) {
 				if (over.failPromote) throw new Error('deadlock detected');
@@ -440,6 +444,7 @@ function fakeAdminWorld(state: HostState, over: WorldOptions = {}) {
 }
 
 const ADMIN_OPTIONS = { ...OPTIONS, firstAdminEmail: 'new.person@example.com' };
+const passwordFileFor = (email: string) => `Volley first admin\nemail: ${email}\npassword: ${'x'.repeat(32)}\nSign in at the site root (/).\n`;
 
 test('first admin: the password file is written BEFORE the account is touched; if the write fails no account is made or changed', async () => {
 	const world = fakeAdminWorld({}, { failWrite: true });
@@ -472,7 +477,10 @@ test('first admin: making an existing non-admin host an admin needs --reset-firs
 	const step = refused.steps.find((s) => s.id === 'hosts.first_admin');
 	assert.equal(step?.status, 'failed');
 	assert.match(step?.detail ?? '', /--reset-first-admin/);
-	assert.equal(step?.next[0].command, 'npm run setup -- --first-admin-email new.person@example.com --reset-first-admin');
+	assert.equal(step?.next[0].kind, 'human', 'promoting someone is a person\'s decision');
+	assert.equal(step?.next[0].command, undefined, 'a mistyped email must not become a command the agent runs');
+	assert.match(step?.next[0].text ?? '', /Confirm new\.person@example\.com is the right person, then run: npm run setup -- --first-admin-email new\.person@example\.com --reset-first-admin/);
+	assert.equal(refused.exitCode, 2);
 	assert.ok(!without.log.some((entry) => entry.startsWith('db:')), 'the host row was not touched');
 
 	const forced = fakeAdminWorld({ host: { is_admin: false }, account: true });
@@ -655,10 +663,10 @@ test('--push-vercel-env help says it sends THIS machine\'s Supabase values to Pr
 });
 
 test('first admin: a failed password-file write leaves an existing file alone (the write is atomic, so there is nothing to clean up)', async () => {
-	const world = fakeAdminWorld({}, { failWrite: true, files: { [FIRST_ADMIN_FILE]: 'old password file\n' } });
+	const world = fakeAdminWorld({}, { failWrite: true, files: { [FIRST_ADMIN_FILE]: passwordFileFor('new.person@example.com') } });
 	const result = await runSetup({ ...ADMIN_OPTIONS, resetFirstAdmin: true }, world.deps);
 	assert.equal(result.steps.find((s) => s.id === 'hosts.first_admin')?.status, 'failed');
-	assert.equal(readFileSync(join(world.root, FIRST_ADMIN_FILE), 'utf8'), 'old password file\n', 'a possibly valid file was deleted for nothing');
+	assert.equal(readFileSync(join(world.root, FIRST_ADMIN_FILE), 'utf8'), passwordFileFor('new.person@example.com'), 'a possibly valid file was deleted for nothing');
 });
 
 test('first admin: account and host row are made in ONE transaction; a failure rolls back and the advice matches what a rerun does', async () => {
@@ -751,14 +759,14 @@ test('an error that escapes setup is scrubbed of the values it read from the env
 test('--reset-first-admin resets an existing account and leaves the generated secrets byte-identical', async () => {
 	const first = fakeAdminWorld({ host: { is_admin: true }, account: true });
 	await runSetup(OPTIONS, first.deps); // writes the secrets into .env.local
-	const before = readFileSync(join(first.root, '.env.local'), 'utf8');
+	const before = readFileSync(join(first.root, '.env.local'));
 	const state: HostState = { account: true };
 	const second = fakeAdminWorld(state);
 	writeFileSync(join(second.root, '.env.local'), before);
 	const result = await runSetup({ ...ADMIN_OPTIONS, resetFirstAdmin: true }, second.deps);
 	assert.equal(result.steps.find((s) => s.id === 'hosts.first_admin')?.status, 'done');
 	assert.ok(second.log.includes('auth:setPassword'), 'the account password was reset');
-	assert.equal(readFileSync(join(second.root, '.env.local'), 'utf8'), before, 'the secrets were touched');
+	assert.ok(readFileSync(join(second.root, '.env.local')).equals(before), 'the secrets were touched');
 	assert.ok(!result.steps.some((s) => s.id === 'env.file'), 'nothing was written to the env file');
 	assert.equal(result.steps.find((s) => s.id === 'env.secrets')?.status, 'unchanged');
 });
@@ -790,11 +798,12 @@ test('no command setup prints for the first-admin account case contains --force;
 		const result = await runSetup({ ...ADMIN_OPTIONS, ...opts }, fakeAdminWorld(state, over).deps);
 		const step = result.steps.find((s) => s.id === 'hosts.first_admin');
 		for (const next of step?.next ?? []) {
-			printed.push(next.command ?? '');
+			printed.push(`${next.command ?? ''} ${next.text}`);
 			assert.ok(!(next.command ?? '').includes('--force'), `${JSON.stringify(state)}: ${next.command}`);
+			assert.ok(!/run[: ]+npm run setup[^\n]*--force/.test(next.text), `${JSON.stringify(state)}: ${next.text}`);
 		}
 	}
-	assert.ok(printed.filter((command) => command.includes('--reset-first-admin')).length >= 3, `commands were: ${printed.join(' | ')}`);
+	assert.ok(printed.filter((line) => line.includes('--reset-first-admin')).length >= 3, `advice was: ${printed.join(' | ')}`);
 });
 
 test('a password file already in the way is only replaced with --reset-first-admin, never with --force', async () => {
@@ -802,7 +811,7 @@ test('a password file already in the way is only replaced with --reset-first-adm
 	const refused = await runSetup({ ...ADMIN_OPTIONS, force: true }, withForce.deps);
 	assert.equal(refused.steps.find((s) => s.id === 'hosts.first_admin')?.status, 'failed');
 	assert.equal(readFileSync(join(withForce.root, FIRST_ADMIN_FILE), 'utf8'), 'old\n');
-	const withReset = fakeAdminWorld({}, { files: { [FIRST_ADMIN_FILE]: 'old\n' } });
+	const withReset = fakeAdminWorld({}, { files: { [FIRST_ADMIN_FILE]: passwordFileFor('new.person@example.com') } });
 	const done = await runSetup({ ...ADMIN_OPTIONS, resetFirstAdmin: true }, withReset.deps);
 	assert.equal(done.steps.find((s) => s.id === 'hosts.first_admin')?.status, 'done');
 	assert.match(readFileSync(join(withReset.root, FIRST_ADMIN_FILE), 'utf8'), /password: \S{32}/);
@@ -816,6 +825,82 @@ test('--reset-first-admin does not regenerate secrets, and --force still does (t
 	assert.equal(parse(readFileSync(join(root, '.env.local'), 'utf8')).HOST_SESSION_SECRET, original.HOST_SESSION_SECRET);
 	await runSetup({ ...OPTIONS, force: true }, depsFor(root, {}));
 	assert.notEqual(parse(readFileSync(join(root, '.env.local'), 'utf8')).HOST_SESSION_SECRET, original.HOST_SESSION_SECRET);
+});
+
+test('first admin: both refusals (existing non-admin host, existing account) are a person\'s decision and exit 2, with no run command', async () => {
+	for (const state of [{ host: { is_admin: false }, account: true }, { account: true }] as HostState[]) {
+		const result = await runSetup(ADMIN_OPTIONS, fakeAdminWorld(state).deps);
+		const step = result.steps.find((s) => s.id === 'hosts.first_admin');
+		assert.equal(step?.status, 'failed');
+		assert.ok(step?.next.length && step.next.every((next) => next.kind === 'human' && next.command === undefined), JSON.stringify(step?.next));
+		assert.match(step?.next[0].text ?? '', /^HUMAN: Confirm new\.person@example\.com is the right person, then run: npm run setup -- --first-admin-email new\.person@example\.com --reset-first-admin$/);
+		assert.equal(result.exitCode, 2, JSON.stringify(state));
+	}
+});
+
+test('first admin: a dry run with --reset-first-admin says what would really happen to an existing account', async () => {
+	const plain = await runSetup({ ...ADMIN_OPTIONS, resetFirstAdmin: true, dryRun: true }, fakeAdminWorld({ account: true }).deps);
+	const detail = plain.steps.find((s) => s.id === 'hosts.first_admin')?.detail ?? '';
+	assert.match(detail, /Would reset the password of the existing account new\.person@example\.com, make it an admin host/);
+	assert.doesNotMatch(detail, /Would create/);
+	assert.doesNotMatch(detail, /replace/);
+	const withFile = await runSetup({ ...ADMIN_OPTIONS, resetFirstAdmin: true, dryRun: true }, fakeAdminWorld({ account: true }, { files: { [FIRST_ADMIN_FILE]: passwordFileFor('new.person@example.com') } }).deps);
+	assert.match(withFile.steps.find((s) => s.id === 'hosts.first_admin')?.detail ?? '', /Would reset the password of the existing account .*and replace the existing \.volley-first-admin\.txt/);
+	const fresh = await runSetup({ ...ADMIN_OPTIONS, dryRun: true }, fakeAdminWorld({}).deps);
+	assert.match(fresh.steps.find((s) => s.id === 'hosts.first_admin')?.detail ?? '', /Would create new\.person@example\.com as an admin host/);
+});
+
+test('first admin: --reset-first-admin only replaces a password file that is for the same email', async () => {
+	for (const [label, content, expected] of [
+		['another person', passwordFileFor('someone.else@example.com'), 'someone.else@example.com'],
+		['nobody readable', 'just some notes\n', 'unreadable'],
+	] as const) {
+		for (const dryRun of [false, true]) {
+			const world = fakeAdminWorld({ account: true }, { files: { [FIRST_ADMIN_FILE]: content } });
+			const result = await runSetup({ ...ADMIN_OPTIONS, resetFirstAdmin: true, dryRun }, world.deps);
+			const step = result.steps.find((s) => s.id === 'hosts.first_admin');
+			assert.equal(step?.status, 'failed', `${label} (dry run ${dryRun})`);
+			if (expected !== 'unreadable') assert.match(step?.detail ?? '', new RegExp(expected.replace('.', '\\.')), 'names the other email');
+			assert.ok(step?.next.every((next) => next.kind === 'human'), 'a human decides whose password file this is');
+			assert.equal(readFileSync(join(world.root, FIRST_ADMIN_FILE), 'utf8'), content, 'the file was left alone');
+			assert.ok(!world.log.some((entry) => /^auth:|^db:(insert|update|begin)/.test(entry)), 'no account was touched');
+			assert.equal(result.exitCode, 2);
+		}
+	}
+	const same = fakeAdminWorld({ account: true }, { files: { [FIRST_ADMIN_FILE]: passwordFileFor('new.person@example.com') } });
+	const done = await runSetup({ ...ADMIN_OPTIONS, resetFirstAdmin: true }, same.deps);
+	assert.equal(done.steps.find((s) => s.id === 'hosts.first_admin')?.status, 'done');
+	assert.notEqual(readFileSync(join(same.root, FIRST_ADMIN_FILE), 'utf8'), passwordFileFor('new.person@example.com'));
+});
+
+test('first admin: the password-file-in-the-way message names both ways out', async () => {
+	const world = fakeAdminWorld({}, { files: { [FIRST_ADMIN_FILE]: passwordFileFor('new.person@example.com') } });
+	const result = await runSetup(ADMIN_OPTIONS, world.deps);
+	const detail = result.steps.find((s) => s.id === 'hosts.first_admin')?.detail ?? '';
+	assert.match(detail, /--reset-first-admin to replace it \(only when it's for the same email\)/);
+});
+
+test('first admin: if the account appeared after setup looked, its password is NOT reset without the flag', async () => {
+	const world = fakeAdminWorld({}, { accountAppearsLate: true });
+	const result = await runSetup(ADMIN_OPTIONS, world.deps);
+	const step = result.steps.find((s) => s.id === 'hosts.first_admin');
+	assert.equal(step?.status, 'failed');
+	assert.ok(!world.log.includes('auth:setPassword') && !world.log.includes('auth:createUser'), `auth was called: ${world.log.join(' → ')}`);
+	assert.equal(existsSync(join(world.root, FIRST_ADMIN_FILE)), false, 'the password file was removed');
+	assert.match(step?.detail ?? '', /appeared|already exists/);
+});
+
+test('makeHost: refuses when the account is not in the state the caller expected', async () => {
+	const queries: string[] = [];
+	const db = (found: boolean) => ({ query: async (sql: string) => (queries.push(sql), { rows: /select id from auth\.users/.test(sql) && found ? [{ id: 'u1' }] : [], rowCount: 1 }) }) as unknown as pg.Client;
+	let touched = 0;
+	const authAdmin = { createUser: async () => (touched++, { data: { user: { id: 'u2' } }, error: null }), updateUserById: async () => (touched++, { error: null }) };
+	await assert.rejects(makeHost(db(true), authAdmin, 'a@example.com', 'pw', { expectExisting: false }), /already exists/);
+	await assert.rejects(makeHost(db(false), authAdmin, 'a@example.com', 'pw', { expectExisting: true }), /no longer exists|isn't there/);
+	assert.equal(touched, 0);
+	await makeHost(db(true), authAdmin, 'a@example.com', 'pw', { expectExisting: true });
+	await makeHost(db(false), authAdmin, 'a@example.com', 'pw');
+	assert.equal(touched, 2);
 });
 
 // ---- the database steps, on the TEST database ----
