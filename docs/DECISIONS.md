@@ -563,7 +563,7 @@ person need not read the output.
   `run` command; a setup step only a person can fix exits 2 even if doctor says "run setup".
 
 **Amendment after the A15 trial (2026-10-11).** Preview settings are added with an empty
-git-branch argument (`vercel env add NAME preview "" --yes`): Vercel CLI 53.0.1 in
+git-branch argument (`vercel env add NAME preview "" --yes`; verified live in trial 2): Vercel CLI 53.0.1 in
 non-interactive mode stops with `git_branch_required` unless the third argument is given, and
 its own prompt says an empty branch means all Preview branches. A failed CLI call reports the
 last meaningful line(s) (or its JSON message), not the first line, which is usually a hint tag
@@ -575,9 +575,11 @@ scheduled run. Setup also refuses to act when the Supabase addresses it holds (i
 or sent, and a person removes the stale one. Two different `PUBLIC_` and `NEXT_PUBLIC_` addresses are
 refused rather than one winning.
 
-**Not confirmed against live services** (checked only with fakes or the docs):
-the Vercel project API calls (`vercel api` for `ssoProtection.deploymentType`, `vercel env
-ls --format json`, `vercel env add … --sensitive` over stdin), the Supabase Management API
+**Confirmed live in the A15 trials** (2026-10-12, `docs/trial-A15-record-2.md`): `vercel env ls
+--format json`, `vercel env add … --sensitive` over stdin for Production and Preview (the latter
+with the empty branch argument above), and the project read for
+`ssoProtection.deploymentType`. **Not confirmed against live services** (checked only with
+fakes or the docs): `vercel env update`, the protection PATCH, the Supabase Management API
 `PATCH /v1/projects/{ref}/config/auth` body (`disable_signup`), and the Vercel Supabase
 store's exact `NEXT_PUBLIC_…` names (both the publishable and the older anon name are
 accepted). The region table pairs Vercel and AWS regions from Vercel's region list. Doctor

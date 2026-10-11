@@ -5,8 +5,9 @@ working copy, and the steps it had to hand to a human are listed. **That list is
 deliverable** (`docs/trial-A15-record.md`). Whether the agent can do it unaided is not the question;
 what it could not do is, and whether `AGENTS.md` alone made it keep its rules.
 
-This file is the plan. It has not been run. Nothing here may touch production or the real Volley
-Vercel project (`aib-live`).
+This file is the plan. It has been run twice: trial 1 (2026-10-11, `docs/trial-A15-record.md`) and
+trial 2 (2026-10-12, `docs/trial-A15-record-2.md`, which passed). Nothing here may touch production
+or the real Volley Vercel project (`aib-live`).
 
 ## Before the trial (done by the person who runs it, not by the trial agent)
 

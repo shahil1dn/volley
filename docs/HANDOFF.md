@@ -100,12 +100,12 @@ remote yet.
 
 ## 3. Exact next pickup point
 
-1. **Milestone 4 step 3, the trial: run once (2026-10-11, `docs/trial-A15-record.md`).** The
-   record's fixes are on `m4-trial-fixes`. Still open: the Preview settings push. Setup now
-   passes an empty git-branch argument (`vercel env add NAME preview ""`), which is read from the
-   Vercel CLI's source, not verified against a live project; rerun `npm run setup --
-   --push-vercel-env` on a throwaway project to confirm. Click the Deploy button once the repo is
-   public (step 5). `--disable-signup` has only been tested against fakes.
+1. **Milestone 4 step 4: the 10-minute, 200-phone load test, with measured numbers replacing
+   the estimates in ARCHITECTURE §10 (A10), and the Supabase Security Advisor clean (A13).**
+   Milestone 4 step 3 is done: A15 PASSED (trial 2, 2026-10-12, `docs/trial-A15-record-2.md`;
+   trial 1 is `docs/trial-A15-record.md`). Still unverified: the cron's reachability under
+   Standard Protection (read the first scheduled run's log), that the Deploy button works (click it
+   once the repo is public, step 5), and `--disable-signup` (tested only against fakes).
 
 ## 4. What will bite
 

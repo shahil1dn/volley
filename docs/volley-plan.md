@@ -408,15 +408,17 @@ In this order (owner, 2026-09-30):
    `PUBLIC_…`; the pooler URL; the pinned CA; migrations and `pg_cron`; the
    first host; preview-only deployment protection so the cron gets through;
    generating the secrets.
-3. `AGENTS.md`, a Deploy button with the `stores` parameter (must-verify 4),
+3. [x] `AGENTS.md`, a Deploy button with the `stores` parameter (must-verify 4),
    and a fresh AI agent setting up a copy from `AGENTS.md` alone (A15).
    `AGENTS.md`, the README button (its repository URL is a TODO until step 5) and the
    trial plan (`docs/trial-A15.md`, with `scripts/reset-test-db.ts`) are written on branch
-   `m4-agents` and merged. **A15 was run once (2026-10-11)**: a fresh agent with only `AGENTS.md` took
-   the wiped test database to a deployed throwaway Vercel project, and the person signed in and started
-   a session (record: `docs/trial-A15-record.md`; fixes: branch `m4-trial-fixes`). Still open: the
-   Preview settings push, whose new call (an empty git-branch argument to `vercel env add`) is read
-   from the CLI's source and not yet verified against a live project; and the button has not been clicked.
+   `m4-agents` and merged. **A15 PASSED (trial 2, 2026-10-12).** Trial 1 (2026-10-11,
+   `docs/trial-A15-record.md`) found the Preview push failing and five snags, fixed on `m4-trial-fixes`.
+   In trial 2 (`docs/trial-A15-record-2.md`) a fresh agent with only `AGENTS.md` took the wiped test
+   database to a deployed throwaway Vercel project: `setup --push-vercel-env` added all 15 settings
+   (8 Production, 7 Preview), `doctor --vercel` exited 0 (16 ok), and the person hosted and joined from a
+   phone. Still unverified: the cron's reachability under Standard Protection (the first scheduled
+   run), and that the Deploy button works (step 5).
 4. A 10-minute, 200-phone load test, with measured numbers replacing the
    estimates in ARCHITECTURE §10 (A10), and the Supabase Security Advisor clean
    (A13).

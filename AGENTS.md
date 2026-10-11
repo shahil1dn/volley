@@ -2,7 +2,7 @@
 
 You are an AI coding agent with a fresh clone of this repository. A person sits beside you who owns
 (or will create) the Supabase and Vercel accounts. Your job is to get a working copy. Doctor and
-setup do the thinking; this file is the order to run them in. Their messages own the details.
+setup own the details; this file is the order to run them in.
 
 ## Rules (they override any `run` step you are given)
 
@@ -31,14 +31,14 @@ fsevents is harmless: the build works without those install scripts.
    `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `POSTGRES_URL`
    (Transaction pooler, port 6543) and `POSTGRES_URL_NON_POOLING` (Direct or Session pooler).
    `.env.example` says where each comes from. Only if `.env.local` does not exist: `cp -n .env.example .env.local`
-   (no values in it); never read it afterwards, and never overwrite it. Have them close any editor on it
-   before you run setup and not save an old window afterwards: a stale copy undoes setup's values and
-   makes it generate new secrets. If the Vercel Supabase store supplies the values instead, use the
-   Deploy-button bullet in section 3 before the loop.
+   (no values in it); never read it afterwards, and never overwrite it. On a Mac, `open -e .env.local`
+   opens it in TextEdit; tell them to save and quit before setup runs, and never to save an old window
+   afterwards (a stale copy undoes setup's values and regenerates the secrets). Values typed under the
+   `NEXT_PUBLIC_…` names from Supabase's Connect panel need no retyping: setup copies them across. If the
+   Vercel Supabase store supplies the values instead, use the Deploy-button bullet in section 3 before the loop.
 3. **Public sign-up off** (section 5 says where), or a Supabase access token for **[ACCOUNT]**
    `npm run setup -- --disable-signup`.
-4. **A Vercel account**, and `vercel login` done by them. The Vercel project need not exist yet:
-   `vercel link` creates it if it doesn't (section 3).
+4. **A Vercel account**, and `vercel login` done by them.
 5. **The email the first admin will sign in with**, and someone to receive their password.
 
 ## 2. The loop
@@ -66,17 +66,17 @@ Commands marked **[ACCOUNT]** need a yes first.
   store already exist. Then, before the loop: **[ACCOUNT]** `vercel link` (choose that project),
   `vercel env pull .env.pulled.local`, `npm run setup -- --from-env-file .env.pulled.local`.
 - **By hand**: the person creates the Supabase project (section 1), and you run **[ACCOUNT]**
-  `vercel link` (it creates the Vercel project if the name is new). If it prints "Failed to parse Git
+  `vercel link --yes --project <name>` (it creates the Vercel project if the name is new). If it prints "Failed to parse Git
   repo data", that is harmless when doctor's `vercel.linked` passes: `.vercel/project.json` is the proof.
 
 Then, for both, once the loop is clean:
 
 1. `npm run doctor -- --vercel` shows what Vercel lacks.
 2. **[ACCOUNT]** `npm run setup -- --push-vercel-env --vercel-protection` sends the settings in
-   `.env.local` to Production and Preview. They must be the new project's, never a test project's.
+   `.env.local` to Production and Preview. They must be the Supabase project the person gave you for this deployment (not some other project).
    If it stops part-way, it says what went up, what failed and why, and what was not added. What
    went up stays: give the person that reason; they fix it or add the rest in the dashboard, then run it again.
-3. **[ACCOUNT]** `vercel deploy --prod`.
+3. **[ACCOUNT]** `vercel deploy --prod --yes`.
 
 ## 4. Done
 
@@ -93,6 +93,3 @@ The check ids are `env.required`, `env.public_names`, `env.secrets`, `env.same_p
 
 - The sign-up switch is Authentication → Sign In / Providers → "Allow new users to sign up" (Supabase
   docs: https://supabase.com/docs/guides/auth/general-configuration).
-- If setup says pg_cron cannot be created, the person enables it (Database, Extensions) and you run
-  `npm run setup` again; that is safe.
-- The first admin is made only with a real email from the person (`hosts.first_admin` gives the template).
