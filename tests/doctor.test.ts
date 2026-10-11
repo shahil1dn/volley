@@ -460,3 +460,50 @@ test('every setting src/ reads is in doctor\'s list, and .env.example documents 
 	for (const name of listed) assert.match(example, new RegExp(`^${name}=`, 'm'), `${name} is missing from .env.example`);
 	assert.doesNotMatch(example, /^[A-Z_]+=\S/m, '.env.example must hold no values');
 });
+
+// ---- fixes from the A15 trial ----
+
+const vercelWith = (over: { protection?: string | null }): Ctx['vercel'] => ({
+	linked: () => ({ projectId: 'prj_1', orgId: 'team_1' }),
+	envNames: async () => ({}),
+	protection: async () => (over.protection === undefined ? null : over.protection),
+});
+
+test('row 10: all_except_custom_domains is Vercel\'s Standard Protection: ok for the site, with the cron check left to a person', async () => {
+	const check = byId(await runChecks(ctxWith({ vercel: vercelWith({ protection: 'all_except_custom_domains' }) })), 'vercel.protection');
+	assert.equal(check.status, 'ok');
+	assert.match(check.summary, /Standard Protection/);
+	assert.match(check.summary, /first scheduled run/);
+	assert.ok(check.next.length > 0 && check.next.every((next) => next.kind === 'human' && /keep-alive/.test(next.text)), 'a HUMAN look at the cron log, never a run step');
+	assert.equal(exitCode([check]), 0);
+});
+
+test('row 8: vercel.linked names .vercel/project.json as the proof, and says the git-parse message can be ignored', async () => {
+	const ok = byId(await runChecks(ctxWith({ vercel: vercelWith({}) })), 'vercel.linked');
+	assert.equal(ok.status, 'ok');
+	assert.match(ok.summary, /\.vercel\/project\.json/);
+	assert.match(ok.summary, /Failed to parse Git repo data/);
+});
+
+test('sign-up wording is the Supabase docs\' own, with the page cited', async () => {
+	const check = byId(await runChecks(ctxWith({ settings: { status: 200, body: { disable_signup: false } } })), 'auth.signup_disabled');
+	const text = check.next.map((next) => next.text).join(' ');
+	assert.match(text, /Allow new users to sign up/);
+	assert.match(text, /supabase\.com\/docs\/guides\/auth\/general-configuration/);
+	assert.doesNotMatch(text, /not confirmed|best known/);
+});
+
+test('row 3: a missing SUPABASE_URL with a store or PUBLIC_ URL for the project is a fix setup makes, not a step for the person', async () => {
+	const { SUPABASE_URL: _, ...rest } = GOOD_ENV;
+	for (const name of ['NEXT_PUBLIC_SUPABASE_URL', 'PUBLIC_SUPABASE_URL']) {
+		const checks = await runChecks(ctxWith({ env: { ...rest, [name]: `https://${REF}.supabase.co` } }));
+		assert.equal(byId(checks, 'env.required').status, 'ok', name);
+		const names = byId(checks, 'env.public_names');
+		assert.equal(names.status, 'fail', name);
+		assert.match(names.summary, /→ SUPABASE_URL/);
+		assert.equal(names.next[0].command, 'npm run setup');
+	}
+	const none = byId(await runChecks(ctxWith({ env: { ...rest } })), 'env.required');
+	assert.equal(none.status, 'fail');
+	assert.ok(none.next.some((next) => next.kind === 'human' && /SUPABASE_URL/.test(next.text)), 'with no URL anywhere it is still the person\'s');
+});

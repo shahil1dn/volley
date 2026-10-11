@@ -1041,3 +1041,100 @@ test('the command line wires --reset-first-admin and --force to different things
 		rmSync('.env.nothing', { force: true });
 	}
 });
+
+// ---- fixes from the A15 trial (docs/trial-A15-record.md) ----
+
+const LINK = () => ({ projectId: 'prj_1', orgId: 'team_1' });
+const PUSH_ENV = { ...STORE_ENV, HOST_SESSION_SECRET: `host-${'a'.repeat(60)}`, PARTICIPANT_SECRET: `part-${'b'.repeat(60)}`, CRON_SECRET: `cron-${'c'.repeat(60)}`, SUPABASE_SECRET_KEY: 'sb_secret_THE_SERVER_KEY_VALUE', POSTGRES_URL: 'postgres://u:pw@aws-0-eu-west-2.pooler.supabase.com:6543/postgres', POSTGRES_URL_NON_POOLING: 'postgres://u:pw@h:5432/postgres', PUBLIC_SUPABASE_PUBLISHABLE_KEY: STORE_KEY };
+
+test('row 9: a push where Production works and Preview is refused says exactly that, with the CLI\'s real reason', async () => {
+	const added: string[] = [];
+	const exec: Deps['exec'] = (args) => {
+		if (args[1] === 'ls') return { status: 0, stdout: '[]', stderr: '' };
+		if (args[3] === 'preview') return { status: 1, stdout: '', stderr: '<claude-code-hint v="1" type="plugin" />\nRetrieving project…\nError: Preview needs a Git connection (REASON_FROM_CLI)\n' };
+		added.push(`${args[2]} ${args[3]}`);
+		return { status: 0, stdout: '', stderr: '' };
+	};
+	const result = await runSetup({ ...OPTIONS, pushVercelEnv: true }, depsFor(folder(), PUSH_ENV, { exec, vercelLink: LINK }));
+	const step = result.steps.find((s) => s.id === 'vercel.env');
+	assert.equal(step?.status, 'failed');
+	assert.match(step?.detail ?? '', /Production done \(\d+ added\), Preview failed: .*REASON_FROM_CLI/);
+	assert.doesNotMatch(step?.detail ?? '', /claude-code-hint|Retrieving project/);
+	assert.ok(added.length > 0 && added.every((one) => one.endsWith(' production')), 'Production went up before Preview was tried');
+	assert.match(step?.detail ?? '', /not added: .*HOST_SESSION_SECRET/, 'the settings still missing are named');
+	assert.ok(step?.next.every((next) => next.kind === 'human'), 'a person fixes this');
+	assert.match(step?.next[0].text ?? '', /run `npm run setup -- --push-vercel-env` again/);
+	assert.ok(!everything(result, OPTIONS).includes('sb_secret_THE_SERVER_KEY_VALUE'));
+});
+
+test('row 9: when the very first target fails nothing is claimed done', async () => {
+	const exec: Deps['exec'] = (args) => (args[1] === 'ls' ? { status: 0, stdout: '[]', stderr: '' } : { status: 1, stdout: '', stderr: 'Error: not logged in\n' });
+	const result = await runSetup({ ...OPTIONS, pushVercelEnv: true }, depsFor(folder(), PUSH_ENV, { exec, vercelLink: LINK }));
+	const step = result.steps.find((s) => s.id === 'vercel.env');
+	assert.equal(step?.status, 'failed');
+	assert.match(step?.detail ?? '', /Production failed: .*not logged in/);
+	assert.doesNotMatch(step?.detail ?? '', /Production done/);
+});
+
+test('row 3: SUPABASE_URL is filled from the store\'s NEXT_PUBLIC_ or the PUBLIC_ URL, and never over a value that is set', async () => {
+	for (const name of ['NEXT_PUBLIC_SUPABASE_URL', 'PUBLIC_SUPABASE_URL']) {
+		const root = folder();
+		const result = await runSetup(OPTIONS, depsFor(root, { [name]: `https://${REF}.supabase.co`, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: STORE_KEY }));
+		const written = parse(readFileSync(join(root, '.env.local'), 'utf8'));
+		assert.equal(written.SUPABASE_URL, `https://${REF}.supabase.co`, name);
+		if (name.startsWith('NEXT_')) assert.equal(written.PUBLIC_SUPABASE_URL, `https://${REF}.supabase.co`, 'and the PUBLIC_ copy is there for SvelteKit');
+		assert.equal(result.checks.find((c) => c.id === 'env.required')?.status === 'fail' && /SUPABASE_URL/.test(result.checks.find((c) => c.id === 'env.required')?.summary ?? ''), false, 'doctor no longer asks the person for it');
+	}
+	const root = folder();
+	await runSetup(OPTIONS, depsFor(root, { SUPABASE_URL: 'https://keepmekeepmekeepmeke.supabase.co', NEXT_PUBLIC_SUPABASE_URL: `https://${REF}.supabase.co` }));
+	assert.ok(!/^SUPABASE_URL=/m.test(readFileSync(join(root, '.env.local'), 'utf8')), 'a SUPABASE_URL that is already set is left alone');
+});
+
+test('row 5: the env.file step tells the person to close any editor on the file and not to save an old window', async () => {
+	const result = await runSetup(OPTIONS, depsFor(folder(), {}));
+	const detail = result.steps.find((s) => s.id === 'env.file')?.detail ?? '';
+	assert.match(detail, /close any editor/i);
+	assert.match(detail, /old window|stale/i);
+});
+
+test('row 6: the first-admin hand-off is addressed to the person, who opens the file; an agent never reads it', async () => {
+	const world = fakeAdminWorld({});
+	const result = await runSetup(ADMIN_OPTIONS, world.deps);
+	const step = result.steps.find((s) => s.id === 'hosts.first_admin');
+	assert.equal(step?.status, 'done');
+	const text = step?.next.map((next) => next.text).join(' ') ?? '';
+	assert.match(text, /the person (opens|reads) the file/i);
+	assert.match(text, /The agent must not open it/i);
+	assert.doesNotMatch(text, /\(read the file/);
+});
+
+test('row 4: a purge job that migration 0008 scheduled in this very run is reported as done, not unchanged', async () => {
+	const without0008 = MIGRATION_FILES.filter((name) => !name.startsWith('0008'));
+	const db = scriptedDb([
+		bookkeeping,
+		[/^select filename from public\.schema_migrations/, () => ({ rows: without0008.map((filename) => ({ filename })) })],
+		[/^begin$/, () => ({ rows: [] })],
+		[/^commit$/, () => ({ rows: [] })],
+		[/^insert into public\.schema_migrations/, () => ({ rows: [] })],
+		[/^select jobid, active from cron\.job/, () => ({ rows: [{ jobid: 7, active: true }] })],
+		[/./, () => ({ rows: [] })],
+	]);
+	const result = await runSetup({ ...OPTIONS, skipMigrate: false }, depsFor(folder(), DB_ENV, { connectOwner: async () => db.client }));
+	const cron = result.steps.find((s) => s.id === 'db.pg_cron');
+	assert.equal(cron?.status, 'done');
+	assert.match(cron?.detail ?? '', /migration 0008 .* this run/);
+	assert.ok(result.steps.find((s) => s.id === 'db.migrate')?.detail.includes('0008'));
+});
+
+test('row 10: Standard Protection (all_except_custom_domains) is left alone by --vercel-protection and not a warning', async () => {
+	const calls: Calls = { exec: [], fetches: [] };
+	const exec: Deps['exec'] = (args, input) => {
+		calls.exec.push({ args, input });
+		return { status: 0, stdout: JSON.stringify({ ssoProtection: { deploymentType: 'all_except_custom_domains' } }), stderr: '' };
+	};
+	const result = await runSetup({ ...OPTIONS, vercelProtection: true }, depsFor(folder(), {}, { exec, vercelLink: LINK }, calls));
+	const step = result.steps.find((s) => s.id === 'vercel.protection');
+	assert.equal(step?.status, 'unchanged');
+	assert.match(step?.detail ?? '', /Standard Protection/);
+	assert.ok(!calls.exec.some((call) => call.args.includes('PATCH')));
+});

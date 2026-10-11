@@ -7,14 +7,14 @@ import { existsSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { dirname, join, sep } from 'node:path';
 import type pg from 'pg';
 import { productionSetting, refuseProduction } from '../production-guard.ts';
-import { cliMissing, exitCode, human, publicRenames, runChecks, vercelProblemNext, type Check, type Ctx, type Next } from './checks.ts';
+import { STANDARD_PROTECTION, cliMissing, exitCode, human, publicRenames, runChecks, vercelProblemNext, type Check, type Ctx, type Next } from './checks.ts';
 import { EMAIL, makeHost, setHost } from './make-host.ts';
 import { applyMigrations, pendingMigrationsReadOnly } from './migrations.ts';
 import { ENV_NAME, VARS, makeSecret, mask, parse, redact, redactDeep, secretValues, setLine } from './env.ts';
 import { writePrivate } from './private-file.ts';
 import { safeRelative } from './safe-path.ts';
 import { shellQuote } from './shell.ts';
-import { addEnv, setProtectionPreviewOnly, vercelProbe, type Exec } from './vercel.ts';
+import { addEnv, cliReason, setProtectionPreviewOnly, vercelProbe, type Exec } from './vercel.ts';
 
 export type Options = {
 	dryRun: boolean;
@@ -203,7 +203,7 @@ async function setup(options: Options, deps: Deps, track: (view: Record<string, 
 	// Write the env file once, private to the owner.
 	if (writes.length > 0 && !options.dryRun) {
 		deps.write(envFile, fileText, 0o600);
-		steps.push(step('env.file', 'done', `Wrote ${[...new Set(writes)].join(', ')} to ${envFile} (permissions 0600).`));
+		steps.push(step('env.file', 'done', `Wrote ${[...new Set(writes)].join(', ')} to ${envFile} (permissions 0600). Close any editor that has ${envFile} open, and do not save an old window over it: a stale copy would undo these values and make the next run generate new secrets.`));
 	}
 
 	// 4. Database: migrations, pg_cron, the first host. Needs the direct connection.
@@ -230,8 +230,10 @@ async function setup(options: Options, deps: Deps, track: (view: Record<string, 
 				}
 			} else {
 				let migrated = false;
+				let appliedNow: string[] = [];
 				try {
 					const applied = await applyMigrations(db, deps.migrationsDir);
+					appliedNow = applied;
 					migrated = true;
 					steps.push(step('db.migrate', applied.length === 0 ? 'unchanged' : 'done', applied.length === 0 ? 'All migrations are already applied.' : `Applied ${applied.length}: ${applied.join(', ')}.`));
 				} catch (error) {
@@ -240,7 +242,9 @@ async function setup(options: Options, deps: Deps, track: (view: Record<string, 
 				if (migrated) {
 					try {
 						const did = await ensureCronJob(db);
-						steps.push(step('db.pg_cron', did ? 'done' : 'unchanged', did === 'scheduled' ? 'Scheduled the hourly purge job (volley-purge-expired), as migration 0008 does.' : did === 'switched on' ? 'Switched the hourly purge job (volley-purge-expired) back on.' : 'The hourly purge job (volley-purge-expired) is scheduled and on.'));
+						// Migration 0008 schedules the job itself: when it ran just now, the job is new even though it was already there.
+						const byMigration = !did && appliedNow.some((name) => name.startsWith('0008_'));
+						steps.push(step('db.pg_cron', did || byMigration ? 'done' : 'unchanged', did === 'scheduled' ? 'Scheduled the hourly purge job (volley-purge-expired), as migration 0008 does.' : did === 'switched on' ? 'Switched the hourly purge job (volley-purge-expired) back on.' : byMigration ? 'The hourly purge job (volley-purge-expired) was scheduled by migration 0008 in this run, and is on.' : 'The hourly purge job (volley-purge-expired) is scheduled and on.'));
 					} catch (error) {
 						steps.push(step('db.pg_cron', 'failed', `Could not check or schedule the hourly purge job: ${failure(error)}`, [humanNext('Supabase dashboard → Database → Extensions → search "pg_cron" → enable it, then run `npm run setup` again.')]));
 					}
@@ -365,7 +369,7 @@ async function firstAdmin(db: pg.Client, options: Options, deps: Deps, effective
 		const state = exists ? `The Supabase account exists but is not a host (its password may have been reset), so a rerun needs --reset-first-admin to set a fresh one.${forceWarning}` : 'No account was made, so a plain rerun starts from the beginning.';
 		return step('hosts.first_admin', 'failed', `${redact(failure(error), [password])}. The password file was removed. ${state}`, [{ kind: 'run', command: again, text: `Once the cause above is fixed, run: ${again}`, ...(exists ? { confirm: 'destructive' as const } : {}) }]);
 	}
-	return step('hosts.first_admin', 'done', `Created ${email} as an admin host. The first password is in ${FIRST_ADMIN_FILE} (permissions 0600); it was not printed.`, [humanNext(`Give the person the password in ${FIRST_ADMIN_FILE} privately (read the file, don't paste it into a chat log), have them sign in at the site root and keep it in a password manager, then delete the file.`)]);
+	return step('hosts.first_admin', 'done', `Created ${email} as an admin host. The first password is in ${FIRST_ADMIN_FILE} (permissions 0600); it was not printed.`, [humanNext(`The first password is in ${FIRST_ADMIN_FILE}. The person opens the file themselves; the agent must not open it or paste it into a chat log. They sign in at the site root, keep the password in a password manager, then delete the file.`)]);
 }
 
 async function pushVercelEnv(options: Options, deps: Deps, effective: Record<string, string | undefined>): Promise<Step> {
@@ -388,17 +392,32 @@ async function pushVercelEnv(options: Options, deps: Deps, effective: Record<str
 	}
 	if (todo.length === 0) return step('vercel.env', 'unchanged', `Nothing to add: ${options.vercelTargets.join(' and ')} already have every setting that is set here.`);
 	if (options.dryRun) return step('vercel.env', 'would', `Would add to the linked project: ${todo.map((entry) => `${entry.name} (${entry.target})`).join(', ')}.`);
-	try {
-		for (const entry of todo) {
+	let added = 0;
+	for (const entry of todo) {
+		try {
 			if (entry.replace) {
 				const result = deps.exec(['env', 'update', entry.name, entry.target, '--yes', ...(SENSITIVE.has(entry.name) ? ['--sensitive'] : [])], effective[entry.name]);
-				if (result.status !== 0) throw new Error(`the Vercel CLI could not update ${entry.name} on ${entry.target}`);
+				if (result.status !== 0) throw new Error(`the Vercel CLI could not update ${entry.name} on ${entry.target} (${cliReason(result, [effective[entry.name] as string])})`);
 			} else addEnv(deps.exec, entry.name, entry.target, effective[entry.name] as string, SENSITIVE.has(entry.name));
+			added++;
+		} catch (error) {
+			if (cliMissing(error)) return step('vercel.env', 'failed', failure(error), [vercelProblemNext(error, 'run setup again')]);
+			return step('vercel.env', 'failed', partialPush(todo, added, failure(error)), [humanNext('Read the reason above. If Vercel is not logged in, run `vercel login` and approve it in the browser. Otherwise add the missing settings in the Vercel dashboard → Project → Settings → Environment Variables. Then run `npm run setup -- --push-vercel-env` again (it only adds what is missing).')]);
 		}
-	} catch (error) {
-		return step('vercel.env', 'failed', failure(error), [cliMissing(error) ? vercelProblemNext(error, 'run setup again') : humanNext('Run `vercel login` if it is not logged in; otherwise add the setting in the Vercel dashboard → Project → Settings → Environment Variables.')]);
 	}
 	return step('vercel.env', 'done', `Added to the linked project: ${todo.map((entry) => `${entry.name} (${entry.target})`).join(', ')}. These are THIS machine's values, now live on those targets (a test database here means the deployment uses the test database). Values went in through stdin; none were printed.`);
+}
+
+// "Production done (8 added), Preview failed: <reason>; not added: …": a push that stops part-way says what
+// went up, what did not, and why, instead of only the last error. The todo list runs target by target.
+function partialPush(todo: { name: string; target: string }[], added: number, reason: string): string {
+	const label = (target: string) => target.charAt(0).toUpperCase() + target.slice(1);
+	const failed = todo[added];
+	const finished = [...new Set(todo.slice(0, added).map((entry) => entry.target))].filter((target) => target !== failed.target);
+	const done = finished.map((target) => `${label(target)} done (${todo.slice(0, added).filter((entry) => entry.target === target).length} added)`);
+	const partly = todo.slice(0, added).filter((entry) => entry.target === failed.target).length;
+	const left = todo.slice(added).map((entry) => `${entry.name} (${entry.target})`);
+	return `${[...done, `${label(failed.target)} failed${partly > 0 ? ` after ${partly} added` : ''}: ${reason}`].join(', ')}; not added: ${left.join(', ')}. What was added stays on the project.`;
 }
 
 async function protectionStep(options: Options, deps: Deps): Promise<Step> {
@@ -407,6 +426,7 @@ async function protectionStep(options: Options, deps: Deps): Promise<Step> {
 	try {
 		const current = await vercelProbe(deps.exec, () => link).protection();
 		if (current === null || current === 'preview') return step('vercel.protection', 'unchanged', 'Vercel Authentication already covers preview deployments only (or is off).');
+		if (current === STANDARD_PROTECTION) return step('vercel.protection', 'unchanged', 'Vercel Authentication is Standard Protection, which Vercel documents as leaving production domains open. Left as it is.');
 		// Only "All Deployments" is documented to protect production domains (Vercel docs: Deployment
 		// Protection → "Choose which URLs to protect"). Any other value is left exactly as it is.
 		if (current !== 'all') return step('vercel.protection', 'warn', `Vercel Authentication is "${current}". Setup only changes "all" (All Deployments), the one mode documented to cover production domains, so it left this alone.`, [humanNext('Look at the first scheduled run: Vercel dashboard → the project → Logs, filter requestPath:/api/cron/keep-alive. Status 200 means it gets through; a login page means set Vercel Authentication to "Only Preview Deployments".')]);

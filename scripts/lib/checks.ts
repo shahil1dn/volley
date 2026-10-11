@@ -72,8 +72,8 @@ export const awsRegionOf = (poolerUrl: string): string | null => /aws-\d+-([a-z0
 export const projectRefOf = (value: string): string | null =>
 	/\/\/([a-z0-9]{20})\.supabase\.co/.exec(value)?.[1] ?? /\/\/postgres\.([a-z0-9]{20}):/.exec(value)?.[1] ?? /@db\.([a-z0-9]{20})\.supabase\.co/.exec(value)?.[1] ?? null;
 
-// The renames a store's NEXT_PUBLIC_… names need before SvelteKit can read them. Only for names
-// whose PUBLIC_ twin is missing. The publishable key is also accepted from the store's older
+// The copies a store's NEXT_PUBLIC_… names need before the app can read them: PUBLIC_… for SvelteKit, and
+// SUPABASE_URL when only the public address was given. Only for names whose target is missing. The publishable key is also accepted from the store's older
 // ANON name (not confirmed which of the two a given store sends; both are tried).
 export function publicRenames(env: Record<string, string | undefined>): { from: string; to: string }[] {
 	const found = nextPublicNames(env)
@@ -84,6 +84,9 @@ export function publicRenames(env: Record<string, string | undefined>): { from: 
 		const alias = ['NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY', 'NEXT_PUBLIC_SUPABASE_ANON_KEY'].find((name) => env[name]);
 		if (alias) found.push({ from: alias, to: key });
 	}
+	// SUPABASE_URL is the same address as the store's NEXT_PUBLIC_ one (or a PUBLIC_ one): copy, don't ask for it twice.
+	const urlFrom = ['PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_URL'].find((name) => env[name]);
+	if (!env.SUPABASE_URL && urlFrom) found.push({ from: urlFrom, to: 'SUPABASE_URL' });
 	return found;
 }
 
@@ -295,7 +298,7 @@ async function authSignup(ctx: Ctx): Promise<Check> {
 			summary: 'Anyone on the internet can create a Supabase account on this project (public sign-up is on). The app refuses such accounts, but switch it off.',
 			next: [
 				...(ctx.env.SUPABASE_ACCESS_TOKEN ? [run('npm run setup -- --disable-signup', 'Run: npm run setup -- --disable-signup (SUPABASE_ACCESS_TOKEN is set, so it can ask the Supabase Management API to switch sign-up off).', 'account')] : []),
-				human('Supabase dashboard → your project → Authentication → Sign In / Providers → turn off "Allow new users to sign up" → Save. (Menu wording as best known; not confirmed in the docs.) Then run `npm run doctor` again.'),
+				human('Supabase dashboard → your project → Authentication → Sign In / Providers → turn off "Allow new users to sign up" → Save. (Supabase documents this option: https://supabase.com/docs/guides/auth/general-configuration; the dashboard page is /project/_/auth/providers.) Then run `npm run doctor` again.'),
 			],
 		};
 	}
@@ -331,7 +334,7 @@ const skippedVercel = (id: string): Check => ({ id, status: 'skipped', summary: 
 function vercelLinked(ctx: Ctx): Check {
 	if (!ctx.vercel) return skippedVercel('vercel.linked');
 	const link = ctx.vercel.linked();
-	if (link) return { id: 'vercel.linked', status: 'ok', summary: 'This folder is linked to a Vercel project (.vercel/project.json).', next: [] };
+	if (link) return { id: 'vercel.linked', status: 'ok', summary: 'This folder is linked to a Vercel project: .vercel/project.json names it, and that file is the proof. (If `vercel link` printed "Failed to parse Git repo data", ignore it; this check passing is what counts.)', next: [] };
 	return {
 		id: 'vercel.linked',
 		status: 'fail',
@@ -360,6 +363,10 @@ async function vercelEnv(ctx: Ctx): Promise<Check> {
 	return { id: 'vercel.env', status: 'fail', summary: `Missing on Vercel: ${missing.map((entry) => `${entry.name} (${entry.target})`).join(', ')}.`, next };
 }
 
+// The API's name for Vercel's "Standard Protection" scope as seen on a live project (the A15 trial: the production alias
+// answered publicly under it). The docs name the scope, not this value; the pairing is from that trial.
+export const STANDARD_PROTECTION = 'all_except_custom_domains';
+
 async function vercelProtection(ctx: Ctx): Promise<Check> {
 	if (!ctx.vercel) return skippedVercel('vercel.protection');
 	if (!ctx.vercel.linked()) return { id: 'vercel.protection', status: 'skipped', summary: 'Needs vercel.linked first.', next: [] };
@@ -378,6 +385,14 @@ async function vercelProtection(ctx: Ctx): Promise<Check> {
 			status: 'fail',
 			summary: 'Vercel Authentication is on for All Deployments, production included; the daily keep-alive cron then gets a login page instead of the app and Supabase can pause the project.',
 			next: [run('npm run setup -- --vercel-protection', 'Run: npm run setup -- --vercel-protection (sets Vercel Authentication to preview deployments only).', 'account'), human('Or by hand: Vercel dashboard → the project → Settings → Deployment Protection → Vercel Authentication → choose "Only Preview Deployments" → Save.')],
+		};
+	}
+	if (type === STANDARD_PROTECTION) {
+		return {
+			id: 'vercel.protection',
+			status: 'ok',
+			summary: 'Vercel Authentication is Standard Protection (all_except_custom_domains): Vercel documents that it protects every domain except the production ones (https://vercel.com/docs/deployment-protection), so the site is open to visitors. Whether the keep-alive cron gets through is confirmed by its first scheduled run.',
+			next: [human('After the first scheduled run: Vercel dashboard → the project → Logs, filter requestPath:/api/cron/keep-alive. Status 200 means the keep-alive works; a login page means set Vercel Authentication to "Only Preview Deployments" (Settings → Deployment Protection).')],
 		};
 	}
 	const standard = type === 'prod_deployment_urls_and_all_previews';
