@@ -13,7 +13,9 @@
     "add-host": "node --env-file-if-exists=.env.local scripts/add-host.mjs",
     "set-host": "node --env-file-if-exists=.env.local scripts/set-host.mjs",
     "doctor": "node --env-file-if-exists=.env.local scripts/doctor.ts",
-    "setup": "node --env-file-if-exists=.env.local scripts/setup.ts"
+    "setup": "node --env-file-if-exists=.env.local scripts/setup.ts",
+    "load-test": "node scripts/load-test.ts",
+    "load-host": "node --env-file-if-exists=.env.local scripts/make-load-host.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

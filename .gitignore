@@ -10,3 +10,7 @@ screenshots
 
 # The first admin host's password, written by `npm run setup -- --first-admin-email`
 .volley-first-admin.txt*
+
+# The load test: its host login (a password) and its JSON results
+.load-test-host*
+load-results/
