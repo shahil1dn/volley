@@ -79,15 +79,18 @@ export type VerdictInput = {
 	answersPerSecond: number;
 	budget: number; // ADR-004 (amended 2026-09-30): about 15 state calls a second
 	specLine: number; // SPEC A10 as written: under 2 a second, plus answers
+	callsRequired?: boolean; // false for a local run, where there is no edge cache to measure (default true)
 };
 
 export function verdictFor(input: VerdictInput): { pass: boolean; specLinePass: boolean; reasons: string[] } {
 	const reasons: string[] = [];
 	if (input.failedSubmits > 0) reasons.push(`${input.failedSubmits} failed submit${input.failedSubmits === 1 ? '' : 's'}`);
 	if (!input.integrityOk) reasons.push('stored counts do not match what was acknowledged');
-	if (input.stateCallsPerSecond === null) reasons.push('function calls could not be measured');
-	else if (input.stateCallsPerSecond > input.budget + input.answersPerSecond) reasons.push(`${input.stateCallsPerSecond} state calls a second is over the budget of ${input.budget} plus ${input.answersPerSecond} answers a second`);
-	const specLinePass = input.stateCallsPerSecond !== null && input.stateCallsPerSecond <= input.specLine + input.answersPerSecond;
+	const callsRequired = input.callsRequired ?? true;
+	if (input.stateCallsPerSecond === null) {
+		if (callsRequired) reasons.push('function calls could not be measured');
+	} else if (callsRequired && input.stateCallsPerSecond > input.budget + input.answersPerSecond) reasons.push(`${input.stateCallsPerSecond} state calls a second is over the budget of ${input.budget} plus ${input.answersPerSecond} answers a second`);
+	const specLinePass = (input.callsRequired ?? true) && input.stateCallsPerSecond !== null && input.stateCallsPerSecond <= input.specLine + input.answersPerSecond;
 	return { pass: reasons.length === 0, specLinePass, reasons };
 }
 
@@ -151,6 +154,7 @@ export type ReportInput = {
 	pollMs: number;
 	seed: number;
 	budget: number;
+	local: boolean;
 	samples: Sample[];
 	submits: { kind: string; outcome: string; replays: number; rateLimited: number }[];
 	acked: Acked;
@@ -175,11 +179,14 @@ export function buildReport(input: ReportInput) {
 	for (const s of input.submits) outcomes[s.outcome] = (outcomes[s.outcome] ?? 0) + 1;
 	const failedSubmits = input.submits.filter((s) => s.outcome !== 'ok').length;
 	// The larger of the two counts: both under-count, and the run should not pass on the smaller one.
-	const measured = [calls.callsPerSecond, calls.generationsPerSecond].filter((n): n is number => n !== null);
+	// Without the cache header there is no cache in front (a local server), so every poll ran the function and
+	// the count says nothing about the edge: it is left out, not compared with the budget.
+	const measured = calls.headerPresent ? [calls.callsPerSecond, calls.generationsPerSecond].filter((n): n is number => n !== null) : [];
 	const stateCallsPerSecond = measured.length > 0 ? Math.max(...measured) : null;
-	const verdict = verdictFor({ failedSubmits, integrityOk: input.stored?.ok === true, stateCallsPerSecond, answersPerSecond, budget: input.budget, specLine: 2 });
+	const verdict = verdictFor({ failedSubmits, integrityOk: input.stored?.ok === true, stateCallsPerSecond, answersPerSecond, budget: input.budget, specLine: 2, callsRequired: !input.local });
 	return {
 		host: input.host,
+		local: input.local,
 		code: input.code,
 		phones: input.phones,
 		minutes: input.minutes,
@@ -239,7 +246,7 @@ export function reportText(report: Report): string {
 	lines.push(`Event loop lag on this machine: p99 ${report.eventLoop.p99Ms} ms, max ${report.eventLoop.maxMs} ms (high values mean the numbers above are partly this machine)`);
 	for (const note of report.notes) lines.push(`Note: ${note}`);
 	lines.push('');
-	lines.push(`RESULT: ${report.verdict.pass ? 'PASS' : 'FAIL'}${report.verdict.reasons.length > 0 ? ` (${report.verdict.reasons.join('; ')})` : ''}`);
-	lines.push(`SPEC A10 line (under 2 a second plus answers): ${report.verdict.specLinePass ? 'met' : 'not met'}`);
+	lines.push(`RESULT: ${report.verdict.pass ? 'PASS' : 'FAIL'}${report.verdict.reasons.length > 0 ? ` (${report.verdict.reasons.join('; ')})` : ''}${report.local && report.verdict.pass ? ' (local run: answers and stored counts only; the edge cache and function calls are measured on a deployment)' : ''}`);
+	lines.push(`SPEC A10 line (under 2 a second plus answers): ${report.local ? 'not measured locally' : report.verdict.specLinePass ? 'met' : 'not met'}`);
 	return lines.join('\n');
 }

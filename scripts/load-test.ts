@@ -70,7 +70,7 @@ async function main(): Promise<number> {
 		projectors: DEFAULTS.projectors, replayRate, retryDelaysMs: DEFAULTS.retryDelaysMs, userRepressMs: DEFAULTS.userRepressMs, joinSpreadMs: DEFAULTS.joinSpreadMs, seed, log: console.log,
 	});
 	const report = buildReport({
-		host: target.url.host, code: result.code, phones, minutes, pollMs: pollSeconds * 1000, seed, budget, samples: result.samples, submits: result.submits, acked: result.acked,
+		host: target.url.host, local: target.local, code: result.code, phones, minutes, pollMs: pollSeconds * 1000, seed, budget, samples: result.samples, submits: result.submits, acked: result.acked,
 		window: result.window, startedAtMs: result.startedAtMs, endedAtMs: result.endedAtMs, stored: result.csv === null ? null : checkStoredCounts(parseResultsCsv(result.csv), result.acked),
 		eventLoop: result.eventLoop, notes: result.notes,
 	});

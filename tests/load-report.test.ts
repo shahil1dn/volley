@@ -1,7 +1,7 @@
 // The report's arithmetic: percentiles, and how function calls are counted from the cache header.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { countFunctionCalls, percentile, summariseRoutes, verdictFor, type Sample } from '../scripts/lib/load-report.ts';
+import { buildReport, countFunctionCalls, percentile, reportText, summariseRoutes, verdictFor, type Sample } from '../scripts/lib/load-report.ts';
 
 const sample = (over: Partial<Sample> = {}): Sample => ({ route: 'state', status: 200, ms: 10, cache: null, at: 0, ...over });
 
@@ -69,4 +69,24 @@ test('the verdict needs zero failed submits, intact stored counts and calls unde
 	// SPEC A10's own line (under 2 a second plus answers) is reported next to the ADR-004 budget, not instead of it.
 	assert.equal(verdictFor(base).specLinePass, false);
 	assert.equal(verdictFor({ ...base, stateCallsPerSecond: 3.9 }).specLinePass, true);
+});
+
+test('a local run (no cache header) passes on submits and stored counts alone and says the calls were not measured', () => {
+	const base = { failedSubmits: 0, integrityOk: true, stateCallsPerSecond: null, answersPerSecond: 1, budget: 15, specLine: 2 };
+	assert.equal(verdictFor({ ...base, callsRequired: false }).pass, true);
+	assert.equal(verdictFor({ ...base, callsRequired: false, failedSubmits: 2 }).pass, false, 'a failed submit still fails a local run');
+	assert.equal(verdictFor({ ...base, callsRequired: false, integrityOk: false }).pass, false);
+	assert.equal(verdictFor(base).pass, false, 'on a deployment, no measurement is a fail');
+
+	const input = {
+		host: 'localhost:5173', code: 'ABCDE', phones: 2, minutes: 1, pollMs: 3000, seed: 1, budget: 15, samples: [sample({ at: 10, generation: 1 }), sample({ at: 20, generation: 2 })],
+		submits: [{ kind: 'word', outcome: 'ok', replays: 0, rateLimited: 0 }], acked: { word: 1, vote: 0, question: 0, upvote: 0 },
+		window: { startMs: 1000, endMs: 11000 }, startedAtMs: 1000, endedAtMs: 12000,
+		stored: { ok: true, checks: [] }, eventLoop: { p99Ms: 1, maxMs: 2 }, notes: [],
+	};
+	const local = reportText(buildReport({ ...input, local: true }));
+	assert.match(local, /RESULT: PASS \(local run/);
+	assert.match(local, /not measured locally/);
+	const remote = buildReport({ ...input, local: false });
+	assert.equal(remote.verdict.pass, false, 'the same samples on a deployment have no cache header, so no measurement');
 });
