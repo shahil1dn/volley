@@ -365,7 +365,7 @@ async function vercelEnv(ctx: Ctx): Promise<Check> {
 	const fromGenerated = missing.filter((entry) => VARS.find((spec) => spec.name === entry.name)?.origin !== 'supabase');
 	const fromSupabase = missing.filter((entry) => VARS.find((spec) => spec.name === entry.name)?.origin === 'supabase');
 	const next: Next[] = [];
-	if (fromGenerated.length > 0) next.push(run('npm run setup -- --push-vercel-env', 'Run: npm run setup -- --push-vercel-env (adds the generated secrets to the targets that lack them; never overwrites).', 'account'));
+	if (fromGenerated.length > 0) next.push(run('npm run setup -- --push-vercel-env', 'Run: npm run setup -- --push-vercel-env (adds every setting from .env.local that a target lacks: the generated secrets and the Supabase values; never overwrites one that is there).', 'account'));
 	if (fromSupabase.length > 0) next.push(human('Vercel dashboard → Storage → connect the Supabase project to this Vercel project for Production and Preview (it sets SUPABASE_URL, POSTGRES_URL … for you). The publishable key then needs the PUBLIC_ name: run `npm run setup -- --push-vercel-env` afterwards.'));
 	return { id: 'vercel.env', status: 'fail', summary: `Missing on Vercel: ${missing.map((entry) => `${entry.name} (${entry.target})`).join(', ')}.`, next };
 }

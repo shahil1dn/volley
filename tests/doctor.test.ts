@@ -539,3 +539,12 @@ test('vercel.protection names the API value it is talking about; only all_except
 	assert.match(legacy.summary, /legacy/i);
 	assert.doesNotMatch(legacy.summary, /is on as Standard Protection/);
 });
+
+test('trial 2 row 6: the vercel.env fix says exactly what it sends: the generated secrets AND the Supabase values', async () => {
+	const check = byId(await runChecks(ctxWith({ vercel: { linked: () => ({ projectId: 'p', orgId: 't' }), envNames: async () => ({}), protection: async () => null } })), 'vercel.env');
+	const push = check.next.find((next) => /--push-vercel-env/.test(next.command ?? ''));
+	assert.ok(push);
+	assert.match(push.text, /generated secrets/);
+	assert.match(push.text, /Supabase/);
+	assert.match(push.text, /never overwrites/);
+});

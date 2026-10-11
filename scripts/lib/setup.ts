@@ -285,6 +285,9 @@ async function finish(steps: Step[], options: Options, deps: Deps, effective: Re
 	const ctx: Ctx = blocked ? { ...made, blocked, query: refuse, connectOwner: async () => ({ ok: false, reason: blocked }), connectPooler: async () => ({ ok: false, reason: blocked }) } : made;
 	try {
 		const checks = await runChecks(ctx);
+		// "Ask the person which email" is only worth saying while there is no admin: doctor has just looked.
+		const adminExists = checks.find((check) => check.id === 'hosts.first_admin')?.status === 'ok';
+		steps = steps.map((entry) => (entry.id === 'hosts.first_admin' && entry.status === 'skipped' && adminExists ? { ...entry, detail: 'No --first-admin-email given, and an admin host already exists, so there is nothing to do.', next: [] } : entry));
 		const failed = steps.filter((entry) => entry.status === 'failed');
 		let code: 0 | 1 | 2;
 		if (failed.some((entry) => entry.next.some((next) => next.kind !== 'human'))) code = 1; // setup's own failure the agent can act on

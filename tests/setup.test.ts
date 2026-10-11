@@ -1208,3 +1208,31 @@ test('row 9: the CLI\'s JSON answer is the reason when it gives one, and a value
 	assert.match(step?.detail ?? '', /Preview failed: .*git_branch_required: Which branch for \[hidden\]/);
 	for (const name of ['HOST_SESSION_SECRET', 'PARTICIPANT_SECRET', 'CRON_SECRET', 'SUPABASE_SECRET_KEY', 'POSTGRES_URL']) assert.ok(!everything(result, OPTIONS).includes(PUSH_ENV[name as keyof typeof PUSH_ENV]), `${name} was echoed`);
 });
+
+// ---- trial 2 (docs/trial-A15-record-2.md) ----
+
+const doctorWithHosts = (hosts: { total: number; admins: number }): Deps['doctor'] => async (e) => ({
+	ctx: {
+		env: e, readFile: () => null, migrationsOnDisk: () => [], fetchJson: async () => ({ status: 200, body: { disable_signup: true } }),
+		query: async (sql: string) => (sql.includes('public.hosts') ? [hosts] : []),
+		connectOwner: async () => ({ ok: true }), connectPooler: async () => ({ ok: true }),
+	},
+	close: async () => undefined,
+});
+
+test('row 6: a run without --first-admin-email does not tell anyone to ask for an email when an admin already exists', async () => {
+	const present = await runSetup({ ...OPTIONS, dryRun: true }, depsFor(folder(), {}, { doctor: doctorWithHosts({ total: 2, admins: 1 }) }));
+	const step = present.steps.find((s) => s.id === 'hosts.first_admin');
+	assert.equal(step?.status, 'skipped');
+	assert.deepEqual(step?.next, []);
+	assert.doesNotMatch(summaryText(present.steps, { ...OPTIONS, dryRun: true }), /Ask the person which email/);
+	assert.match(step?.detail ?? '', /already/i, 'and it says why there is nothing to do');
+
+	for (const hosts of [{ total: 0, admins: 0 }, { total: 1, admins: 0 }]) {
+		const absent = await runSetup({ ...OPTIONS, dryRun: true }, depsFor(folder(), {}, { doctor: doctorWithHosts(hosts) }));
+		const missing = absent.steps.find((s) => s.id === 'hosts.first_admin');
+		assert.match(missing?.next.map((next) => next.text).join(' ') ?? '', /Ask the person which email/, `${hosts.total} hosts, ${hosts.admins} admins: the question stays`);
+	}
+	const unknown = await runSetup({ ...OPTIONS, dryRun: true }, depsFor(folder(), {}));
+	assert.match(unknown.steps.find((s) => s.id === 'hosts.first_admin')?.next.map((next) => next.text).join(' ') ?? '', /Ask the person which email/, 'when doctor cannot read the hosts the question stays');
+});

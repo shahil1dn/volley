@@ -86,10 +86,10 @@ test('the trial plan uses a throwaway Vercel project, a record file that exists,
 test('AGENTS.md carries what the trial showed an agent needs', () => {
 	const flat = agents.replace(/\s+/g, ' ');
 	for (const [why, pattern] of [
-		['row 1: the Vercel project need not exist first', /vercel link[^.]* creates it/],
+		['row 1: the Vercel project need not exist first', /vercel link[^.]*creates the Vercel project/],
 		['row 1: the npm install-script warning is harmless', /allowScripts|install-scripts/],
 		['row 2: the agent may copy .env.example to .env.local, but never over a file that exists', /only if `\.env\.local` does not exist: `cp -n \.env\.example \.env\.local`/i],
-		['row 5: close editors on .env.local before setup', /close any editor on it/i],
+		['row 5: close editors on .env.local before setup', /save and quit before setup runs, and never to save an old window/i],
 		['row 8: the git-parse message from vercel link is harmless', /Failed to parse Git repo data[^.]*harmless/],
 		['row 9: a partial push is named (setup owns the wording)', /stops part-way/],
 	] as [string, RegExp][]) assert.match(flat, pattern, why);
@@ -106,4 +106,17 @@ test('the store route in section 1 points at the Deploy-button bullet, which hol
 	const bullet = /- \*\*If `README\.md` has a Deploy button\*\*[\s\S]*?(?=\n- \*\*By hand|\n\n)/.exec(section3)?.[0] ?? '';
 	for (const command of ['vercel link', 'vercel env pull .env.pulled.local', '--from-env-file .env.pulled.local']) assert.ok(bullet.includes(command), `the Deploy-button bullet lost ${command}`);
 	assert.doesNotMatch(bullet, /--push-vercel-env/, 'the pull route must not push settings first');
+});
+
+test('AGENTS.md carries what the second trial showed an agent needs', () => {
+	const flat = agents.replace(/\s+/g, ' ');
+	for (const [why, pattern] of [
+		['row 7: Production gets the project given for this deployment, in words a "test project" cannot confuse', /the Supabase project the person gave you for this deployment \(not some other project\)/],
+		['row 5: prompt-free link', /vercel link --yes --project <name>/],
+		['row 8: prompt-free deploy', /vercel deploy --prod --yes/],
+		['row 2: opening .env.local for a non-coder', /open -e \.env\.local/],
+		['row 2: save and quit before setup', /save and quit/i],
+		['row 3: NEXT_PUBLIC_ names are copied, not retyped', /NEXT_PUBLIC_[^.]*setup copies/i],
+	] as [string, RegExp][]) assert.match(flat, pattern, why);
+	assert.doesNotMatch(flat, /never a test project/, 'the person may well call their own project a test project');
 });

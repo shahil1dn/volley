@@ -1,8 +1,9 @@
 // The Vercel side of doctor and setup, through the Vercel CLI only (it already holds the login).
 // Everything goes through `exec` so tests can fake the CLI. Only ever the project linked in
 // .vercel/ in the current folder: this module never takes a project name or id as input.
-// Not verified against a live project: shapes follow Vercel's documented `vercel env ls
-// --format json` and project API (ssoProtection.deploymentType); parsing is tolerant.
+// Run against a live project in the A15 trials (docs/trial-A15-record-2.md): `env ls --format json`,
+// `env add` over stdin (Production and Preview), and the project read (ssoProtection.deploymentType).
+// Never run live: `env update` and the protection PATCH. Parsing is tolerant.
 import { spawnSync } from 'node:child_process';
 import type { VercelProbe } from './checks.ts';
 import { redact } from './env.ts';
@@ -111,7 +112,7 @@ export function setProtectionPreviewOnly(exec: Exec, link: { projectId: string; 
 export function addEnv(exec: Exec, name: string, target: string, value: string, sensitive: boolean) {
 	// Preview wants a Git branch. Non-interactive, Vercel CLI 53.0.1 stops with git_branch_required unless the
 	// third argument is there; an empty one is its own prompt's "leave empty for all Preview branches"
-	// (dist/commands/env/index.js). Not run against a live project: the empty argument is read from the CLI's source.
+	// (dist/commands/env/index.js). Confirmed live in trial 2: all 7 Preview settings were added this way.
 	const branch = target === 'preview' ? [''] : [];
 	const result = exec(['env', 'add', name, target, ...branch, '--yes', ...(sensitive ? ['--sensitive'] : [])], value);
 	if (result.status !== 0) throw new Error(`the Vercel CLI could not add ${name} to ${target} (${cliReason(result, [value])})`);
