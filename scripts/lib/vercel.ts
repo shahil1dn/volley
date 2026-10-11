@@ -5,6 +5,7 @@
 // --format json` and project API (ssoProtection.deploymentType); parsing is tolerant.
 import { spawnSync } from 'node:child_process';
 import type { VercelProbe } from './checks.ts';
+import { redact } from './env.ts';
 
 export type Exec = (args: string[], input?: string) => { status: number; stdout: string; stderr: string };
 
@@ -21,8 +22,31 @@ export const realExec = (cwd: string, timeoutMs = 60_000): Exec => (args, input)
 
 export const TARGETS = ['production', 'preview', 'development'] as const;
 
+// Lines the CLI prints that say nothing about why it failed: Claude Code's hint tag, spinner and
+// progress lines ("Retrieving project…"), and the pointer to its docs.
+const NOISE = [/<claude-code-hint\b/i, /^[⠀-⣿]/, /(…|\.\.\.)\s*$/, /^learn more\b/i, /^vercel cli \d/i];
+
+// The reason a failed CLI call gives, for a person to read: its own JSON message when it printed one
+// (non-interactive mode answers `action_required` on stdout), else the last meaningful line(s) of what
+// it printed, else the exit code. The first line is not enough: it is usually progress. Redacted.
+export function cliReason(result: ReturnType<Exec>, secrets: string[] = []): string {
+	let reason = '';
+	try {
+		const answer = JSON.parse(result.stdout.trim()) as { reason?: unknown; message?: unknown };
+		if (typeof answer.message === 'string') reason = typeof answer.reason === 'string' ? `${answer.reason}: ${answer.message}` : answer.message;
+	} catch {
+		// not JSON: read the text
+	}
+	if (!reason) {
+		const lines = `${result.stderr}\n${result.stdout}`.split('\n').map((line) => line.trim()).filter((line) => line && !NOISE.some((noise) => noise.test(line)));
+		const errors = lines.filter((line) => /^error\b/i.test(line));
+		reason = (errors.length > 0 ? errors : lines).slice(-2).join(' / ');
+	}
+	return redact(reason || `exit ${result.status}`, secrets.filter(Boolean));
+}
+
 function json(result: ReturnType<Exec>, what: string): unknown {
-	if (result.status !== 0) throw new Error(`the Vercel CLI failed while ${what} (${result.stderr.trim().split('\n')[0] || `exit ${result.status}`})`);
+	if (result.status !== 0) throw new Error(`the Vercel CLI failed while ${what} (${cliReason(result)})`);
 	try {
 		return JSON.parse(result.stdout);
 	} catch {
@@ -63,11 +87,15 @@ export function vercelProbe(exec: Exec, readLink: () => { projectId: string; org
 export function setProtectionPreviewOnly(exec: Exec, link: { projectId: string; orgId: string }) {
 	const query = link.orgId.startsWith('team_') ? `?teamId=${link.orgId}` : '';
 	const result = exec(['api', `/v9/projects/${link.projectId}${query}`, '-X', 'PATCH', '--input', '-'], JSON.stringify({ ssoProtection: { deploymentType: 'preview' } }));
-	if (result.status !== 0) throw new Error(`the Vercel CLI refused to change the protection (${result.stderr.trim().split('\n')[0] || `exit ${result.status}`})`);
+	if (result.status !== 0) throw new Error(`the Vercel CLI refused to change the protection (${cliReason(result)})`);
 }
 
 // The value goes in on stdin, so it never appears in a process list or a log.
 export function addEnv(exec: Exec, name: string, target: string, value: string, sensitive: boolean) {
-	const result = exec(['env', 'add', name, target, '--yes', ...(sensitive ? ['--sensitive'] : [])], value);
-	if (result.status !== 0) throw new Error(`the Vercel CLI could not add ${name} to ${target} (${result.stderr.trim().split('\n')[0] || `exit ${result.status}`})`);
+	// Preview wants a Git branch. Non-interactive, Vercel CLI 53.0.1 stops with git_branch_required unless the
+	// third argument is there; an empty one is its own prompt's "leave empty for all Preview branches"
+	// (dist/commands/env/index.js). Not run against a live project: the empty argument is read from the CLI's source.
+	const branch = target === 'preview' ? [''] : [];
+	const result = exec(['env', 'add', name, target, ...branch, '--yes', ...(sensitive ? ['--sensitive'] : [])], value);
+	if (result.status !== 0) throw new Error(`the Vercel CLI could not add ${name} to ${target} (${cliReason(result, [value])})`);
 }

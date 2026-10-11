@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runChecks, type Ctx } from '../scripts/lib/checks.ts';
-import { realExec, vercelProbe } from '../scripts/lib/vercel.ts';
+import { addEnv, realExec, vercelProbe, type Exec } from '../scripts/lib/vercel.ts';
 import { runSetup } from '../scripts/lib/setup.ts';
 
 function withPath<T>(path: string, work: () => T): T {
@@ -88,4 +88,88 @@ test('the CLI disappearing between listing and adding is also an install step, n
 	const step = result.steps.find((s) => s.id === 'vercel.env');
 	assert.equal(step?.status, 'failed');
 	assert.match(step?.next[0].text ?? '', /npm i -g vercel/);
+});
+
+// ---- how `vercel env add` is called, and what its failure says ----
+
+const recordingExec = (): { exec: Exec; calls: { args: string[]; input?: string }[] } => {
+	const calls: { args: string[]; input?: string }[] = [];
+	return { calls, exec: (args, input) => (calls.push({ args, input }), { status: 0, stdout: '', stderr: '' }) };
+};
+
+// Vercel CLI 53.0.1 (dist/commands/env/index.js): `env add NAME preview` with no third argument and
+// --non-interactive stops with reason git_branch_required (exit 1). Its own prompt text says an empty
+// branch means "all Preview branches", so an empty third argument is the non-interactive spelling of that.
+// Production and Development take no branch.
+test('env add for Preview names "all branches" with an empty third argument; the other targets take none', () => {
+	const { exec, calls } = recordingExec();
+	addEnv(exec, 'A_NAME', 'preview', 'the-value', false);
+	addEnv(exec, 'B_NAME', 'production', 'the-value', true);
+	addEnv(exec, 'C_NAME', 'development', 'the-value', false);
+	assert.deepEqual(calls[0].args, ['env', 'add', 'A_NAME', 'preview', '', '--yes']);
+	assert.deepEqual(calls[1].args, ['env', 'add', 'B_NAME', 'production', '--yes', '--sensitive']);
+	assert.deepEqual(calls[2].args, ['env', 'add', 'C_NAME', 'development', '--yes']);
+	for (const call of calls) assert.equal(call.input, 'the-value', 'the value stays on stdin');
+});
+
+const fakeCli = (script: string): string => {
+	const dir = emptyDir();
+	writeFileSync(join(dir, 'vercel'), `#!/bin/sh\n${script}\n`);
+	chmodSync(join(dir, 'vercel'), 0o755);
+	return `${dir}:/usr/bin:/bin`;
+};
+
+test('a CLI failure reports the real error, not a hint tag or a progress line, and never the value', () => {
+	const path = fakeCli(`cat >/dev/null
+echo '<claude-code-hint v="1" type="plugin" value="vercel@claude-plugins-official" />' >&2
+echo 'Retrieving project…' >&2
+echo '⠋ Adding environment variable' >&2
+echo 'Error: The Environment Variable "A_NAME" is already set to the-secret-value for Preview' >&2
+echo 'Learn more: https://vercel.com/docs/environment-variables' >&2
+exit 1`);
+	const exec = realExec(process.cwd());
+	assert.throws(
+		() => withPath(path, () => addEnv(exec, 'A_NAME', 'preview', 'the-secret-value', false)),
+		(error: Error) => /could not add A_NAME to preview/.test(error.message)
+			&& /already set to/.test(error.message)
+			&& !/claude-code-hint|Retrieving project|Adding environment variable/.test(error.message)
+			&& !error.message.includes('the-secret-value'),
+	);
+});
+
+test('a CLI that answers with its action_required JSON on stdout has that message reported', () => {
+	const path = fakeCli(`cat >/dev/null
+echo 'Retrieving project…' >&2
+echo '{"status":"action_required","reason":"git_branch_required","message":"Add A_NAME to which Git branch for Preview?"}'
+exit 1`);
+	const exec = realExec(process.cwd());
+	assert.throws(
+		() => withPath(path, () => addEnv(exec, 'A_NAME', 'preview', 'v', false)),
+		(error: Error) => /git_branch_required/.test(error.message) && /which Git branch/.test(error.message) && !/Retrieving/.test(error.message),
+	);
+});
+
+test('a CLI that prints nothing meaningful still says the exit code', () => {
+	const path = fakeCli(`cat >/dev/null
+echo 'Retrieving project…' >&2
+exit 3`);
+	assert.throws(() => withPath(path, () => addEnv(realExec(process.cwd()), 'A_NAME', 'production', 'v', false)), /exit 3/);
+});
+
+test('a read that fails (env ls) is reported the same way', () => {
+	const path = fakeCli(`echo '<claude-code-hint v="1" />' >&2
+echo 'Retrieving project…' >&2
+echo 'Error: The specified token is not valid. Use vercel login to generate a new token.' >&2
+exit 1`);
+	const probe = vercelProbe(realExec(process.cwd()), () => ({ projectId: 'p', orgId: 'o' }));
+	return assert.rejects(() => withPath(path, () => probe.envNames()), (error: Error) => /token is not valid/.test(error.message) && !/claude-code-hint|Retrieving/.test(error.message));
+});
+
+test('a hint tag and progress are dropped even when the real reason has no "Error" prefix', () => {
+	const path = fakeCli(`cat >/dev/null
+echo '<claude-code-hint v="1" type="plugin" />' >&2
+echo 'Retrieving project…' >&2
+echo 'Preview variables need a Git branch' >&2
+exit 1`);
+	assert.throws(() => withPath(path, () => addEnv(realExec(process.cwd()), 'A_NAME', 'preview', 'v', false)), (error: Error) => /Preview variables need a Git branch/.test(error.message) && !/claude-code-hint|Retrieving/.test(error.message));
 });
