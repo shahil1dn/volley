@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runChecks, type Ctx } from '../scripts/lib/checks.ts';
-import { addEnv, realExec, vercelProbe, type Exec } from '../scripts/lib/vercel.ts';
+import { addEnv, cliReason, realExec, vercelProbe, type Exec } from '../scripts/lib/vercel.ts';
 import { runSetup } from '../scripts/lib/setup.ts';
 
 function withPath<T>(path: string, work: () => T): T {
@@ -172,4 +172,35 @@ echo 'Retrieving project…' >&2
 echo 'Preview variables need a Git branch' >&2
 exit 1`);
 	assert.throws(() => withPath(path, () => addEnv(realExec(process.cwd()), 'A_NAME', 'preview', 'v', false)), (error: Error) => /Preview variables need a Git branch/.test(error.message) && !/claude-code-hint|Retrieving/.test(error.message));
+});
+
+// ---- cliReason on its own ----
+
+const said = (stderr: string, stdout = '', status = 1) => ({ status, stdout, stderr });
+
+test('cliReason: an Error line that ends in an ellipsis is the reason, not progress', () => {
+	assert.match(cliReason(said('Retrieving project…\nError: The Vercel API is unreachable...\n')), /unreachable/);
+	assert.match(cliReason(said('Error: Network lost…\n')), /Network lost/);
+	assert.doesNotMatch(cliReason(said('Retrieving project…\nLoading...\n')), /Retrieving|Loading/, 'plain progress is still dropped');
+});
+
+test('cliReason: indented lines that follow an Error line come with it, up to a small cap', () => {
+	const reason = cliReason(said('Retrieving project…\nError: could not add A_NAME\n  reason: the name is reserved\n  hint: pick another\nSomething unrelated afterwards\n'));
+	assert.match(reason, /could not add A_NAME/);
+	assert.match(reason, /the name is reserved/);
+	assert.match(reason, /pick another/);
+	const long = cliReason(said(`Error: top\n${Array.from({ length: 12 }, (_, index) => `  detail line ${index}`).join('\n')}\n`));
+	assert.match(long, /detail line 0/);
+	assert.doesNotMatch(long, /detail line 11/, 'the cap keeps one failure from flooding the report');
+});
+
+test('cliReason: a CLI that printed nothing at all gives its exit code', () => {
+	assert.equal(cliReason(said('', '', 3)), 'exit 3');
+});
+
+test('cliReason: the value is blanked in the JSON message too', () => {
+	const json = JSON.stringify({ status: 'action_required', reason: 'bad_value', message: 'The value hunter2-secret was refused' });
+	const reason = cliReason(said('', json), ['hunter2-secret']);
+	assert.match(reason, /bad_value/);
+	assert.doesNotMatch(reason, /hunter2-secret/);
 });

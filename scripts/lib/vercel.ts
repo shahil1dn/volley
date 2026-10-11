@@ -23,12 +23,17 @@ export const realExec = (cwd: string, timeoutMs = 60_000): Exec => (args, input)
 export const TARGETS = ['production', 'preview', 'development'] as const;
 
 // Lines the CLI prints that say nothing about why it failed: Claude Code's hint tag, spinner and
-// progress lines ("Retrieving project…"), and the pointer to its docs.
-const NOISE = [/<claude-code-hint\b/i, /^[⠀-⣿]/, /(…|\.\.\.)\s*$/, /^learn more\b/i, /^vercel cli \d/i];
+// progress lines ("Retrieving project…"), and the pointer to its docs. A line that starts with "Error" is
+// never noise, even when it trails off with "…".
+const NOISE = [/<claude-code-hint\b/i, /^[⠀-⣿]/, /^learn more\b/i, /^vercel cli \d/i];
+const PROGRESS = /(…|\.\.\.)\s*$/;
+const isError = (line: string) => /^error\b/i.test(line);
+const CONTINUATION_CAP = 3;
 
 // The reason a failed CLI call gives, for a person to read: its own JSON message when it printed one
-// (non-interactive mode answers `action_required` on stdout), else the last meaningful line(s) of what
-// it printed, else the exit code. The first line is not enough: it is usually progress. Redacted.
+// (non-interactive mode answers `action_required` on stdout), else the last "Error" line with the indented lines
+// under it (a few), else the last meaningful line(s), else the exit code. The first line is not enough: it is
+// usually progress. Redacted.
 export function cliReason(result: ReturnType<Exec>, secrets: string[] = []): string {
 	let reason = '';
 	try {
@@ -38,9 +43,21 @@ export function cliReason(result: ReturnType<Exec>, secrets: string[] = []): str
 		// not JSON: read the text
 	}
 	if (!reason) {
-		const lines = `${result.stderr}\n${result.stdout}`.split('\n').map((line) => line.trim()).filter((line) => line && !NOISE.some((noise) => noise.test(line)));
-		const errors = lines.filter((line) => /^error\b/i.test(line));
-		reason = (errors.length > 0 ? errors : lines).slice(-2).join(' / ');
+		const lines = `${result.stderr}\n${result.stdout}`
+			.split('\n')
+			.filter((line) => {
+				const text = line.trim();
+				return text && !NOISE.some((noise) => noise.test(text)) && (isError(text) || !PROGRESS.test(text));
+			});
+		const lastError = lines.map((line) => isError(line.trim())).lastIndexOf(true);
+		if (lastError >= 0) {
+			const under: string[] = [];
+			for (const line of lines.slice(lastError + 1)) {
+				if (!/^\s/.test(line) || under.length === CONTINUATION_CAP) break;
+				under.push(line.trim());
+			}
+			reason = [lines[lastError].trim(), ...under].join(' / ');
+		} else reason = lines.slice(-2).map((line) => line.trim()).join(' / ');
 	}
 	return redact(reason || `exit ${result.status}`, secrets.filter(Boolean));
 }
