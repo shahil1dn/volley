@@ -161,7 +161,7 @@ Each check fails if the behaviour is missing.
 | A7 | The host cookie is `httpOnly`: `document.cookie` in the browser does not contain it. |
 | A8 | Browser test: 3 phones answer; the projector shows the result within 3s without reload. Hide removes it from the projector within 3s. |
 | A9 | Out of scope for the first release (ADR-007): the quiz. The underlying rule is already tested: secret settings are absent from the state until reveal (S4), and answers after close are refused (S3). |
-| A10 | Load test: 200 simulated phones polling and answering for 10 minutes against a deployed preview. Zero failed submits. Measured function calls stay under 2 a second plus answers, which proves the edge cache works. Measured numbers replace the estimates in ARCHITECTURE §10. |
+| A10 | Load test: 200 simulated phones polling and answering for 10 minutes against a deployed preview. Zero failed submits. Measured function calls stay within ADR-004's budget (as amended 2026-09-30) plus answers, which proves the edge cache works. Measured numbers replace the estimates in ARCHITECTURE §10. |
 | A11 | `EXPLAIN` on each database function's queries shows index scans only. |
 | A12 | Retention test: a run ended 25 hours ago is deleted with everything under it; one ended 23 hours ago remains; its deck remains. |
 | A13 | Supabase Security Advisor shows no warnings. |
