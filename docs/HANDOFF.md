@@ -108,6 +108,8 @@ remote yet.
 
 1. **Milestone 4 step 4: the 10-minute, 200-phone load test, with measured numbers replacing
    the estimates in ARCHITECTURE §10 (A10), and the Supabase Security Advisor clean (A13).**
+   The load script is ready (`docs/load-test.md`); a run needs a preview deploy and a protection
+   bypass, which are Shahil's account steps.
    Milestone 4 step 3 is done: A15 PASSED (trial 2, 2026-10-12, `docs/trial-A15-record-2.md`;
    trial 1 is `docs/trial-A15-record.md`). Still unverified: the cron's reachability under
    Standard Protection (read the first scheduled run's log), that the Deploy button works (click it
