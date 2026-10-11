@@ -561,6 +561,16 @@ person need not read the output.
   a person's input (an email) is a `human` step with a separate `template` field, never a
   `run` command; a setup step only a person can fix exits 2 even if doctor says "run setup".
 
+**Amendment after the A15 trial (2026-10-11).** Preview settings are added with an empty
+git-branch argument (`vercel env add NAME preview "" --yes`): Vercel CLI 53.0.1 in
+non-interactive mode stops with `git_branch_required` unless the third argument is given, and
+its own prompt says an empty branch means all Preview branches. A failed CLI call reports the
+last meaningful line(s) (or its JSON message), not the first line, which is usually a hint tag
+or a progress line. A push that stops part-way says what went up and what did not.
+`all_except_custom_domains` (Vercel's Standard Protection, which the docs say leaves production
+domains open) is ok for the site; the keep-alive cron is confirmed by a person reading its first
+scheduled run.
+
 **Not confirmed against live services** (checked only with fakes or the docs):
 the Vercel project API calls (`vercel api` for `ssoProtection.deploymentType`, `vercel env
 ls --format json`, `vercel env add … --sensitive` over stdin), the Supabase Management API

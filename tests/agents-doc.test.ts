@@ -81,3 +81,18 @@ test('the trial plan uses a throwaway Vercel project, a record file that exists,
 	const brief = trial.slice(trial.indexOf('## The brief'), trial.indexOf('## Pass'));
 	assert.doesNotMatch(brief, /Do not print|Do not use `--force`|one step at a time|secret/i, 'the brief must not hand the agent the rules AGENTS.md is being tested on');
 });
+
+// Lines from the A15 trial record (docs/trial-A15-record.md): each one is a place a stranger's agent got stuck.
+test('AGENTS.md carries what the trial showed an agent needs', () => {
+	const flat = agents.replace(/\s+/g, ' ');
+	for (const [why, pattern] of [
+		['row 1: the Vercel project need not exist first', /vercel link[^.]* creates it/],
+		['row 1: the npm install-script warning is harmless', /allowScripts|install-scripts/],
+		['row 2: the agent may copy .env.example to .env.local', /by copying `\.env\.example`/],
+		['row 5: close editors on .env.local before setup', /close any editor on it/i],
+		['row 8: the git-parse message from vercel link is harmless', /Failed to parse Git repo data[^.]*harmless/],
+		['row 9: a partial push is named', /Production done, Preview failed/],
+	] as [string, RegExp][]) assert.match(flat, pattern, why);
+	assert.doesNotMatch(flat, /not confirmed/, 'the sign-up wording is confirmed');
+	assert.match(flat, /supabase\.com\/docs\/guides\/auth\/general-configuration/);
+});

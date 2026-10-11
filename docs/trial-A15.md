@@ -69,6 +69,8 @@ Only what `AGENTS.md` section 1 says a person must do:
 ## After the trial
 
 1. **Delete the Vercel project `volley-trial`** (dashboard, or `vercel project rm volley-trial`) and
-   remove its Supabase store connection if one was made.
+   remove its Supabase store connection if one was made. What happened on 2026-10-11: it was removed
+   with `vercel project rm volley-trial`, which asks for confirmation; non-interactively that needs a
+   `y` piped in (`echo y | vercel project rm volley-trial`). No store connection had been made.
 2. Delete `/tmp/volley-trial` (it holds `.env.local` and the first admin's password file).
 3. Run the full test suite once against the rebuilt test project, then release the lock.

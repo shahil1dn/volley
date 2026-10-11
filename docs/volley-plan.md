@@ -412,7 +412,11 @@ In this order (owner, 2026-09-30):
    and a fresh AI agent setting up a copy from `AGENTS.md` alone (A15).
    `AGENTS.md`, the README button (its repository URL is a TODO until step 5) and the
    trial plan (`docs/trial-A15.md`, with `scripts/reset-test-db.ts`) are written on branch
-   `m4-agents`. The trial itself has not been run, and the button has not been clicked.
+   `m4-agents` and merged. **A15 was run once (2026-10-11)**: a fresh agent with only `AGENTS.md` took
+   the wiped test database to a deployed throwaway Vercel project, and the person signed in and started
+   a session (record: `docs/trial-A15-record.md`; fixes: branch `m4-trial-fixes`). Still open: the
+   Preview settings push, whose new call (an empty git-branch argument to `vercel env add`) is read
+   from the CLI's source and not yet verified against a live project; and the button has not been clicked.
 4. A 10-minute, 200-phone load test, with measured numbers replacing the
    estimates in ARCHITECTURE §10 (A10), and the Supabase Security Advisor clean
    (A13).
@@ -439,7 +443,7 @@ Also: one gate command (build, typecheck, all tests, exit code intact, A17).
   supports only `^5.3.3 || ^6.0.0`.
 - **`npm run typecheck` replaced by `npm run check`** (svelte-check). Plain
   `tsc` cannot read `.svelte` files.
-- **esbuild's install script was not run.** npm's `allowScripts` list does not
+- **esbuild's (and fsevents') install script was not run.** npm's `allowScripts` list does not
   include it. The build works without it (the prebuilt binary package installs
   normally), but `npm install-scripts ls` will keep flagging it.
 - **A project's first deploy is always production**, even with
@@ -509,7 +513,8 @@ Also: one gate command (build, typecheck, all tests, exit code intact, A17).
   account (email confirmation is required). The guard makes such an account
   useless (tested), but switch it off: Supabase dashboard → the project →
   Authentication → Sign In / Providers → turn off "Allow new users to sign up"
-  → Save (label as best known; not confirmed in the docs). For M4's
+  → Save (confirmed 2026-10-11 against Supabase's docs,
+  https://supabase.com/docs/guides/auth/general-configuration). For M4's
   `npm run doctor`: fail if that endpoint reports `disable_signup: false`.
 - **`HOST_SESSION_SECRET` joins `PARTICIPANT_SECRET` as a deploy blocker.** Both
   are read through `$env/static/private`, so a Vercel build fails until both are

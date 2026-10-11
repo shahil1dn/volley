@@ -18,10 +18,11 @@ setup do the thinking; this file is the order to run them in. Their messages own
 
 ## Prerequisites
 
-Node 22.18 or newer (check `node --version`; `.nvmrc` says 24, which is what Vercel runs) and npm.
-For section 3, the Vercel CLI: `npm i -g vercel`.
+Node 22.18 or newer (`.nvmrc` says 24, which Vercel runs) and npm.
+For section 3, the Vercel CLI: `npm i -g vercel`. An npm `allowScripts` warning about esbuild or
+fsevents is harmless: the build works without those install scripts.
 
-## 1. Ask the person for these first (they can do all of it in one sitting)
+## 1. Ask the person for these first
 
 1. **A new Supabase project** (free plan). Pick the region next to the functions: this repo pins
    them to Vercel `lhr1`, so choose *West EU (London)* (`eu-west-2`). A project's region cannot be
@@ -29,12 +30,15 @@ For section 3, the Vercel CLI: `npm i -g vercel`.
 2. **The project's connection values in `.env.local`**, typed in by them, not pasted to you:
    `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `POSTGRES_URL`
    (Transaction pooler, port 6543) and `POSTGRES_URL_NON_POOLING` (Direct or Session pooler).
-   `.env.example` says where each comes from. If the Vercel Supabase store supplies them instead,
-   do section 3 steps 1 and 2 before the loop.
-3. **Public sign-up off**: Supabase dashboard, Authentication, Sign In / Providers, "Allow new users to
-   sign up" (doctor gives the wording). Or give a Supabase access token and use **[ACCOUNT]**
+   `.env.example` says where each comes from. You may create `.env.local` by copying `.env.example`
+   (no values in it), but never read it afterwards. Have them close any editor on it before you
+   run setup and not save an old window afterwards: a stale copy undoes setup's values and makes it
+   generate new secrets. If the Vercel Supabase store supplies the values instead, do section 3
+   steps 1 and 2 before the loop.
+3. **Public sign-up off** (section 5 says where), or a Supabase access token for **[ACCOUNT]**
    `npm run setup -- --disable-signup`.
-4. **A Vercel account**, and `vercel login` done by them.
+4. **A Vercel account**, and `vercel login` done by them. The Vercel project need not exist yet:
+   `vercel link` creates it if it doesn't (section 3).
 5. **The email the first admin will sign in with**, and someone to receive their password.
 
 ## 2. The loop
@@ -48,7 +52,7 @@ For section 3, the Vercel CLI: `npm i -g vercel`.
    placeholder (an email): ask for the missing value, fill it in, never run it as it stands.
 5. `npm run setup` fixes most env and database problems. Try `npm run setup -- --dry-run` first; it
    changes nothing. The password of the first admin goes to `.volley-first-admin.txt`, never the
-   screen: the person reads it, saves it in a password manager, then deletes the file.
+   screen: the person opens it, saves it in a password manager, then deletes the file.
 6. Repeat from step 2 until doctor exits 0.
 
 Exit codes: **0** ready. **1** something you can fix: do it, run again. **2** only a person can fix
@@ -61,14 +65,17 @@ Commands marked **[ACCOUNT]** need a yes first.
 - **If `README.md` has a Deploy button** and the person used it, the Vercel project and a Supabase
   store already exist. Then, before the loop: **[ACCOUNT]** `vercel link` (choose that project),
   `vercel env pull .env.pulled.local`, `npm run setup -- --from-env-file .env.pulled.local`.
-- **By hand**: the person creates the Supabase project (section 1) and a Vercel project, and you run
-  **[ACCOUNT]** `vercel link`.
+- **By hand**: the person creates the Supabase project (section 1), and you run **[ACCOUNT]**
+  `vercel link` (it creates the Vercel project if the name is new). If it prints "Failed to parse Git
+  repo data", that is harmless when doctor's `vercel.linked` passes: `.vercel/project.json` is the proof.
 
 Then, for both, once the loop is clean:
 
 1. `npm run doctor -- --vercel` shows what Vercel lacks.
 2. **[ACCOUNT]** `npm run setup -- --push-vercel-env --vercel-protection` sends the settings in
    `.env.local` to Production and Preview. They must be the new project's, never a test project's.
+   If it stops part-way ("Production done, Preview failed: <reason>; not added: …"), what went up
+   stays: give the person that reason; they fix it or add the rest in the dashboard, then run it again.
 3. **[ACCOUNT]** `vercel deploy --prod`.
 
 ## 4. Done
@@ -84,8 +91,8 @@ The check ids are `env.required`, `env.public_names`, `env.secrets`, `env.same_p
 `hosts.first_admin`, `vercel.linked`, `vercel.env`, `vercel.protection` and `vercel.cron`. Each one's
 `next` steps are the fix; follow them. What they cannot tell you:
 
-- The sign-up menu wording is "as best known; not confirmed". If the person finds different wording,
-  the setting is still the one that stops anyone creating an account.
+- The sign-up switch is Authentication → Sign In / Providers → "Allow new users to sign up" (Supabase
+  docs: https://supabase.com/docs/guides/auth/general-configuration).
 - If setup says pg_cron cannot be created, the person enables it (Database, Extensions) and you run
   `npm run setup` again; that is safe.
 - The first admin is made only with a real email from the person (`hosts.first_admin` gives the template).

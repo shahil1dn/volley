@@ -100,12 +100,12 @@ remote yet.
 
 ## 3. Exact next pickup point
 
-1. **Milestone 4 step 3, the trial.** `AGENTS.md`, the Deploy button and the trial plan are
-   written (`docs/trial-A15.md`; reset script `scripts/reset-test-db.ts`, not an npm script).
-   Still to do: run the trial (needs Shahil to type the Supabase values and decide the Vercel
-   project, so ask first), click the button once the repo is public (step 5), and fix `AGENTS.md`
-   from the record. Its Vercel paths (`--push-vercel-env`, `--vercel-protection`,
-   `doctor --vercel`) and `--disable-signup` have only been tested against fakes.
+1. **Milestone 4 step 3, the trial: run once (2026-10-11, `docs/trial-A15-record.md`).** The
+   record's fixes are on `m4-trial-fixes`. Still open: the Preview settings push. Setup now
+   passes an empty git-branch argument (`vercel env add NAME preview ""`), which is read from the
+   Vercel CLI's source, not verified against a live project; rerun `npm run setup --
+   --push-vercel-env` on a throwaway project to confirm. Click the Deploy button once the repo is
+   public (step 5). `--disable-signup` has only been tested against fakes.
 
 ## 4. What will bite
 
