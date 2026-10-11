@@ -121,7 +121,7 @@ export async function runLoad(config: LoadConfig): Promise<LoadResult> {
 
 	const signIn = await http('sign-in', '/', {
 		method: 'POST',
-		headers: { origin, 'content-type': 'application/x-www-form-urlencoded' },
+		headers: { origin, accept: 'text/html', 'content-type': 'application/x-www-form-urlencoded' },
 		body: new URLSearchParams({ email: config.login.email, password: config.login.password }).toString(),
 	});
 	const hostCookie = cookieFrom(signIn.headers, 'volley_host');
@@ -142,7 +142,7 @@ export async function runLoad(config: LoadConfig): Promise<LoadResult> {
 		session.append('prompt', prompt);
 		for (const option of options ?? []) session.append(`options${index}`, option);
 	});
-	const started = await http('start-session', '/decks?/startSession', { method: 'POST', headers: hostHeaders({ 'content-type': 'application/x-www-form-urlencoded' }), body: session.toString() });
+	const started = await http('start-session', '/decks?/startSession', { method: 'POST', headers: hostHeaders({ accept: 'text/html', 'content-type': 'application/x-www-form-urlencoded' }), body: session.toString() });
 	const code = /\/run\/([A-Z0-9]{5})\/control/.exec(started.headers.get('location') ?? '')?.[1];
 	if (started.status !== 303 || !code) throw new LoadError(`Starting the session failed (HTTP ${started.status}).`);
 	config.log(`Room ${code}: ${config.phones} phones, ${config.minutes} minute${config.minutes === 1 ? '' : 's'}, one poll every ${config.pollMs / 1000}s`);

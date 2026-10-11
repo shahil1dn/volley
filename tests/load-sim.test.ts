@@ -32,6 +32,10 @@ function fakeApp(over: { protectionOn?: boolean } = {}) {
 		if (request.headers['x-vercel-protection-bypass'] !== SECRET_BYPASS) world.badBypass++;
 		if (over.protectionOn && request.headers['x-vercel-protection-bypass'] !== SECRET_BYPASS) return send(response, 401, 'Authentication Required', { server: 'Vercel' });
 		const body = await read(request);
+		// SvelteKit answers a form post that does not ask for HTML (Node's fetch sends */*) as the JSON the
+		// enhance protocol reads: HTTP 200 and no redirect. Found by running the script for real.
+		const asksForHtml = (request.headers.accept ?? '').startsWith('text/html');
+		if (request.method === 'POST' && !asksForHtml && (url.pathname === '/' || url.pathname === '/decks')) return send(response, 200, { type: 'redirect', status: 303, location: '/decks' });
 		const hostOk = (request.headers.cookie ?? '').includes('volley_host=h');
 		if (request.method === 'POST' && url.pathname === '/') {
 			const form = new URLSearchParams(body);
