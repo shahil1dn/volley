@@ -90,3 +90,21 @@ test('a local run (no cache header) passes on submits and stored counts alone an
 	const remote = buildReport({ ...input, local: false });
 	assert.equal(remote.verdict.pass, false, 'the same samples on a deployment have no cache header, so no measurement');
 });
+
+test('an upvote on a question the host just answered is counted apart; any other refusal is a failed submit', () => {
+	const submit = (kind: string, outcome: string) => ({ kind, outcome, replays: 0, rateLimited: 0 });
+	const input = {
+		host: 'x.vercel.app', local: false, code: 'ABCDE', phones: 2, minutes: 1, pollMs: 3000, seed: 1, budget: 15,
+		samples: [sample({ at: 10, cache: 'HIT', generation: 1 })], acked: { word: 1, vote: 0, question: 0, upvote: 0 },
+		window: { startMs: 1000, endMs: 11000 }, startedAtMs: 1000, endedAtMs: 12000, stored: { ok: true, checks: [] }, eventLoop: { p99Ms: 1, maxMs: 2 }, notes: [],
+	};
+	const raced = buildReport({ ...input, submits: [submit('word', 'ok'), submit('upvote', 'closed')] });
+	assert.equal(raced.submits.failed, 0);
+	assert.equal(raced.submits.racedUpvotes, 1);
+	assert.equal(raced.submits.stored, 1);
+	assert.match(reportText(raced), /refused by rule/);
+	const late = buildReport({ ...input, submits: [submit('word', 'closed'), submit('upvote', 'closed'), submit('question', 'network')] });
+	assert.equal(late.submits.failed, 2, 'a word that arrived after the item closed, and a lost question, are failures');
+	assert.deepEqual(late.submits.outcomes, { 'word:closed': 1, 'question:network': 1 });
+	assert.equal(late.verdict.pass, false);
+});

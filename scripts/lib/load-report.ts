@@ -175,9 +175,13 @@ export function buildReport(input: ReportInput) {
 	const calls = countFunctionCalls(state, seconds);
 	const ackedTotal = input.acked.word + input.acked.vote + input.acked.question + input.acked.upvote;
 	const answersPerSecond = Math.round((ackedTotal / seconds) * 100) / 100;
+	// An upvote on a question the host had just marked answered is refused by rule (vote_question: "closed"): the
+	// phone's list was up to one poll old. Nothing was lost, so it is counted apart, not as a failed submit.
+	const raced = input.submits.filter((s) => s.kind === 'upvote' && s.outcome === 'closed');
+	const failed = input.submits.filter((s) => s.outcome !== 'ok' && !raced.includes(s));
 	const outcomes: Record<string, number> = {};
-	for (const s of input.submits) outcomes[s.outcome] = (outcomes[s.outcome] ?? 0) + 1;
-	const failedSubmits = input.submits.filter((s) => s.outcome !== 'ok').length;
+	for (const s of failed) outcomes[`${s.kind}:${s.outcome}`] = (outcomes[`${s.kind}:${s.outcome}`] ?? 0) + 1;
+	const failedSubmits = failed.length;
 	// The larger of the two counts: both under-count, and the run should not pass on the smaller one.
 	// Without the cache header there is no cache in front (a local server), so every poll ran the function and
 	// the count says nothing about the edge: it is left out, not compared with the budget.
@@ -198,8 +202,9 @@ export function buildReport(input: ReportInput) {
 		state: { requests: state.length, perSecond: Math.round((state.length / seconds) * 100) / 100, calls },
 		submits: {
 			total: input.submits.length,
-			stored: input.submits.length - failedSubmits,
+			stored: input.submits.length - failedSubmits - raced.length,
 			failed: failedSubmits,
+			racedUpvotes: raced.length,
 			outcomes,
 			replays: input.submits.reduce((n, s) => n + s.replays, 0),
 			rateLimitedNotices: input.submits.reduce((n, s) => n + s.rateLimited, 0),
@@ -226,6 +231,7 @@ export function reportText(report: Report): string {
 	lines.push('  Count Vercel runtime logs between those times. Hobby keeps runtime logs for 1 hour.');
 	lines.push('');
 	lines.push(`Submits: ${report.submits.total}, stored ${report.submits.stored}, FAILED ${report.submits.failed}` + (report.submits.failed > 0 ? ` (${Object.entries(report.submits.outcomes).filter(([k]) => k !== 'ok').map(([k, v]) => `${k} ${v}`).join(', ')})` : ''));
+	if (report.submits.racedUpvotes > 0) lines.push(`  ${report.submits.racedUpvotes} upvote${report.submits.racedUpvotes === 1 ? '' : 's'} reached a question the host had just marked answered: refused by rule (HTTP 409, "closed"), nothing lost, not counted as failed`);
 	lines.push(`  ${report.submits.replays} lost replies were resent with the same id; ${report.submits.rateLimitedNotices} "slow down" notices; ${report.submits.answersPerSecond} answers a second`);
 	if (report.stored === null) lines.push('Stored counts: could not read the results download, so nothing is proved.');
 	else for (const check of report.stored.checks) lines.push(`Stored counts: ${check.name}: expected ${check.expected}, found ${check.found}${check.expected === check.found ? '' : '  <-- MISMATCH'}`);
