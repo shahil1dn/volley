@@ -30,11 +30,11 @@ fsevents is harmless: the build works without those install scripts.
 2. **The project's connection values in `.env.local`**, typed in by them, not pasted to you:
    `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `POSTGRES_URL`
    (Transaction pooler, port 6543) and `POSTGRES_URL_NON_POOLING` (Direct or Session pooler).
-   `.env.example` says where each comes from. You may create `.env.local` by copying `.env.example`
-   (no values in it), but never read it afterwards. Have them close any editor on it before you
-   run setup and not save an old window afterwards: a stale copy undoes setup's values and makes it
-   generate new secrets. If the Vercel Supabase store supplies the values instead, do section 3
-   steps 1 and 2 before the loop.
+   `.env.example` says where each comes from. Only if `.env.local` does not exist: `cp -n .env.example .env.local`
+   (no values in it); never read it afterwards, and never overwrite it. Have them close any editor on it
+   before you run setup and not save an old window afterwards: a stale copy undoes setup's values and
+   makes it generate new secrets. If the Vercel Supabase store supplies the values instead, use the
+   Deploy-button bullet in section 3 before the loop.
 3. **Public sign-up off** (section 5 says where), or a Supabase access token for **[ACCOUNT]**
    `npm run setup -- --disable-signup`.
 4. **A Vercel account**, and `vercel login` done by them. The Vercel project need not exist yet:
@@ -74,8 +74,8 @@ Then, for both, once the loop is clean:
 1. `npm run doctor -- --vercel` shows what Vercel lacks.
 2. **[ACCOUNT]** `npm run setup -- --push-vercel-env --vercel-protection` sends the settings in
    `.env.local` to Production and Preview. They must be the new project's, never a test project's.
-   If it stops part-way ("Production done, Preview failed: <reason>; not added: …"), what went up
-   stays: give the person that reason; they fix it or add the rest in the dashboard, then run it again.
+   If it stops part-way, it says what went up, what failed and why, and what was not added. What
+   went up stays: give the person that reason; they fix it or add the rest in the dashboard, then run it again.
 3. **[ACCOUNT]** `vercel deploy --prod`.
 
 ## 4. Done

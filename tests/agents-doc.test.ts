@@ -88,11 +88,22 @@ test('AGENTS.md carries what the trial showed an agent needs', () => {
 	for (const [why, pattern] of [
 		['row 1: the Vercel project need not exist first', /vercel link[^.]* creates it/],
 		['row 1: the npm install-script warning is harmless', /allowScripts|install-scripts/],
-		['row 2: the agent may copy .env.example to .env.local', /by copying `\.env\.example`/],
+		['row 2: the agent may copy .env.example to .env.local, but never over a file that exists', /only if `\.env\.local` does not exist: `cp -n \.env\.example \.env\.local`/i],
 		['row 5: close editors on .env.local before setup', /close any editor on it/i],
 		['row 8: the git-parse message from vercel link is harmless', /Failed to parse Git repo data[^.]*harmless/],
-		['row 9: a partial push is named', /Production done, Preview failed/],
+		['row 9: a partial push is named (setup owns the wording)', /stops part-way/],
 	] as [string, RegExp][]) assert.match(flat, pattern, why);
 	assert.doesNotMatch(flat, /not confirmed/, 'the sign-up wording is confirmed');
 	assert.match(flat, /supabase\.com\/docs\/guides\/auth\/general-configuration/);
+});
+
+test('the store route in section 1 points at the Deploy-button bullet, which holds the pull commands (not at step numbers)', () => {
+	const flat = agents.replace(/\s+/g, ' ');
+	const reference = /If the Vercel Supabase store supplies the values instead,([^.]*)\./.exec(flat)?.[1] ?? '';
+	assert.match(reference, /Deploy.button bullet/, 'section 1 names the bullet it points at');
+	assert.doesNotMatch(flat, /section 3 steps? \d/i, 'a numbered step drifts when the list changes');
+	const section3 = agents.slice(agents.indexOf('## 3. Deploy'), agents.indexOf('## 4. Done'));
+	const bullet = /- \*\*If `README\.md` has a Deploy button\*\*[\s\S]*?(?=\n- \*\*By hand|\n\n)/.exec(section3)?.[0] ?? '';
+	for (const command of ['vercel link', 'vercel env pull .env.pulled.local', '--from-env-file .env.pulled.local']) assert.ok(bullet.includes(command), `the Deploy-button bullet lost ${command}`);
+	assert.doesNotMatch(bullet, /--push-vercel-env/, 'the pull route must not push settings first');
 });

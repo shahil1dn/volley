@@ -1049,16 +1049,19 @@ const PUSH_ENV = { ...STORE_ENV, HOST_SESSION_SECRET: `host-${'a'.repeat(60)}`, 
 
 test('row 9: a push where Production works and Preview is refused says exactly that, with the CLI\'s real reason', async () => {
 	const added: string[] = [];
-	const exec: Deps['exec'] = (args) => {
+	const exec: Deps['exec'] = (args, input) => {
 		if (args[1] === 'ls') return { status: 0, stdout: '[]', stderr: '' };
-		if (args[3] === 'preview') return { status: 1, stdout: '', stderr: '<claude-code-hint v="1" type="plugin" />\nRetrieving project…\nError: Preview needs a Git connection (REASON_FROM_CLI)\n' };
+		if (args[3] === 'preview') return { status: 1, stdout: '', stderr: `<claude-code-hint v="1" type="plugin" />\nRetrieving project…\nError: Preview needs a Git connection (REASON_FROM_CLI) for ${input}\n` };
 		added.push(`${args[2]} ${args[3]}`);
 		return { status: 0, stdout: '', stderr: '' };
 	};
 	const result = await runSetup({ ...OPTIONS, pushVercelEnv: true }, depsFor(folder(), PUSH_ENV, { exec, vercelLink: LINK }));
 	const step = result.steps.find((s) => s.id === 'vercel.env');
 	assert.equal(step?.status, 'failed');
-	assert.match(step?.detail ?? '', /Production done \(\d+ added\), Preview failed: .*REASON_FROM_CLI/);
+	// Production gets all 8 settings of PUSH_ENV (7 required everywhere + the cron secret); the count is pinned, not matched.
+	assert.equal(added.length, 8);
+	assert.match(step?.detail ?? '', /^Production done \(8 added\), Preview failed: .*REASON_FROM_CLI/);
+	for (const name of ['HOST_SESSION_SECRET', 'PARTICIPANT_SECRET', 'CRON_SECRET', 'SUPABASE_SECRET_KEY', 'POSTGRES_URL']) assert.ok(!everything(result, OPTIONS).includes(PUSH_ENV[name as keyof typeof PUSH_ENV]), `${name} was echoed into the report`);
 	assert.doesNotMatch(step?.detail ?? '', /claude-code-hint|Retrieving project/);
 	assert.ok(added.length > 0 && added.every((one) => one.endsWith(' production')), 'Production went up before Preview was tried');
 	assert.match(step?.detail ?? '', /not added: .*HOST_SESSION_SECRET/, 'the settings still missing are named');
@@ -1083,10 +1086,10 @@ test('row 3: SUPABASE_URL is filled from the store\'s NEXT_PUBLIC_ or the PUBLIC
 		const written = parse(readFileSync(join(root, '.env.local'), 'utf8'));
 		assert.equal(written.SUPABASE_URL, `https://${REF}.supabase.co`, name);
 		if (name.startsWith('NEXT_')) assert.equal(written.PUBLIC_SUPABASE_URL, `https://${REF}.supabase.co`, 'and the PUBLIC_ copy is there for SvelteKit');
-		assert.equal(result.checks.find((c) => c.id === 'env.required')?.status === 'fail' && /SUPABASE_URL/.test(result.checks.find((c) => c.id === 'env.required')?.summary ?? ''), false, 'doctor no longer asks the person for it');
+		assert.doesNotMatch(result.checks.find((c) => c.id === 'env.required')?.summary ?? '', /SUPABASE_URL/, 'doctor no longer lists it as missing');
 	}
 	const root = folder();
-	await runSetup(OPTIONS, depsFor(root, { SUPABASE_URL: 'https://keepmekeepmekeepmeke.supabase.co', NEXT_PUBLIC_SUPABASE_URL: `https://${REF}.supabase.co` }));
+	await runSetup(OPTIONS, depsFor(root, { SUPABASE_URL: `https://${REF}.supabase.co/`, NEXT_PUBLIC_SUPABASE_URL: `https://${REF}.supabase.co` }));
 	assert.ok(!/^SUPABASE_URL=/m.test(readFileSync(join(root, '.env.local'), 'utf8')), 'a SUPABASE_URL that is already set is left alone');
 });
 
@@ -1137,4 +1140,71 @@ test('row 10: Standard Protection (all_except_custom_domains) is left alone by -
 	assert.equal(step?.status, 'unchanged');
 	assert.match(step?.detail ?? '', /Standard Protection/);
 	assert.ok(!calls.exec.some((call) => call.args.includes('PATCH')));
+});
+
+test('row 9: the partial-push report survives the CLI disappearing part-way', async () => {
+	let production = 0;
+	const exec: Deps['exec'] = (args) => {
+		if (args[1] === 'ls') return { status: 0, stdout: '[]', stderr: '' };
+		if (args[3] === 'preview') throw new Error("the Vercel CLI isn't installed (install it with: npm i -g vercel)");
+		production++;
+		return { status: 0, stdout: '', stderr: '' };
+	};
+	const result = await runSetup({ ...OPTIONS, pushVercelEnv: true }, depsFor(folder(), PUSH_ENV, { exec, vercelLink: LINK }));
+	const step = result.steps.find((s) => s.id === 'vercel.env');
+	assert.equal(step?.status, 'failed');
+	assert.equal(production, 8);
+	assert.match(step?.detail ?? '', /^Production done \(8 added\), Preview failed: .*isn't installed.*not added: .*\(preview\)/);
+	assert.match(step?.next[0].text ?? '', /Install the Vercel CLI/, 'the install hint is kept');
+});
+
+// ---- setup stops when the settings are from different Supabase projects ----
+
+const OTHER = 'zyxwvutsrqponmlkjihg';
+const mixedFolderRun = async (env: Record<string, string>, over: Partial<Options> = {}) => {
+	const root = folder();
+	const calls: Calls = { exec: [], fetches: [] };
+	let connects = 0;
+	const deps = depsFor(root, env, { connectOwner: async () => (connects++, scriptedDb([]).client), vercelLink: LINK }, calls);
+	const result = await runSetup({ ...OPTIONS, skipMigrate: false, pushVercelEnv: true, disableSignup: true, ...over }, deps);
+	return { root, calls, connects, result };
+};
+
+test('mixed projects: a stale PUBLIC_/NEXT_PUBLIC_ address stops setup before anything is written, connected to, pushed or sent', async () => {
+	const pooler = `postgres://postgres.${REF}:pw@aws-0-eu-west-2.pooler.supabase.com:5432/postgres`;
+	const cases: Record<string, Record<string, string>> = {
+		'SUPABASE_URL is filled from a NEXT_PUBLIC_ address of another project': { NEXT_PUBLIC_SUPABASE_URL: `https://${OTHER}.supabase.co`, POSTGRES_URL_NON_POOLING: pooler },
+		'PUBLIC_ and NEXT_PUBLIC_ addresses point at different projects': { PUBLIC_SUPABASE_URL: `https://${REF}.supabase.co`, NEXT_PUBLIC_SUPABASE_URL: `https://${OTHER}.supabase.co`, POSTGRES_URL_NON_POOLING: pooler },
+		'a set SUPABASE_URL against another project\'s database': { SUPABASE_URL: `https://${OTHER}.supabase.co`, POSTGRES_URL_NON_POOLING: pooler },
+	};
+	for (const [label, env] of Object.entries(cases)) {
+		const { root, calls, connects, result } = await mixedFolderRun({ ...env, SUPABASE_ACCESS_TOKEN: 'sbp_TOKEN_VALUE_XYZ' });
+		const step = result.steps.find((s) => s.id === 'env.same_project');
+		assert.equal(step?.status, 'failed', label);
+		assert.ok(step?.next.every((next) => next.kind === 'human'), label);
+		assert.equal(result.exitCode, 2, label);
+		assert.equal(existsSync(join(root, '.env.local')), false, `${label}: nothing written`);
+		assert.equal(connects, 0, `${label}: no database connection`);
+		assert.equal(calls.exec.length, 0, `${label}: nothing sent to Vercel`);
+		assert.equal(calls.fetches.length, 0, `${label}: nothing sent to Supabase`);
+		assert.ok(!everything(result, OPTIONS).includes('sbp_TOKEN_VALUE_XYZ'));
+	}
+});
+
+test('one project, written two ways, is not "mixed": setup carries on', async () => {
+	const { root, result } = await mixedFolderRun({ NEXT_PUBLIC_SUPABASE_URL: `https://${REF}.supabase.co`, PUBLIC_SUPABASE_URL: `https://${REF}.supabase.co`, POSTGRES_URL_NON_POOLING: `postgres://postgres.${REF}:pw@aws-0-eu-west-2.pooler.supabase.com:5432/postgres` }, { pushVercelEnv: false, disableSignup: false, skipMigrate: true });
+	assert.equal(result.steps.find((s) => s.id === 'env.same_project'), undefined);
+	assert.equal(existsSync(join(root, '.env.local')), true);
+});
+
+test('row 9: the CLI\'s JSON answer is the reason when it gives one, and a value it echoes is blanked', async () => {
+	const exec: Deps['exec'] = (args, input) => {
+		if (args[1] === 'ls') return { status: 0, stdout: '[]', stderr: '' };
+		if (args[3] === 'preview') return { status: 1, stdout: JSON.stringify({ status: 'action_required', reason: 'git_branch_required', message: `Which branch for ${input}?` }), stderr: 'Retrieving project…\n' };
+		return { status: 0, stdout: '', stderr: '' };
+	};
+	const result = await runSetup({ ...OPTIONS, pushVercelEnv: true }, depsFor(folder(), PUSH_ENV, { exec, vercelLink: LINK }));
+	const step = result.steps.find((s) => s.id === 'vercel.env');
+	assert.match(step?.detail ?? '', /Preview failed: .*git_branch_required: Which branch for \[hidden\]/);
+	for (const name of ['HOST_SESSION_SECRET', 'PARTICIPANT_SECRET', 'CRON_SECRET', 'SUPABASE_SECRET_KEY', 'POSTGRES_URL']) assert.ok(!everything(result, OPTIONS).includes(PUSH_ENV[name as keyof typeof PUSH_ENV]), `${name} was echoed`);
 });

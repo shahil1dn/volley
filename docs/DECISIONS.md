@@ -557,7 +557,8 @@ person need not read the output.
   host out and makes phones look new, so no printed advice for the account case may
   suggest it. `--dry-run` only reads. `--vercel-protection` rewrites only
   `all` (All Deployments), the one mode Vercel documents as covering production domains;
-  Standard Protection and unknown modes are a warning for a person. A command that needs
+  the older `prod_deployment_urls_and_all_previews` and unknown modes are a warning for a
+  person (`all_except_custom_domains` is ok: see the A15 amendment below). A command that needs
   a person's input (an email) is a `human` step with a separate `template` field, never a
   `run` command; a setup step only a person can fix exits 2 even if doctor says "run setup".
 
@@ -569,7 +570,10 @@ last meaningful line(s) (or its JSON message), not the first line, which is usua
 or a progress line. A push that stops part-way says what went up and what did not.
 `all_except_custom_domains` (Vercel's Standard Protection, which the docs say leaves production
 domains open) is ok for the site; the keep-alive cron is confirmed by a person reading its first
-scheduled run.
+scheduled run. Setup also refuses to act when the Supabase addresses it holds (including
+`PUBLIC_` and `NEXT_PUBLIC_SUPABASE_URL`) name different projects: nothing is written, connected to
+or sent, and a person removes the stale one. Two different `PUBLIC_` and `NEXT_PUBLIC_` addresses are
+refused rather than one winning.
 
 **Not confirmed against live services** (checked only with fakes or the docs):
 the Vercel project API calls (`vercel api` for `ssoProtection.deploymentType`, `vercel env

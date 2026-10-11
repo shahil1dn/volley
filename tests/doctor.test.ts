@@ -507,3 +507,35 @@ test('row 3: a missing SUPABASE_URL with a store or PUBLIC_ URL for the project 
 	assert.equal(none.status, 'fail');
 	assert.ok(none.next.some((next) => next.kind === 'human' && /SUPABASE_URL/.test(next.text)), 'with no URL anywhere it is still the person\'s');
 });
+
+test('env.same_project also compares the public address names; PUBLIC_ against NEXT_PUBLIC_ pointing apart fails', async () => {
+	const other = 'zyxwvutsrqponmlkjihg';
+	const apart = byId(await runChecks(ctxWith({ env: { ...GOOD_ENV, PUBLIC_SUPABASE_URL: `https://${REF}.supabase.co`, NEXT_PUBLIC_SUPABASE_URL: `https://${other}.supabase.co` } })), 'env.same_project');
+	assert.equal(apart.status, 'fail');
+	assert.match(apart.summary, /PUBLIC_SUPABASE_URL → abcdefghijklmnopqrst/);
+	assert.match(apart.summary, /NEXT_PUBLIC_SUPABASE_URL → zyxwvutsrqponmlkjihg/);
+	assert.ok(apart.next.every((next) => next.kind === 'human'));
+	const together = byId(await runChecks(ctxWith({ env: { ...GOOD_ENV, PUBLIC_SUPABASE_URL: `https://${REF}.supabase.co`, NEXT_PUBLIC_SUPABASE_URL: `https://${REF}.supabase.co` } })), 'env.same_project');
+	assert.equal(together.status, 'ok');
+});
+
+test('env.public_names says where the address came from: a PUBLIC_ source is not called a store name', async () => {
+	const { SUPABASE_URL: _, ...rest } = GOOD_ENV;
+	const fromPublic = byId(await runChecks(ctxWith({ env: { ...rest, PUBLIC_SUPABASE_URL: `https://${REF}.supabase.co` } })), 'env.public_names');
+	assert.match(fromPublic.summary, /PUBLIC_SUPABASE_URL → SUPABASE_URL/);
+	assert.doesNotMatch(fromPublic.summary, /store gave/i);
+	const fromStore = byId(await runChecks(ctxWith({ env: { ...rest, NEXT_PUBLIC_SUPABASE_URL: `https://${REF}.supabase.co` } })), 'env.public_names');
+	assert.match(fromStore.summary, /NEXT_PUBLIC_SUPABASE_URL → SUPABASE_URL/);
+});
+
+test('vercel.protection names the API value it is talking about; only all_except_custom_domains is "Standard Protection", and previews are mentioned', async () => {
+	const standard = byId(await runChecks(ctxWith({ vercel: vercelWith({ protection: 'all_except_custom_domains' }) })), 'vercel.protection');
+	assert.match(standard.summary, /preview/i);
+	assert.match(standard.summary, /custom domain/i);
+	assert.match(standard.summary, /not verified|unverified/i);
+	const legacy = byId(await runChecks(ctxWith({ vercel: vercelWith({ protection: 'prod_deployment_urls_and_all_previews' }) })), 'vercel.protection');
+	assert.equal(legacy.status, 'warn');
+	assert.match(legacy.summary, /prod_deployment_urls_and_all_previews/);
+	assert.match(legacy.summary, /legacy/i);
+	assert.doesNotMatch(legacy.summary, /is on as Standard Protection/);
+});

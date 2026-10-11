@@ -7,7 +7,7 @@ import { existsSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { dirname, join, sep } from 'node:path';
 import type pg from 'pg';
 import { productionSetting, refuseProduction } from '../production-guard.ts';
-import { STANDARD_PROTECTION, cliMissing, exitCode, human, publicRenames, runChecks, vercelProblemNext, type Check, type Ctx, type Next } from './checks.ts';
+import { STANDARD_PROTECTION, cliMissing, exitCode, human, publicRenames, runChecks, sameProject, vercelProblemNext, type Check, type Ctx, type Next } from './checks.ts';
 import { EMAIL, makeHost, setHost } from './make-host.ts';
 import { applyMigrations, pendingMigrationsReadOnly } from './migrations.ts';
 import { ENV_NAME, VARS, makeSecret, mask, parse, redact, redactDeep, secretValues, setLine } from './env.ts';
@@ -192,6 +192,14 @@ async function setup(options: Options, deps: Deps, track: (view: Record<string, 
 		refuseProduction({ ...effective, ...imported }, 'setup', 'Setup never writes to the production database; ask the owner to run it with their approval.');
 	} catch (error) {
 		steps.push(step('guard.production', 'failed', failure(error), [humanNext('Point the settings (.env.local and any --from-env-file) at a test or fresh Supabase project, not production.')]));
+		return finish(steps, options, deps, { ...effective, ...imported });
+	}
+
+	// Settings from two Supabase projects must not be acted on: the SUPABASE_URL copied above, the database, the
+	// Management API and Vercel would each get a different project. Nothing is written, connected to or sent.
+	const mixed = sameProject({ ...effective, ...imported });
+	if (mixed.status === 'fail') {
+		steps.push(step('env.same_project', 'failed', `${mixed.summary} Nothing was written or sent.`, mixed.next));
 		return finish(steps, options, deps, { ...effective, ...imported });
 	}
 
@@ -401,7 +409,7 @@ async function pushVercelEnv(options: Options, deps: Deps, effective: Record<str
 			} else addEnv(deps.exec, entry.name, entry.target, effective[entry.name] as string, SENSITIVE.has(entry.name));
 			added++;
 		} catch (error) {
-			if (cliMissing(error)) return step('vercel.env', 'failed', failure(error), [vercelProblemNext(error, 'run setup again')]);
+			if (cliMissing(error)) return step('vercel.env', 'failed', added > 0 ? partialPush(todo, added, failure(error)) : failure(error), [vercelProblemNext(error, 'run setup again')]);
 			return step('vercel.env', 'failed', partialPush(todo, added, failure(error)), [humanNext('Read the reason above. If Vercel is not logged in, run `vercel login` and approve it in the browser. Otherwise add the missing settings in the Vercel dashboard → Project → Settings → Environment Variables. Then run `npm run setup -- --push-vercel-env` again (it only adds what is missing).')]);
 		}
 	}

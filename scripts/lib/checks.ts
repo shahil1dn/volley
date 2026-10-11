@@ -118,7 +118,7 @@ function envPublicNames(ctx: Ctx): Check {
 	return {
 		id: 'env.public_names',
 		status: 'fail',
-		summary: `SvelteKit reads PUBLIC_… names, but the store gave NEXT_PUBLIC_… ones: ${renames.map((rename) => `${rename.from} → ${rename.to}`).join(', ')}.`,
+		summary: `These settings are not set under the name the app reads, but are set under another: ${renames.map((rename) => `${rename.from} → ${rename.to}`).join(', ')}.`,
 		next: [run('npm run setup', `Run: npm run setup (it adds ${renames.map((rename) => rename.to).join(', ')} as copies; the originals stay).`)],
 	};
 }
@@ -144,9 +144,14 @@ function envSecrets(ctx: Ctx): Check {
 	return { id: 'env.secrets', status: 'ok', summary: 'The generated secrets are long enough.', next: [] };
 }
 
-function envSameProject(ctx: Ctx): Check {
-	const refs = (['SUPABASE_URL', 'POSTGRES_URL', 'POSTGRES_URL_NON_POOLING'] as const)
-		.map((name) => ({ name, ref: ctx.env[name] ? projectRefOf(ctx.env[name] as string) : null }))
+// Every setting that names the Supabase project. The two public address names are included: setup copies one
+// of them into SUPABASE_URL, and a stale one from another project must not slip through that copy.
+const PROJECT_ADDRESSES = ['SUPABASE_URL', 'PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_URL', 'POSTGRES_URL', 'POSTGRES_URL_NON_POOLING'] as const;
+
+// Also run by setup on the final values, before it acts on any of them.
+export function sameProject(env: Record<string, string | undefined>): Check {
+	const refs = PROJECT_ADDRESSES
+		.map((name) => ({ name, ref: env[name] ? projectRefOf(env[name] as string) : null }))
 		.filter((entry): entry is { name: (typeof entry)['name']; ref: string } => entry.ref !== null);
 	const distinct = new Set(refs.map((entry) => entry.ref));
 	if (distinct.size <= 1) return { id: 'env.same_project', status: refs.length === 0 ? 'skipped' : 'ok', summary: refs.length === 0 ? 'No Supabase address to compare yet.' : 'The API address and the database addresses belong to one Supabase project.', next: [] };
@@ -154,9 +159,11 @@ function envSameProject(ctx: Ctx): Check {
 		id: 'env.same_project',
 		status: 'fail',
 		summary: `These point at different Supabase projects: ${refs.map((entry) => `${entry.name} → ${entry.ref}`).join(', ')}.`,
-		next: [human('Make SUPABASE_URL, POSTGRES_URL and POSTGRES_URL_NON_POOLING all come from the same Supabase project (Supabase dashboard → Connect).')],
+		next: [human('Make SUPABASE_URL (and PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL, if set), POSTGRES_URL and POSTGRES_URL_NON_POOLING all come from the same Supabase project (Supabase dashboard → Connect). Remove the stale ones.')],
 	};
 }
+
+const envSameProject = (ctx: Ctx): Check => sameProject(ctx.env);
 
 function dbPooler(ctx: Ctx): Check {
 	const raw = ctx.env.POSTGRES_URL;
@@ -377,8 +384,9 @@ async function vercelProtection(ctx: Ctx): Promise<Check> {
 		return { id: 'vercel.protection', status: 'fail', summary: `Could not read the project's deployment protection: ${(error as Error).message}`, next: [vercelProblemNext(error, 'run `npm run doctor -- --vercel` again')] };
 	}
 	if (type === null || type === 'preview') return { id: 'vercel.protection', status: 'ok', summary: type === null ? 'No Vercel Authentication, so the cron can reach production.' : 'Vercel Authentication covers preview deployments only, so the cron can reach production.', next: [] };
-	// Vercel's Deployment Protection page: "All Deployments" protects production domains too, Standard
-	// Protection (prod_deployment_urls_and_all_previews) protects everything except production domains.
+	// Vercel's Deployment Protection page: "All Deployments" (`all`) protects production domains too. Both
+	// all_except_custom_domains ("Standard Protection", evidenced by the A15 trial) and the older
+	// prod_deployment_urls_and_all_previews ("(Legacy) Standard Protection") leave production domains open.
 	if (type === 'all') {
 		return {
 			id: 'vercel.protection',
@@ -391,7 +399,7 @@ async function vercelProtection(ctx: Ctx): Promise<Check> {
 		return {
 			id: 'vercel.protection',
 			status: 'ok',
-			summary: 'Vercel Authentication is Standard Protection (all_except_custom_domains): Vercel documents that it protects every domain except the production ones (https://vercel.com/docs/deployment-protection), so the site is open to visitors. Whether the keep-alive cron gets through is confirmed by its first scheduled run.',
+			summary: 'Vercel Authentication is Standard Protection (all_except_custom_domains): Vercel documents that it protects every domain except the production ones (https://vercel.com/docs/deployment-protection), so the site is open to visitors. Whether the keep-alive cron gets through is confirmed by its first scheduled run. Preview deployments are behind Vercel login, but a preview branch served on a custom domain may not be (not verified); previews get the same Supabase secrets, so keep preview links private.',
 			next: [human('After the first scheduled run: Vercel dashboard → the project → Logs, filter requestPath:/api/cron/keep-alive. Status 200 means the keep-alive works; a login page means set Vercel Authentication to "Only Preview Deployments" (Settings → Deployment Protection).')],
 		};
 	}
@@ -400,7 +408,7 @@ async function vercelProtection(ctx: Ctx): Promise<Check> {
 		id: 'vercel.protection',
 		status: 'warn',
 		summary: standard
-			? 'Vercel Authentication is on as Standard Protection. Vercel documents that this leaves production domains open, so the keep-alive cron should get through, but the docs do not say which address the cron calls.'
+			? 'Vercel Authentication is set to prod_deployment_urls_and_all_previews, which Vercel documents as "(Legacy) Standard Protection": it leaves production domains open, so the keep-alive cron should get through, but the docs do not say which address the cron calls.'
 			: `Vercel Authentication is set to "${type}", a value doctor does not know, so it can't tell whether the keep-alive cron reaches production.`,
 		next: [human('Look at the first scheduled run: Vercel dashboard → the project → Logs, filter requestPath:/api/cron/keep-alive. Status 200 means it gets through. A login page or redirect means set Vercel Authentication to "Only Preview Deployments" (Settings → Deployment Protection).')],
 	};
