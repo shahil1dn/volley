@@ -91,6 +91,12 @@ remote yet.
   tests only; the live cold case hasn't recurred.
 - **The purge's A11 index test may be flaky**: once green with its index
   dropped, three times red (`tests/db-retention.test.ts`).
+- **The Q&A edge test failed once** (2026-10-12, full run on `6b3d9f8` after a
+  test-DB rebuild): Next question past the last one, and "No more questions are
+  waiting." never showed (`tests/e2e/qna-screen.spec.ts:91`). It then passed
+  8/8 alone and in the next full run. Not reproduced, so not fixed. The control
+  page's timer refresh clears a notice after a failed poll
+  (`src/routes/run/[code]/control/+page.svelte`, `refresh`), which may be how.
 - **The merged worktrees** `.claude/worktrees/invite-host` and `m4-theme` can be
   removed (`git worktree remove …`, then `git branch -d …`). Both branches are
   in `main`.
