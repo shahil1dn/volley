@@ -7,3 +7,5 @@ screenshots
 test-results
 playwright-report
 .volley-first-admin.txt
+.load-test-host*
+load-results
