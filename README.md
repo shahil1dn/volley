@@ -62,6 +62,9 @@ npm run add-host someone@example.com
 
 It prints a new password once; pass it to the host.
 
+On Supabase's Pro plan, also turn on "Prevent use of leaked passwords" in the project's Auth settings
+(free-plan projects cannot; ADR-015).
+
 ## Name, colours and logo
 
 All three live in `src/lib/brand.ts`: the name (shown on every screen and in

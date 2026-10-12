@@ -296,10 +296,10 @@ as `postgres`, which has `rolbypassrls = true` on Supabase (read from `pg_roles`
 Postgres 17.6; not a superuser), and a BYPASSRLS role skips row security even when it is forced on the table
 (Postgres docs, "Row Security Policies"). The app's functions are `SECURITY DEFINER` and owned by `postgres`.
 `using (false)` can never allow a row, and the policy is scoped to the two Data API roles, not `public`. The
-same migration indexes the six foreign keys flagged by `unindexed_foreign_keys` (`host_invites.created_by`
+same migration indexes the six foreign keys flagged by `unindexed_foreign_keys` (a Performance Advisor lint, not a security one) (`host_invites.created_by`
 and `item_id` on `moderation`, `questions`, `quotas`, `responses`, `tallies`); `responses` takes one more
 index entry per answer. `tests/db-advisor-clean.test.ts` fails if a table has no policy, a policy is not a
-deny-all for those two roles, or one of those foreign keys loses its index.
+deny-all for those two roles, or one of those foreign keys loses its index. The Advisor's one remaining WARN, leaked-password protection, is accepted: ADR-015.
 
 ## ADR-007: The first release ships word cloud and poll; no quiz (2026-09-30)
 
@@ -614,3 +614,39 @@ setup. The migration now creates the extension only when `pg_extension` lacks it
 change only matters to a database that has not applied 0008 yet. The statement's effect on
 a fresh database is the same. `tests/migration-pg-cron.test.ts` runs the file over an
 installed pg_cron in a rolled-back transaction.
+
+## ADR-015: A13 passes with one accepted warning, leaked-password protection (2026-10-12)
+
+**Decision (owner, 2026-10-12).** Accept the Supabase Security Advisor's one WARN on `aib-live-db`,
+`auth_leaked_password_protection` ("Leaked Password Protection Disabled", EXTERNAL, entity Auth), and write down
+why. A13 ("no warnings") passes with that one exception. It is not an error in the code: the switch does not
+exist on the free plan. Supabase's docs (https://supabase.com/docs/guides/auth/password-security): "Leaked
+password protection is available on the Pro Plan and above." It makes Auth reject a password found in the
+HaveIBeenPwned.org Pwned Passwords list when it is set.
+
+**What the Advisor showed before migration 0017 reached production (owner's dashboard read, 2026-10-12):** this
+WARN, plus 14 INFO `rls_enabled_no_policy` rows, one per table, which 0017 clears (ADR-006 amendment). The
+dashboard's Security list did not show `unindexed_foreign_keys`: that is a lint of the **Performance** Advisor,
+not a security one. 0017 still adds those six indexes. The owner's re-check of the Security list after 0017 is
+not recorded here yet.
+
+**Why accepting it is reasonable.** A leaked password matters only where a person chooses a password, and
+here that is rare and guarded:
+- Hosts are made only by `add-host` (a random 24-byte password, `scripts/add-host.mjs:23`) or an admin's
+  invite link; there is no public sign-up. Setup's `auth.signup_disabled` check reads Supabase's setting
+  and fails if sign-up is on (`scripts/lib/checks.ts`, `disable_signup`).
+- The one place a person types a new password is the invite page, which requires at least 10 characters and
+  at most 72 bytes (`PASSWORD_MIN`, `passwordProblem`, `src/lib/server/invite-token.ts:18`; used in
+  `src/routes/invite/[token]/+page.server.ts:47`).
+- Sign-in through the app is limited to 10 attempts per email and 30 per address in 15 minutes, counted
+  before the password is checked (`allow_sign_in`, migration 0005; `src/routes/+page.server.ts:23`).
+  A list of leaked passwords is only useful at a rate far above that.
+
+**What these do not cover.** The app's limits apply to sign-in through the app. Someone who calls Supabase
+Auth directly with the public key is limited by Supabase's own Auth rate limits, which were not checked here.
+The 10-character minimum is length only: it does not stop a long, common password.
+
+**A copy on the Pro plan can switch it on:** Supabase's docs say it is configured in the project's Auth
+settings (the password-security page above). The exact dashboard path, "Authentication → Attack Protection /
+Password security → Prevent use of leaked passwords", is **UNCONFIRMED**: that page does not give a menu path
+and the dashboard is behind a login. Look for the "Prevent use of leaked passwords" option.

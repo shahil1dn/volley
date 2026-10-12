@@ -104,6 +104,9 @@ has passed, the dashboard's Logs tab is the only other place, and may be empty.
 
 ## A13: the Security Advisor
 
+The Security list and the Performance list are separate: `unindexed_foreign_keys` is a Performance lint. The one
+Security WARN left on production, `auth_leaked_password_protection`, needs the Pro plan and is accepted (ADR-015).
+
 Ways to get its list: the dashboard (Advisors, Security) is a person step; the Management API
 `GET /v1/projects/{ref}/advisors/security` needs a Supabase access token (experimental endpoint,
 https://supabase.com/docs/reference/api/v1-get-security-advisors); Supabase publishes the lints as SQL,

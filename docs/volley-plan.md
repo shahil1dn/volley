@@ -419,13 +419,15 @@ In this order (owner, 2026-09-30):
    (8 Production, 7 Preview), `doctor --vercel` exited 0 (16 ok), and the person hosted and joined from a
    phone. Still unverified: the cron's reachability under Standard Protection (the first scheduled
    run), and that the Deploy button works (step 5).
-4. [ ] A10 and A13. **A10 PASSED (2026-10-12):** 200 phones, a 10-minute and a 4-minute run on a
+4. [x] A10 and A13. **A10 PASSED (2026-10-12):** 200 phones, a 10-minute and a 4-minute run on a
    preview against the test database, zero failed submits, stored counts matching, state function calls
    between a lower and an upper bound that are both under ADR-004's budget. The numbers are in
    `docs/load-test-results.md` (the only place they are written; ARCHITECTURE §10 uses them); how to run
-   it again and count the calls is `docs/load-test.md` (`npm run load-logs`). **A13:** migration 0017
-   clears the Security Advisor's INFO rows (deny-all policies, six indexes); applied to the test
-   project, not yet to production; Shahil reads the Advisor in the dashboard.
+   it again and count the calls is `docs/load-test.md` (`npm run load-logs`). **A13 PASSED with one
+   accepted warning (2026-10-12):** migration 0017 (deny-all policies, six indexes) is applied to the test
+   project and to production (aib-live-db); it clears the 14 `rls_enabled_no_policy` INFO rows. The one
+   WARN left, `auth_leaked_password_protection`, needs Supabase's Pro plan; the owner accepted it
+   (ADR-015, which lists the mitigations). The owner's dashboard re-check after 0017 is not yet recorded.
 5. The folder rename to `volley` and a public GitHub repository (needs the
    owner's OK).
 

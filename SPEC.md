@@ -100,7 +100,7 @@ own copy by telling an AI agent to follow `AGENTS.md`.
     and flips the tally's `hidden` flag in the same transaction.
 21. Rate limits per hashed IP and per run, in an unlogged table.
 22. Row-level security enabled and forced on every table. The public key can read
-    nothing. Supabase's Security Advisor shows no warnings.
+    nothing. Supabase's Security Advisor shows no warnings (one accepted exception, see A13).
 
 **Data and privacy**
 23. Runs and everything under them are deleted by an hourly `pg_cron` job 24 hours
@@ -164,7 +164,7 @@ Each check fails if the behaviour is missing.
 | A10 | Load test: 200 simulated phones polling and answering for 10 minutes against a deployed preview. Zero failed submits. Measured function calls stay within ADR-004's budget (as amended 2026-09-30) plus answers, which proves the edge cache works. Measured numbers replace the estimates in ARCHITECTURE §10. |
 | A11 | `EXPLAIN` on each database function's queries shows index scans only. |
 | A12 | Retention test: a run ended 25 hours ago is deleted with everything under it; one ended 23 hours ago remains; its deck remains. |
-| A13 | Supabase Security Advisor shows no warnings. |
+| A13 | Supabase Security Advisor shows no warnings. *Owner-accepted exception (2026-10-12, ADR-015): `auth_leaked_password_protection`, which needs the Pro plan; the other 14 findings are cleared by migration 0017.* |
 | A14 | `npm run doctor` on a copy with the database in the wrong region, or with no host, names the problem in plain English. |
 | A15 | A fresh AI agent with only `AGENTS.md` and new accounts reaches a working copy; the steps it had to hand to a human are listed. |
 | A16 | `grep` for "AI Builders" in `src/` finds nothing outside the default settings. |

@@ -1,4 +1,4 @@
-// Migration 0017 (A13): every table says "no Data API access" explicitly, and the foreign keys the Security
+// Migration 0017 (A13): every table says "no Data API access" explicitly, and the foreign keys the Performance
 // Advisor flagged have an index that starts with their column. Runs against the database in .env.local.
 import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';

@@ -106,11 +106,11 @@ remote yet.
 
 ## 3. Exact next pickup point
 
-1. **Milestone 4 step 4, A13: the Supabase Security Advisor clean.** A10 is done: PASSED 2026-10-12
-   (two runs, numbers in `docs/load-test-results.md`; to repeat it or count calls, `docs/load-test.md`).
-   Migration 0017 (explicit deny-all policies on the 14 tables, six foreign-key indexes) clears the
-   Advisor's INFO rows. It is applied to the test project only; production waits for Shahil's OK, and
-   Shahil reads the Advisor in the dashboard (ADR-006 amendment). After that, **step 5**: the folder rename to `volley` and the public repository.
+1. **Milestone 4 step 5: the folder rename to `volley` and the public GitHub repository (needs Shahil's OK).**
+   Milestone 4 step 4 is done. A10 PASSED 2026-10-12 (two runs; numbers in `docs/load-test-results.md`;
+   to repeat it or count calls, `docs/load-test.md`). A13 PASSED with one accepted warning: production is
+   at migration 0017, and the Advisor's leaked-password-protection WARN needs the Pro plan, so the owner
+   accepted it (ADR-015). Shahil's dashboard re-check after 0017 is not recorded yet.
    Milestone 4 step 3 is done: A15 PASSED (trial 2, 2026-10-12, `docs/trial-A15-record-2.md`;
    trial 1 is `docs/trial-A15-record.md`). Still unverified: the cron's reachability under
    Standard Protection (read the first scheduled run's log), that the Deploy button works (click it

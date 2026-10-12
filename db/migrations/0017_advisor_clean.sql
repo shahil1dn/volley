@@ -1,5 +1,6 @@
--- Clears the Supabase Security Advisor's INFO rows on the test project (A13): `rls_enabled_no_policy` on every
--- table, and `unindexed_foreign_keys` on six columns. Neither changes what the app can do.
+-- Clears the Supabase Security Advisor's INFO rows (A13): `rls_enabled_no_policy` on every table. It also adds the
+-- indexes the Performance Advisor's `unindexed_foreign_keys` flags on six columns (that lint is not a security one).
+-- Neither changes what the app can do.
 --
 -- 1. Explicit deny-all policies. Every table already has row-level security enabled AND forced, no policy, and
 --    no privileges for anon or authenticated: three layers that each say "the Data API reaches nothing" (ADR-006).
