@@ -287,6 +287,20 @@ so the owner downloaded Supabase's official certificate from the dashboard
 on the download printed the same SHA-256 as the pinned root, "Supabase Root 2021
 CA" (80:70:25:AD:…:E6:CA:FA). Trust-on-first-use is closed.
 
+**Amendment, A13 (2026-10-12): "no Data API access" is now explicit (migration 0017).** Every table already
+had row-level security enabled and forced, no policy, and no privileges for `anon` or `authenticated`. The
+Security Advisor reports the missing policy as `rls_enabled_no_policy` (INFO, 14 rows). 0017 adds one
+`deny_all_public_roles` policy per table, `for all to anon, authenticated using (false) with check (false)`,
+so the third layer is written down instead of implied. It cannot change what the app does: the app logs in
+as `postgres`, which has `rolbypassrls = true` on Supabase (read from `pg_roles` on the test project,
+Postgres 17.6; not a superuser), and a BYPASSRLS role skips row security even when it is forced on the table
+(Postgres docs, "Row Security Policies"). The app's functions are `SECURITY DEFINER` and owned by `postgres`.
+`using (false)` can never allow a row, and the policy is scoped to the two Data API roles, not `public`. The
+same migration indexes the six foreign keys flagged by `unindexed_foreign_keys` (`host_invites.created_by`
+and `item_id` on `moderation`, `questions`, `quotas`, `responses`, `tallies`); `responses` takes one more
+index entry per answer. `tests/db-advisor-clean.test.ts` fails if a table has no policy, a policy is not a
+deny-all for those two roles, or one of those foreign keys loses its index.
+
 ## ADR-007: The first release ships word cloud and poll; no quiz (2026-09-30)
 
 Owner decision. *Amended by ADR-008: Q&A joins v1.*
