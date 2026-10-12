@@ -22,7 +22,7 @@ polling. If it does not, the delivery design changes and every later slice with 
   app; keep `db/`, `scripts/migrate.mjs`, `tests/`.
   *verify:* `npm run build` and `npm test` pass with exit codes intact; the
   existing 5 unit tests still pass.
-  *done:* `1a357bf`. `npm run build` EXIT=0 (function config: `lhr1`,
+  *done:* `78dd633`. `npm run build` EXIT=0 (function config: `lhr1`,
   `nodejs24.x`); `npm run check` EXIT=0, 0 errors, 0 warnings; `npm test`
   EXIT=0, 5 pass, 0 fail; dev server serves `/` and `/fonts/*` with no
   console errors. Folder not renamed yet (see below).
@@ -64,7 +64,7 @@ polling. If it does not, the delivery design changes and every later slice with 
   `Cache-Control`. That fits the refreshes not being merged, but no run here
   isolates the cause.
   *done:* the owner accepted the measured cost as a budget, **ADR-004** (at most
-  about 10 calls/s at 200 phones polling every 3s). Measured runs in `8daf4c5`.
+  about 10 calls/s at 200 phones polling every 3s). Measured runs in `5486c8c`.
 
 - [x] **S2. The real schema.** Migration for `hosts`, `decks`, `deck_items`,
   `runs`, `responses`, `tallies`, `quotas`, `moderation`, `players`, unlogged
@@ -224,7 +224,7 @@ polling. If it does not, the delivery design changes and every later slice with 
   in 5.3s: 150 of 150 ok, 150 stored and tallied, 0 errors, p50 129 ms, p95 251
   ms, max 427 ms (`scripts/load/burst-dryrun-local.json`).
   *Preview burst, 2026-09-29* (protected preview `aib-live-qtah4qm7i…`,
-  built from `c607b0e` plus a temporary `STATE_FN_CALL` line, never
+  built from `d626646` plus a temporary `STATE_FN_CALL` line, never
   committed; the build succeeded with both secrets; `aib-live.vercel.app`
   still 404): `burst.mjs … 200 preview-200`, 200 phones × 3 words →
   **600 of 600 ok (HTTP 200), 600 stored = 600 tallied, 0 5xx, 0 network
@@ -555,7 +555,7 @@ Also: one gate command (build, typecheck, all tests, exit code intact, A17).
   function-call rate on the next preview** (S1's `poll.mjs`), since S1 measured
   the old header.
 - **Why a 200-phone burst was slow, and the fix (ADR-006).** Diagnosed with
-  `scripts/load/diagnose-submit.mjs` (44d7267): every call through Supabase's
+  `scripts/load/diagnose-submit.mjs` (3e28f46): every call through Supabase's
   Data API stopped at ~44 a second, even a no-op, while the database took
   `submit_answer` at 321–342 a second. Row locks slowed it a little, not
   enough to matter. Fixed by calling the database directly through the

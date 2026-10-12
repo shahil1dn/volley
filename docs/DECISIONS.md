@@ -223,7 +223,7 @@ from one place: `src/lib/server/db.ts`. Nothing server-side uses the Data API
 Auth API) and for `npm run add-host` (the Auth admin API).
 `tests/no-data-api.test.ts` fails if app code calls `.rpc(` or `.from('…')`.
 
-**Why.** Measured in `scripts/load/diagnose-submit.mjs` (44d7267): every call
+**Why.** Measured in `scripts/load/diagnose-submit.mjs` (3e28f46): every call
 through the Data API topped out at ~44 a second, even a no-op, while the
 database took `submit_answer` at 321–342 a second. On a protected preview, 200
 phones × 3 words within ~5s:
@@ -682,7 +682,7 @@ society's name, colours and fonts out of the template (ADR-012: "a copy is a for
 The cost is a merge on every update, kept small by the rule that the copy edits only branding.
 
 **Fonts and the public history (facts for the history decision).** The AI Builders look once shipped Switzer and
-Zarathustra (added 2026-09-29, `2eb7e05`; removed 2026-09-30, `de405fe`; 67 of the 162 commits contain them).
+Zarathustra (added 2026-09-29, `a54022c`; removed 2026-09-30, `9a88dc8`).
 ADR-012 said they "stay in git history for the AI Builders copy"; that is only safe if the history is not public.
 - **Zarathustra** is under the SIL Open Font License 1.1 (copyright Lorène Ceccon; the licence text was committed
   beside the font), so it may be redistributed with that text.
@@ -691,5 +691,11 @@ ADR-012 said they "stay in git history for the AI Builders copy"; that is only s
   own website is allowed, but section 02 forbids making the font software available to any other person,
   "including ... through ... repository ... publicly accessible servers". A public repository whose history
   contains the three `switzer-*.woff2` files is that. The licence in force when they were downloaded was not
-  recorded. Whether to rewrite the history to remove them, or to publish without that history, is the owner's
-  decision and is recorded here when made.
+  recorded.
+
+**Decision (owner, 2026-10-12): rewrite the history to remove only the three Switzer files, then publish it.**
+Every commit's message, author and date is kept (166 commits, merges included); every commit id changed, and ids
+quoted in these docs were updated to the new ones. Switzer was in 67 commits before the rewrite and is in none now.
+Zarathustra stays (OFL). The original history and the three files are kept privately, outside the repository.
+The private `aib-volley` copy adds Switzer back in its own commit: section 01 allows self-hosting on the
+society's own site, and a private repository is not "made available to any other person".

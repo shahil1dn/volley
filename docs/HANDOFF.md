@@ -33,7 +33,7 @@ A pointer to now, not a log. Reasons live in `docs/DECISIONS.md`, scope in
 ## 1. Where things stand
 
 - **Live at https://aib-live.vercel.app** (deploy `dpl_Ag1UVbBrpvySv6b82p6N5xN3k2F3`,
-  built from `main` at `aedf8a1` on 2026-10-06):
+  built from `main` at `eec52b8` on 2026-10-06):
   - word cloud, poll and Q&A (ADR-008); the projector shows one Q&A question
     at a time, stepped by the host with Next/Previous question (ADR-013);
   - sessions of 1 to 10 activities under one room code (`/decks`, reworked
@@ -91,7 +91,7 @@ A pointer to now, not a log. Reasons live in `docs/DECISIONS.md`, scope in
   tests only; the live cold case hasn't recurred.
 - **The purge's A11 index test may be flaky**: once green with its index
   dropped, three times red (`tests/db-retention.test.ts`).
-- **The Q&A edge test failed once** (2026-10-12, full run on `6b3d9f8` after a
+- **The Q&A edge test failed once** (2026-10-12, full run on `917f465` after a
   test-DB rebuild): Next question past the last one, and "No more questions are
   waiting." never showed (`tests/e2e/qna-screen.spec.ts:91`). It then passed
   8/8 alone and in the next full run. Not reproduced, so not fixed. The control
