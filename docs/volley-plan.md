@@ -419,11 +419,13 @@ In this order (owner, 2026-09-30):
    (8 Production, 7 Preview), `doctor --vercel` exited 0 (16 ok), and the person hosted and joined from a
    phone. Still unverified: the cron's reachability under Standard Protection (the first scheduled
    run), and that the Deploy button works (step 5).
-4. A 10-minute, 200-phone load test, with measured numbers replacing the
-   estimates in ARCHITECTURE §10 (A10), and the Supabase Security Advisor clean
-   (A13). The load script is ready (`docs/load-test.md`). For A13, migration 0017 clears the
-   Advisor's INFO rows (deny-all policies, six indexes); applied to the test project, not yet to
-   production.
+4. [ ] A10 and A13. **A10 PASSED (2026-10-12):** 200 phones, a 10-minute and a 4-minute run on a
+   preview against the test database, zero failed submits, stored counts matching, state function calls
+   between a lower and an upper bound that are both under ADR-004's budget. The numbers are in
+   `docs/load-test-results.md` (the only place they are written; ARCHITECTURE §10 uses them); how to run
+   it again and count the calls is `docs/load-test.md` (`npm run load-logs`). **A13:** migration 0017
+   clears the Security Advisor's INFO rows (deny-all policies, six indexes); applied to the test
+   project, not yet to production; Shahil reads the Advisor in the dashboard.
 5. The folder rename to `volley` and a public GitHub repository (needs the
    owner's OK).
 
@@ -460,12 +462,14 @@ Also: one gate command (build, typecheck, all tests, exit code intact, A17).
   `"framework": "sveltekit-1"`, which overrides the dashboard's Next.js preset.
   Plain `"sveltekit"` is the legacy v0 preset.
 - **Hobby keeps runtime logs for 1 hour.** Count function calls straight after
-  a load run, or stream them during it (`vercel logs <url> --json`).
+  a load run with `npm run load-logs` (`docs/load-test.md`). Streaming them during the run
+  (`vercel logs <url> --json`, as S1 did) is stale: in Vercel CLI 53.0.1 it shows only what the
+  app prints, and the app prints nothing.
 - **Hobby allowances** (Vercel fair-use guidelines, checked 2026-09-29): 1M
   function calls, 100 GB data transfer, 4 hours of active CPU a month. No
   request-count allowance is listed, so cache hits cost only data transfer.
 - **The log stream stops after 5 minutes** ("Exceeded query duration limit of 5
-  minutes"). Keep a counted run inside that, or restart the stream between runs.
+  minutes") (S1). A10 does not stream; it reads the finished window in pages.
 - **Later optimisation: ISR for the state route** (ADR-004). Vercel's docs say
   request collapsing, including for stale refreshes, is supported for ISR, and
   adapter-vercel has an `isr` route option. Unverified whether it works on a
@@ -488,8 +492,8 @@ Also: one gate command (build, typecheck, all tests, exit code intact, A17).
 - **`npm test` takes over a minute** (the database A4 test ~35s, plus the
   submit tests). Fine for now; batch the A4 probes if it gets in the way.
 - **`STATE_FN_CALL` log line removed in S4.** ADR-004 settled the delivery
-  design it was measuring. A10's load test will need another way to count calls
-  (Vercel's function metrics, or add the line back for the run).
+  design it was measuring. A10 counted calls from the request rows in Vercel's
+  runtime logs instead (`npm run load-logs`); no log line was added back.
 - **A cached state can be a few seconds old**, so `serverNow` is too. Clients
   should add the response's `Age` header (always present, S1) to `serverNow`
   before timing anything on the server's clock, and ignore any state whose

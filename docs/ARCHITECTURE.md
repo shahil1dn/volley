@@ -343,20 +343,21 @@ an index.
 | Host opens decks | `list_decks(host)` | the host's decks | `decks(host_id, updated_at desc)` |
 | Hourly clean-up | `purge_expired()` | expired runs, cascading; rate-limit windows over an hour old | `runs(ended_at)`, `runs(last_activity_at)`, `rate_limits(window_start)` |
 
-**One 200-person, 60-minute event, phones polling every 3s.** Measured rows
-come from the load runs in `docs/volley-plan.md` (S1, and run C-direct after
-ADR-006); the budget they're held to is ADR-004's ~15 calls a second.
+**One 200-person, 60-minute event, phones polling every 3s.** The measured function-call rates are in
+`docs/load-test-results.md` (A10, 2026-10-12: 200 phones, 3s polling, all state requests answered from the
+CDN); the budget they're held to is ADR-004's ~15 calls a second. The figures below are those rates
+over 3,600s, so they move when that file does.
 
 | Budget (free) | Usage | Measured or estimated | Why |
 |---|---|---|---|
-| Vercel function calls, 1M/month | ~41,000 | **measured**: 11.39 state calls/s (run C-direct, after ADR-006) × 3,600s | the CDN doesn't merge stale refreshes for function responses; budget ~15/s (ADR-004) |
-| | + ~600 | estimated | answers and host actions |
-| Vercel Active CPU, 4h/month | a few minutes | estimated | thin handlers, mostly waiting on the database |
-| Vercel data transfer, 100 GB/month | ~0.5 GB | estimated | 200 phones × 1,200 polls × ~2 KB |
+| Vercel function calls, 1M/month | ~39,000 to ~50,000 | **measured** (A10): the lower and upper state call rates × 3,600s | the CDN doesn't merge stale refreshes for function responses; the logs show requests, not the background refreshes, hence two bounds |
+| | + ~2,000 | **measured** (A10 run 1) | every other request that reaches the function in a 10-minute run: answers, host pages, each phone's page and join |
+| Vercel Active CPU, 4h/month | a few minutes | estimated | thin handlers, mostly waiting on the database; the load test does not record CPU |
+| Vercel data transfer, 100 GB/month | ~0.5 GB | estimated | 200 phones × 1,200 polls × ~2 KB; the load test does not record bytes |
 | Supabase database, 500 MB | < 5 MB per event | estimated | deleted after 24h |
-| Supabase egress, 5 GB/month | ~80 MB | estimated from the measured call count | ~41,000 state reads × ~2 KB |
+| Supabase egress, 5 GB/month | ~100 MB | estimated from the measured call count | ~50,000 state reads × ~2 KB |
 | Supabase realtime | 0 | by design | not used |
 
 At 1s polling the rate was 8.8 calls/s (S1 run A, before ADR-006; not
-re-measured since), about 32,000 an hour. The S1 runs lasted 2 minutes. The 10-minute load check in `SPEC.md` (A10)
-replaces the remaining estimates.
+re-measured since), about 32,000 an hour. The A10 runs (10 and 4 minutes) measured the function calls and
+the answers path; the CPU, data transfer and egress rows stay estimates until someone records them.

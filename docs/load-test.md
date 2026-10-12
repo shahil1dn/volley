@@ -35,13 +35,39 @@ stored once. At the end the host's results download is compared with what the ph
   `x-vercel-cache` header shows HIT, STALE, MISS and so on, but a STALE reply starts a refresh in the
   background that no client ever sees: in S1 run A there were 52 MISS responses and 1,055 function calls in
   the runtime logs. Distinct `serverNow` values in the state bodies are closer. **The runtime logs for the
-  printed window are the authority**, and Hobby keeps them for **1 hour**: pull them straight after the run
-  (`vercel logs --json --since … --until …` with a `--limit` above the default 100, or the dashboard Logs
-  tab filtered to the window).
-- **The pass line is ADR-004's budget, not SPEC A10's "under 2 a second".** S1 measured 6.9 to 11.4 calls a
-  second with 200 phones (ADR-004, amended to about 15 a second); "under 2" was already failed and
-  superseded. The report prints both lines. SPEC A10's wording needs the owner's OK to change.
+  printed window are the authority**, and Hobby keeps them for **1 hour**: count them straight after the run
+  (next section). Do not stream the logs during the run: in Vercel CLI 53.0.1 following the logs shows only
+  what the app prints, and the app prints nothing.
+- **The pass line is ADR-004's budget** (about 15 state calls a second, plus answers); SPEC A10 points at it.
+  S1 measured 6.9 to 11.4 calls a second with 200 phones, so the earlier "under 2 a second" line was already
+  failed and was superseded. The report prints only that budget.
 - Latency is measured from the machine running the script; the report prints that machine's event-loop lag.
+
+## Counting the function calls (straight after the run, within the hour)
+
+```
+npm run load-logs -- --deployment dpl_... --report load-results/<the run's file>.json
+npm run load-logs -- --deployment dpl_... --since <ISO time> --until <ISO time>
+```
+
+Read only. It refuses a deployment Vercel reports as production (the same lookup as the load test) and a
+deployment id it cannot check. How it counts, because the CLI makes it fiddly:
+
+- `vercel logs --deployment <dpl> --no-follow --no-branch --since … --until … --json` returns **request rows**,
+  each with a `cache` field, at most **50 a call** whatever `--limit` says. Background refreshes have no row.
+- It asks once each for `cache:MISS`, `cache:STALE`, `cache:REVALIDATED` and `cache:BYPASS` (a HIT never
+  reaches the function), and pages backwards: the next `--until` is the oldest timestamp seen plus 1 ms, and
+  rows are deduplicated by id. Fifty rows in one millisecond cannot be paged past; it then says
+  **INCOMPLETE** and exits 1 instead of printing a short count.
+- State rows that are MISS or STALE, over the window's seconds, are the **upper bound** (each STALE starts at
+  most one background refresh). The report's distinct state versions a second is the **lower bound**. The
+  command prints both and compares them with the budget plus answers: within (exit 0), over at the lower
+  bound, or not proven (exit 1).
+- Check the answer rows against the report: the MISS rows on the answer route should equal the answer
+  requests the script sent. If they do not, rows were lost and the count is not to be trusted.
+
+The A10 numbers from this method are in `docs/load-test-results.md`. If a run needs a count after the hour
+has passed, the dashboard's Logs tab is the only other place, and may be empty.
 
 ## What can stand in the way
 
@@ -65,7 +91,8 @@ stored once. At the end the host's results download is compared with what the ph
 - `x-vercel-cache` values: https://vercel.com/docs/headers/response-headers and
   https://vercel.com/docs/caching/cache-status. STALE regenerates in the background; that refresh is an
   invocation: https://vercel.com/kb/guide/optimize-function-invocations
-- Runtime logs, Hobby retention 1 hour: https://vercel.com/docs/logs/runtime; CLI: https://vercel.com/docs/cli/logs
+- Runtime logs, Hobby retention 1 hour: https://vercel.com/docs/logs/runtime; CLI: https://vercel.com/docs/cli/logs.
+  The 50-rows-a-call cap and the `cache:` query filter are from running CLI 53.0.1 on the A10 run, not from the docs.
 - Hobby allowances (1M function invocations, 4 h active CPU, 1M CDN requests, 100 GB fast data transfer):
   https://vercel.com/docs/limits/fair-use-guidelines and https://vercel.com/docs/pricing. A per-IP or
   per-deployment request-rate limit: UNCONFIRMED, none is documented there.

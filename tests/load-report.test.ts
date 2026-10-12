@@ -78,6 +78,7 @@ test('the report names the ADR-004 budget as the one line and no longer prints t
 	const text = reportText(buildReport(input));
 	assert.doesNotMatch(text, /SPEC A10/);
 	assert.doesNotMatch(text, /under 2 a second/);
+	assert.match(text, /npm run load-logs/, 'the report says how to count the calls');
 	assert.match(text, /budget: 15 a second plus [\d.]+ answers a second \(ADR-004\)/);
 });
 

@@ -226,7 +226,7 @@ export function reportText(report: Report): string {
 	lines.push(`Volley load test: ${report.host}, room ${report.code}`);
 	lines.push(`${report.phones} phones for ${report.minutes} minutes, one poll every ${report.pollSeconds}s, seed ${report.seed}`);
 	lines.push(`Measured window (first activity opened to last closed): ${report.measuredWindow.start} to ${report.measuredWindow.end} (${Math.round(report.measuredWindow.seconds)}s)`);
-	lines.push('  Count Vercel runtime logs between those times. Hobby keeps runtime logs for 1 hour.');
+	lines.push('  Count the function calls for this window within the hour (Hobby keeps runtime logs for 1 hour): npm run load-logs, see docs/load-test.md.');
 	lines.push('');
 	lines.push(`Submits: ${report.submits.total}, stored ${report.submits.stored}, FAILED ${report.submits.failed}` + (report.submits.failed > 0 ? ` (${Object.entries(report.submits.outcomes).filter(([k]) => k !== 'ok').map(([k, v]) => `${k} ${v}`).join(', ')})` : ''));
 	if (report.submits.racedUpvotes > 0) lines.push(`  ${report.submits.racedUpvotes} upvote${report.submits.racedUpvotes === 1 ? '' : 's'} reached a question the host had just marked answered: refused by rule (HTTP 409, "closed"), nothing lost, not counted as failed`);

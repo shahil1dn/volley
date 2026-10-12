@@ -106,17 +106,15 @@ remote yet.
 
 ## 3. Exact next pickup point
 
-1. **Milestone 4 step 4: the 10-minute, 200-phone load test, with measured numbers replacing
-   the estimates in ARCHITECTURE §10 (A10), and the Supabase Security Advisor clean (A13).**
-   The load script is ready (`docs/load-test.md`); a run needs a preview deploy and a protection
-   bypass, which are Shahil's account steps.
+1. **Milestone 4 step 4, A13: the Supabase Security Advisor clean.** A10 is done: PASSED 2026-10-12
+   (two runs, numbers in `docs/load-test-results.md`; to repeat it or count calls, `docs/load-test.md`).
+   Migration 0017 (explicit deny-all policies on the 14 tables, six foreign-key indexes) clears the
+   Advisor's INFO rows. It is applied to the test project only; production waits for Shahil's OK, and
+   Shahil reads the Advisor in the dashboard (ADR-006 amendment). After that, **step 5**: the folder rename to `volley` and the public repository.
    Milestone 4 step 3 is done: A15 PASSED (trial 2, 2026-10-12, `docs/trial-A15-record-2.md`;
    trial 1 is `docs/trial-A15-record.md`). Still unverified: the cron's reachability under
    Standard Protection (read the first scheduled run's log), that the Deploy button works (click it
    once the repo is public, step 5), and `--disable-signup` (tested only against fakes).
-   **A13:** migration 0017 (explicit deny-all policies on the 14 tables, six foreign-key indexes) clears the
-   Security Advisor's INFO rows. It is applied to the test project only; production waits for Shahil's OK,
-   and Shahil reads the Advisor in the dashboard (ADR-006 amendment).
 
 ## 4. What will bite
 
