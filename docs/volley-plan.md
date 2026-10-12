@@ -429,7 +429,10 @@ In this order (owner, 2026-09-30):
    WARN left, `auth_leaked_password_protection`, needs Supabase's Pro plan; the owner accepted it
    (ADR-015, which lists the mitigations). Owner's dashboard re-check after 0017 (2026-10-12): only the accepted `auth_leaked_password_protection` WARN remains.
 5. The folder rename to `volley` and a public GitHub repository (needs the
-   owner's OK).
+   owner's OK). **Done 2026-10-12:** public at https://github.com/shahil1dn/volley (history rewritten to drop
+   the Switzer fonts, ADR-016); the society's private copy is https://github.com/shahil1dn/aib-volley
+   (`~/Documents/projects/aib-volley`, `upstream` remote, push to it disabled), and the aib-live Vercel link
+   lives only there; the folder is `~/Documents/projects/volley`. Still unverified: the README's Deploy button.
 
 Also: one gate command (build, typecheck, all tests, exit code intact, A17).
 
@@ -437,9 +440,7 @@ Also: one gate command (build, typecheck, all tests, exit code intact, A17).
 
 (New tasks discovered while building go here.)
 
-- **Folder rename to `volley` still to do.** It was left out of S0 because the
-  build ran from inside the folder. Rename it between sessions, then re-link
-  anything that points at the old path.
+- **Folder rename to `volley`: done 2026-10-12** (step 5).
 - **Vercel project's framework preset: done in S1** through `vercel.json`
   (below). Renaming the project from `aib-live` is still open.
 - **Adapter runtime pinned to `nodejs24.x`.** The Vercel adapter otherwise
