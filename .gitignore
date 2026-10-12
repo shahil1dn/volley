@@ -14,3 +14,7 @@ screenshots
 # The load test: its host login (a password) and its JSON results
 .load-test-host*
 load-results/
+
+# Claude Code's local worktrees and launch settings, and macOS folder metadata: never public
+.claude/
+.DS_Store
