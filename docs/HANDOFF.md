@@ -115,15 +115,14 @@ A pointer to now, not a log. Reasons live in `docs/DECISIONS.md`, scope in
    screenshots are in `~/Documents/projects/volley-backup/`. Next: the AI Builders theme in the private copy,
    and one end-to-end try of the README's Deploy button (an [ACCOUNT] step).
 
-1. **Milestone 4 step 5: the folder rename to `volley` and the public GitHub repository (needs Shahil's OK).**
-   Milestone 4 step 4 is done. A10 PASSED 2026-10-12 (two runs; numbers in `docs/load-test-results.md`;
+1. **Steps 3 and 4, for reference.** Milestone 4 step 4 is done. A10 PASSED 2026-10-12 (two runs; numbers in `docs/load-test-results.md`;
    to repeat it or count calls, `docs/load-test.md`). A13 PASSED with one accepted warning: production is
    at migration 0017, and the Advisor's leaked-password-protection WARN needs the Pro plan, so the owner
    accepted it (ADR-015). Shahil's dashboard re-check after 0017 (2026-10-12) shows only that warning.
    Milestone 4 step 3 is done: A15 PASSED (trial 2, 2026-10-12, `docs/trial-A15-record-2.md`;
    trial 1 is `docs/trial-A15-record.md`). Still unverified: the cron's reachability under
-   Standard Protection (read the first scheduled run's log), that the Deploy button works (click it
-   once the repo is public, step 5), and `--disable-signup` (tested only against fakes).
+   Standard Protection (read the first scheduled run's log), that the Deploy button works (the repo is
+   public now; try it once), and `--disable-signup` (tested only against fakes).
 
 ## 4. What will bite
 
