@@ -15,7 +15,8 @@
     "doctor": "node --env-file-if-exists=.env.local scripts/doctor.ts",
     "setup": "node --env-file-if-exists=.env.local scripts/setup.ts",
     "load-test": "node scripts/load-test.ts",
-    "load-host": "node --env-file-if-exists=.env.local scripts/make-load-host.ts"
+    "load-host": "node --env-file-if-exists=.env.local scripts/make-load-host.ts",
+    "load-logs": "node scripts/load-logs.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
