@@ -627,8 +627,8 @@ HaveIBeenPwned.org Pwned Passwords list when it is set.
 **What the Advisor showed before migration 0017 reached production (owner's dashboard read, 2026-10-12):** this
 WARN, plus 14 INFO `rls_enabled_no_policy` rows, one per table, which 0017 clears (ADR-006 amendment). The
 dashboard's Security list did not show `unindexed_foreign_keys`: that is a lint of the **Performance** Advisor,
-not a security one. 0017 still adds those six indexes. The owner's re-check of the Security list after 0017 is
-not recorded here yet.
+not a security one. 0017 still adds those six indexes. The owner's re-check of the Security list after 0017
+(2026-10-12) shows only the accepted `auth_leaked_password_protection` WARN.
 
 **Why accepting it is reasonable.** A leaked password matters only where a person chooses a password, and
 here that is rare and guarded:

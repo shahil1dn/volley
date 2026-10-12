@@ -427,7 +427,7 @@ In this order (owner, 2026-09-30):
    accepted warning (2026-10-12):** migration 0017 (deny-all policies, six indexes) is applied to the test
    project and to production (aib-live-db); it clears the 14 `rls_enabled_no_policy` INFO rows. The one
    WARN left, `auth_leaked_password_protection`, needs Supabase's Pro plan; the owner accepted it
-   (ADR-015, which lists the mitigations). The owner's dashboard re-check after 0017 is not yet recorded.
+   (ADR-015, which lists the mitigations). Owner's dashboard re-check after 0017 (2026-10-12): only the accepted `auth_leaked_password_protection` WARN remains.
 5. The folder rename to `volley` and a public GitHub repository (needs the
    owner's OK).
 
