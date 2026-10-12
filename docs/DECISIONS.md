@@ -653,3 +653,43 @@ The 10-character minimum is length only: it does not stop a long, common passwor
 settings (the password-security page above). The exact dashboard path, "Authentication → Attack Protection /
 Password security → Prevent use of leaked passwords", is **UNCONFIRMED**: that page does not give a menu path
 and the dashboard is behind a login. Look for the "Prevent use of leaked passwords" option.
+
+## ADR-016: The public repository is upstream; the society's copy is a private repository that pulls from it (2026-10-12)
+
+Milestone 4 step 5. Owner decision (2026-10-12): publish `github.com/shahil1dn/volley` (MIT, ADR-009) and keep
+the AI Builders deployment in a separate private repository.
+
+**Decision.**
+- **The public repository is upstream.** Every feature, fix and migration is built there first.
+- **`aib-volley` is a private repository, not a GitHub fork.** GitHub: "A fork's visibility depends on the
+  upstream repository. Public repository forks are public ... You cannot change the visibility of a fork by
+  itself" (https://docs.github.com/en/pull-requests/reference/forks, read 2026-10-12), so a fork of a public
+  repository cannot hold the society's private files. It is an ordinary private repository whose history starts
+  from the upstream's, with an `upstream` remote pointing at the public one.
+- **It differs from upstream only in** `src/lib/brand.ts` (name, colours, logo path), the brand assets in
+  `static/`, and any font files the society uses. Nothing else is edited there; a change that is not
+  branding goes to the public repository first and comes back by merge.
+- **Updates come in with** `git fetch upstream && git merge upstream/main`. Because the private copy touches
+  only the files above, a merge conflict means someone edited something else there. The fix is to move that
+  change upstream.
+- **The `aib-live` Vercel project deploys from the private copy's folder.** The public repository has no
+  deployment of its own (a copy deploys itself with the Deploy button or `AGENTS.md`).
+- **Secrets are never in either repository.** The `.env*` files, `.vercel/` and the first-admin file stay
+  ignored in both (`.gitignore`); `.claude/` and `.DS_Store` are now ignored too.
+
+**Why.** It keeps one codebase, so a bug fixed for strangers is fixed for the society, and it keeps the
+society's name, colours and fonts out of the template (ADR-012: "a copy is a fork of the repository anyway").
+The cost is a merge on every update, kept small by the rule that the copy edits only branding.
+
+**Fonts and the public history (facts for the history decision).** The AI Builders look once shipped Switzer and
+Zarathustra (added 2026-09-29, `2eb7e05`; removed 2026-09-30, `de405fe`; 67 of the 162 commits contain them).
+ADR-012 said they "stay in git history for the AI Builders copy"; that is only safe if the history is not public.
+- **Zarathustra** is under the SIL Open Font License 1.1 (copyright Lorène Ceccon; the licence text was committed
+  beside the font), so it may be redistributed with that text.
+- **Switzer** is a "Closed Source" Fontshare font under the Indian Type Foundry Free Font License
+  (https://www.fontshare.com/licenses/itf-ffl, version 2.0 of 17 Aug 2026, read 2026-10-12). Self-hosting on your
+  own website is allowed, but section 02 forbids making the font software available to any other person,
+  "including ... through ... repository ... publicly accessible servers". A public repository whose history
+  contains the three `switzer-*.woff2` files is that. The licence in force when they were downloaded was not
+  recorded. Whether to rewrite the history to remove them, or to publish without that history, is the owner's
+  decision and is recorded here when made.
