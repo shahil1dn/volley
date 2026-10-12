@@ -106,6 +106,16 @@ A pointer to now, not a log. Reasons live in `docs/DECISIONS.md`, scope in
 
 ## 3. Exact next pickup point
 
+0. **Paused mid step 5 (2026-10-12), nothing published yet.** Shahil approved: a public repo
+   `github.com/shahil1dn/volley` with the full history, minus the three Switzer font files (ADR-016), and
+   his Gmail kept as author. Done: the pre-publish audit (clean); the history rewrite (166 commits kept,
+   today's files identical, Switzer in no commit); old commit ids in the docs updated; every worktree and old
+   branch removed. Gate on the rewritten main: check 0, build 0, npm test 414/414, e2e 68. The original history
+   (`menti-pilot-original-history.bundle`), the Switzer files and old theme screenshots are kept privately in
+   `~/Documents/projects/volley-backup/`, outside the repo. Next, when Shahil says go: `gh repo create
+   shahil1dn/volley --public`, push `main`; then the private `aib-volley` repo (same history, with an
+   `upstream` remote, plus Switzer in its own commit), and move the aib-live Vercel link to its folder; then
+   the folder rename (last, with no session working in it).
 1. **Milestone 4 step 5: the folder rename to `volley` and the public GitHub repository (needs Shahil's OK).**
    Milestone 4 step 4 is done. A10 PASSED 2026-10-12 (two runs; numbers in `docs/load-test-results.md`;
    to repeat it or count calls, `docs/load-test.md`). A13 PASSED with one accepted warning: production is
