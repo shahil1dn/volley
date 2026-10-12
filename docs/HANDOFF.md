@@ -9,7 +9,7 @@ A pointer to now, not a log. Reasons live in `docs/DECISIONS.md`, scope in
 
 - **An orchestrator session and build sessions.** The orchestrator talks to
   Shahil in plain English and briefs build sessions in this folder
-  (`~/Documents/projects/menti-pilot`). Every brief ends with a reply clause:
+  (`~/Documents/projects/volley`). Every brief ends with a reply clause:
   send results back to the orchestrator by title and id, using
   `mcp__ccd_session_mgmt__send_message` (`SendMessage` does not cross sessions).
 - **Parallel builds use worktrees**, one per session, under `.claude/worktrees/`

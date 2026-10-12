@@ -5,8 +5,7 @@ reopened here. The design is drawn out in `docs/ARCHITECTURE.md`.
 
 ## Target
 
-A rebuild of this repository (`~/Documents/projects/menti-pilot`, to be renamed
-`volley`) on SvelteKit, replacing the Next.js prototype.
+A rebuild of this repository (`~/Documents/projects/volley`, formerly `menti-pilot`) on SvelteKit, replacing the Next.js prototype.
 
 | Path | Screen or module |
 |---|---|
