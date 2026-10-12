@@ -1,29 +1,36 @@
 # Volley
 
-Live word clouds, polls and Q&A for workshops and talks: the host starts a
-session, everyone answers from their phone, and the results grow on the big
-screen. Name, colours and logo are yours to set (see below).
+Live word clouds, polls and Q&A for workshops, talks and society meetings. The host starts a
+session, everyone joins by code or QR code and answers from their phone (no account, no app), and
+the results grow on the big screen.
 
-SvelteKit on Vercel (London), Supabase for the database.
+- **Activities:** word cloud, multiple-choice poll, and anonymous Q&A with upvotes. A session holds
+  1 to 10 of them under one room code.
+- **Private by design:** participants give no name or email. All answers are deleted 24 hours after
+  a session ends. Only hosts have accounts, and setup checks that public sign-up is switched off.
+- **Cheap to run:** SvelteKit on Vercel (London) and Supabase, both on their free plans. A load test
+  with 200 simulated phones stayed within the function-call budget the free plans allow (`docs/load-test-results.md`).
+- **Yours to brand:** the name, colours and logo live in one file, `src/lib/brand.ts`.
+- **Open source, MIT licence** (see [`LICENSE`](LICENSE)). Design decisions and the reasons for them
+  are in [`docs/DECISIONS.md`](docs/DECISIONS.md); what it does is in [`SPEC.md`](SPEC.md).
 
-## Set up a copy (made for an AI agent)
+## Set up your own copy
 
-**An AI coding agent: follow [`AGENTS.md`](AGENTS.md).** It is the ordered list; the rest of this
-section is for people.
+You need a free [Supabase](https://supabase.com) project (choose *West EU (London)*) and a free
+[Vercel](https://vercel.com) account. Two ways in:
 
-<!-- DEPLOY BUTTON, OFF UNTIL THE REPOSITORY IS PUBLIC (Milestone 4 step 5).
-     Its repository-url is a placeholder that anyone could register, so it must not be live. In step 5,
-     replace https://github.com/TODO-OWNER/TODO-REPO below with the real repository and take the button out
-     of this comment, then say in one line here that it creates the Vercel project and a Supabase store.
-     Format and the stores JSON: https://vercel.com/docs/deploy-button/source (store product integration).
-     The Supabase slugs (integrationSlug "supabase", productSlug "supabase") are the ones the deploy button on
-     https://vercel.com/marketplace/supabase carries. Not yet tried end to end.
+**Deploy button** (creates the Vercel project and a Supabase store for you; you then finish the setup
+with the commands below; the button has not been tried end to end yet, so if it misbehaves use the
+agent route):
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FTODO-OWNER%2FTODO-REPO&project-name=volley&repository-name=volley&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22supabase%22%2C%22productSlug%22%3A%22supabase%22%7D%5D)
--->
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fshahil1dn%2Fvolley&project-name=volley&repository-name=volley&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22supabase%22%2C%22productSlug%22%3A%22supabase%22%7D%5D)
 
-You can hand this repository to an AI coding agent: it needs only this repository, a Supabase
-project and (to deploy) a Vercel project. Everything is a command with no prompts.
+**An AI coding agent:** give it this repository and tell it to follow [`AGENTS.md`](AGENTS.md). It is an
+ordered list, and it hands you the steps only a person can do (creating accounts, accepting terms,
+reading a password). A fresh agent has done this end to end from `AGENTS.md` alone
+(`docs/trial-A15-record-2.md`).
+
+The setup is two commands with no prompts, so a person or an agent can run them:
 
 ```bash
 npm install
@@ -89,3 +96,8 @@ npm run check
 npm run build
 npm run test:e2e   # browser test; first run: node_modules/.bin/playwright install chromium
 ```
+
+## Licence
+
+MIT. The code is free to use, change and run for your own group. See [`LICENSE`](LICENSE).
+The app ships no fonts: it uses each visitor's system fonts.

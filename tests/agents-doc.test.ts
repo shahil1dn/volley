@@ -55,19 +55,16 @@ test('AGENTS.md states the rules an agent must keep', () => {
 	assert.ok(agents.split(/\s+/).length < 1000, 'AGENTS.md should stay lean');
 });
 
-test('the Deploy button is prepared in the right format but NOT live while its repository is a placeholder', () => {
+test('the Deploy button is live, in the documented format, and points at the public repository', () => {
 	const live = readme.replace(/<!--[\s\S]*?-->/g, '');
-	assert.doesNotMatch(live, /TODO-OWNER|TODO-REPO/, 'a live link to a repository nobody owns yet');
-	const liveButton = /\[!\[Deploy with Vercel\]\([^)]*\)\]\((https:\/\/vercel\.com\/new\/clone\?[^)]+)\)/.exec(live)?.[1];
-	const prepared = /\[!\[Deploy with Vercel\]\(https:\/\/vercel\.com\/button\)\]\((https:\/\/vercel\.com\/new\/clone\?[^)]+)\)/.exec(readme)?.[1];
-	const href = liveButton ?? prepared;
-	assert.ok(href, 'no Deploy with Vercel button in README.md, live or prepared');
+	assert.doesNotMatch(live, /TODO-OWNER|TODO-REPO/, 'a live link to a repository nobody owns');
+	const href = /\[!\[Deploy with Vercel\]\(https:\/\/vercel\.com\/button\)\]\((https:\/\/vercel\.com\/new\/clone\?[^)]+)\)/.exec(live)?.[1];
+	assert.ok(href, 'no live Deploy with Vercel button in README.md (one inside a comment does not count)');
 	const url = new URL(href);
 	assert.equal(url.origin + url.pathname, 'https://vercel.com/new/clone');
-	assert.ok(url.searchParams.get('repository-url'), 'repository-url is required');
+	assert.equal(url.searchParams.get('repository-url'), 'https://github.com/shahil1dn/volley');
 	const stores = JSON.parse(url.searchParams.get('stores') ?? 'null');
 	assert.deepEqual(stores, [{ type: 'integration', integrationSlug: 'supabase', productSlug: 'supabase' }]);
-	if (!liveButton) assert.match(readme, /Milestone 4 step 5/, 'the prepared button must say when it goes live');
 	assert.match(readme, /AGENTS\.md/);
 });
 
