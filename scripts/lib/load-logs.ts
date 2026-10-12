@@ -5,6 +5,7 @@
 //   --limit says, each with a `cache` field. Background refreshes behind a STALE reply have no row of their own.
 // So the state route's function calls lie between two numbers: at least the distinct versions that reached a phone
 // (from the run's report), at most every state row that was MISS, STALE or otherwise not a plain cache HIT.
+// Run live on the A10 run-2 window (2026-10-12): MISS 1,323, STALE 3,341, REVALIDATED 0, BYPASS 0.
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { Refusal, vercelDeploymentFacts, verifyNotProduction } from './load-guard.ts';

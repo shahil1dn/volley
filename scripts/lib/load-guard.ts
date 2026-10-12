@@ -57,7 +57,7 @@ export async function verifyNotProduction(host: string, lookup: (host: string) =
 }
 
 // Read only: GET /v13/deployments/{idOrUrl} through the Vercel CLI, which already holds the login.
-// Field names (`target`, `alias`) are from Vercel's REST reference; not yet run against a live deployment.
+// Field names (`target`, `alias`) are from Vercel's REST reference; run against a live preview on 2026-10-12 (A10): target and alias came back as read here.
 export async function vercelDeploymentFacts(host: string, exec: Exec): Promise<DeploymentFacts> {
 	const result = exec(['api', `/v13/deployments/${encodeURIComponent(host)}`]);
 	if (result.status !== 0) throw new Error(`the Vercel CLI failed while reading the deployment (${cliReason(result)})`);

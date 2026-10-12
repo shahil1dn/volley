@@ -66,7 +66,7 @@ The authority is Vercel's runtime logs for the window. Found on this run (Vercel
   a `cache` field, at most **50 rows a call** whatever `--limit` says. Background refreshes have no row of
   their own (asked for `cache:REVALIDATED`, `PRERENDER`, `BYPASS`: 0 rows). `--query "cache:MISS"` and
   `"cache:STALE"` filter. Paging backwards (next `--until` = oldest timestamp + 1 ms, rows deduplicated by
-  id) reaches every row. `npm run load-logs` does this.
+  id) reaches every row. `npm run load-logs` does this (checked live against the run-2 window: same counts as the hand-made pager).
 
 So the state route's function calls lie between two numbers:
 

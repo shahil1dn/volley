@@ -50,7 +50,9 @@ npm run load-logs -- --deployment dpl_... --report load-results/<the run's file>
 npm run load-logs -- --deployment dpl_... --since <ISO time> --until <ISO time>
 ```
 
-Read only. It refuses a deployment Vercel reports as production (the same lookup as the load test) and a
+Read only. **Run it from the folder that has `.vercel/` (the main checkout), not from a worktree:** the Vercel
+CLI there says "Your codebase isn't linked to a project on Vercel" and the command exits 2. Verified live on
+run 2's window, 2026-10-12: 99 CLI calls, the same counts as the hand-made pager. It refuses a deployment Vercel reports as production (the same lookup as the load test) and a
 deployment id it cannot check. How it counts, because the CLI makes it fiddly:
 
 - `vercel logs --deployment <dpl> --no-follow --no-branch --since … --until … --json` returns **request rows**,
