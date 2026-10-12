@@ -486,6 +486,12 @@ Milestone 4 step 1, SPEC 26 and A16.
 - **The society's fonts (Zarathustra, Switzer) and plum were removed** from
   the template. They stay in git history for the AI Builders copy.
 
+**Amendment (2026-10-12): fonts are a brand setting too.** `brand.fonts` holds a body and a heading
+font-family list, the heading weight, and font files in `static/` to load. The default is system fonts with
+no files, so the template looks the same. Every value is checked before it is written into the page's
+`<style>` (`fontCss` in `src/lib/theme.ts`), because it goes in through `{@html}`. The setting is in the
+public repository; a copy's font files are its own (ADR-016: Switzer may be self-hosted, never published).
+
 ## ADR-013: The projector shows one Q&A question at a time, chosen by the host (2026-10-06)
 
 Owner decision (Shahil): questions should not appear on the big screen all at

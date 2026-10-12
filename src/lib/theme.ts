@@ -83,3 +83,29 @@ export function themeCss(p: Palette): string {
 	const vars = Object.entries(p).map(([name, value]) => `--${name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}:${value}`);
 	return `:root{${vars.join(';')}}`;
 }
+
+// This CSS goes into the page through {@html}, so every value must be unable to end
+// the rule or the <style> element it sits in.
+const FONT_LIST = /^[A-Za-z0-9 "',-]+$/;
+const FAMILY = /^[A-Za-z0-9 -]+$/;
+const FONT_FILE = /^\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+\.(woff2|woff|otf|ttf)$/;
+const FORMAT: Record<string, string> = { woff2: 'woff2', woff: 'woff', otf: 'opentype', ttf: 'truetype' };
+
+export function fontCss(fonts: Brand['fonts']): string {
+	for (const name of ['body', 'display'] as const) {
+		if (!FONT_LIST.test(fonts[name])) throw new Error(`brand.fonts.${name} must be a font-family list of letters, digits, spaces, quotes, commas and hyphens`);
+	}
+	if (!Number.isInteger(fonts.displayWeight) || fonts.displayWeight < 100 || fonts.displayWeight > 900) {
+		throw new Error('brand.fonts.displayWeight must be a whole number from 100 to 900');
+	}
+	const faces = fonts.files.map(({ family, src, weight }, i) => {
+		if (!FAMILY.test(family)) throw new Error(`brand.fonts.files[${i}].family must be letters, digits, spaces and hyphens`);
+		const file = FONT_FILE.exec(src);
+		if (!file) throw new Error(`brand.fonts.files[${i}].src must be a .woff2, .woff, .otf or .ttf path in static/, starting with /`);
+		if (weight !== undefined && (!Number.isInteger(weight) || weight < 100 || weight > 900)) {
+			throw new Error(`brand.fonts.files[${i}].weight must be a whole number from 100 to 900`);
+		}
+		return `@font-face{font-family:"${family}";src:url("${src}") format("${FORMAT[file[1]]}");${weight ? `font-weight:${weight};` : ''}font-display:swap}`;
+	});
+	return `${faces.join('')}:root{--font:${fonts.body};--font-display:${fonts.display};--display-weight:${fonts.displayWeight}}`;
+}

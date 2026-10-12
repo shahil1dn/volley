@@ -1,10 +1,10 @@
 /* The default look: neutral, so any copy's own name, colours and logo lead.
-   Colours come from src/lib/brand.ts (injected by +layout.svelte as --accent,
-   --ink, --muted, --border, --line, --surface, --paper, --error, --on-accent).
-   System fonts: nothing to download or license, and native on every phone.
+   Colours and fonts come from src/lib/brand.ts (injected by +layout.svelte as
+   --accent, --ink, --muted, --border, --line, --surface, --paper, --error,
+   --on-accent, --font, --font-display and --display-weight). The default is
+   system fonts: nothing to download or license, and native on every phone.
    Spacing sticks to 4/8/12/16/24/32/48/64. */
 :root {
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --radius: 12px;
   --tap: 44px;
 }
@@ -18,7 +18,7 @@ body {
   font: 16px/1.5 var(--font);
   -webkit-font-smoothing: antialiased;
 }
-h1 { font-weight: 700; letter-spacing: -0.015em; color: var(--ink); margin: 0; line-height: 1.2; text-wrap: balance; }
+h1 { font-family: var(--font-display); font-weight: var(--display-weight); letter-spacing: -0.015em; color: var(--ink); margin: 0; line-height: 1.2; text-wrap: balance; }
 h2 { font-size: 18px; font-weight: 600; color: var(--ink); margin: 32px 0 12px; }
 p { margin: 0; }
 a { color: var(--ink); text-decoration-thickness: 1px; text-underline-offset: 3px; }

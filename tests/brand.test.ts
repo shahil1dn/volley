@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { brand } from '../src/lib/brand.ts';
-import { contrast, contrastChecks, palette, themeCss } from '../src/lib/theme.ts';
+import { contrast, contrastChecks, fontCss, palette, themeCss } from '../src/lib/theme.ts';
 
 const SETTINGS = join('src', 'lib', 'brand.ts');
 
@@ -54,4 +54,47 @@ test('themeCss writes each colour as a custom property on :root', () => {
 	assert.match(css, /^:root\{.*\}$/);
 	assert.ok(css.includes(`--accent:${brand.colours.accent}`));
 	assert.ok(css.includes('--on-accent:'));
+});
+
+const SYSTEM = { body: 'system-ui, sans-serif', display: 'system-ui, sans-serif', displayWeight: 700, files: [] };
+
+test('fontCss sets the body and heading fonts on :root, and loads nothing when there are no files', () => {
+	const css = fontCss(SYSTEM);
+	assert.equal(css, ':root{--font:system-ui, sans-serif;--font-display:system-ui, sans-serif;--display-weight:700}');
+	assert.doesNotMatch(css, /@font-face/);
+});
+
+test('fontCss loads each file with the format its extension names, and its weight', () => {
+	const css = fontCss({
+		body: '"Body Sans", Arial, sans-serif',
+		display: '"Show", Georgia, serif',
+		displayWeight: 400,
+		files: [
+			{ family: 'Body Sans', src: '/fonts/body-500.woff2', weight: 500 },
+			{ family: 'Show', src: '/fonts/show.otf' },
+		],
+	});
+	assert.ok(css.includes('@font-face{font-family:"Body Sans";src:url("/fonts/body-500.woff2") format("woff2");font-weight:500;font-display:swap}'));
+	assert.ok(css.includes('@font-face{font-family:"Show";src:url("/fonts/show.otf") format("opentype");font-display:swap}'));
+	assert.ok(css.endsWith(':root{--font:"Body Sans", Arial, sans-serif;--font-display:"Show", Georgia, serif;--display-weight:400}'));
+});
+
+test('fontCss refuses anything that could end the rule or the <style> it is written into', () => {
+	const bad: [string, object, RegExp][] = [
+		['body', { body: 'x;}body{color:red' }, /brand\.fonts\.body/],
+		['display', { display: 'x</style><script>' }, /brand\.fonts\.display/],
+		['weight', { displayWeight: 750.5 }, /displayWeight/],
+		['weight range', { displayWeight: 1000 }, /displayWeight/],
+		['family', { files: [{ family: 'X"}', src: '/f.woff2' }] }, /files\[0\]\.family/],
+		['src outside static', { files: [{ family: 'X', src: 'https://evil.example/f.woff2' }] }, /files\[0\]\.src/],
+		['src climbing', { files: [{ family: 'X', src: '/fonts/../../f.woff2' }] }, /files\[0\]\.src/],
+		['src quote', { files: [{ family: 'X', src: '/f").woff2' }] }, /files\[0\]\.src/],
+		['src type', { files: [{ family: 'X', src: '/f.svg' }] }, /files\[0\]\.src/],
+		['file weight', { files: [{ family: 'X', src: '/f.woff2', weight: 50 }] }, /files\[0\]\.weight/],
+	];
+	for (const [why, change, message] of bad) assert.throws(() => fontCss({ ...SYSTEM, ...change }), message, why);
+});
+
+test("this copy's own fonts pass the same checks", () => {
+	assert.doesNotThrow(() => fontCss(brand.fonts));
 });

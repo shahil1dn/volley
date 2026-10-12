@@ -10,7 +10,7 @@ the results grow on the big screen.
   a session ends. Only hosts have accounts, and setup checks that public sign-up is switched off.
 - **Cheap to run:** SvelteKit on Vercel (London) and Supabase, both on their free plans. A load test
   with 200 simulated phones stayed within the function-call budget the free plans allow (`docs/load-test-results.md`).
-- **Yours to brand:** the name, colours and logo live in one file, `src/lib/brand.ts`.
+- **Yours to brand:** the name, colours, logo and fonts live in one file, `src/lib/brand.ts`.
 - **Open source, MIT licence** (see [`LICENSE`](LICENSE)). Design decisions and the reasons for them
   are in [`docs/DECISIONS.md`](docs/DECISIONS.md); what it does is in [`SPEC.md`](SPEC.md).
 
@@ -72,11 +72,12 @@ It prints a new password once; pass it to the host.
 On Supabase's Pro plan, also turn on "Prevent use of leaked passwords" in the project's Auth settings
 (free-plan projects cannot; ADR-015).
 
-## Name, colours and logo
+## Name, colours, logo and fonts
 
-All three live in `src/lib/brand.ts`: the name (shown on every screen and in
-tab titles), an accent, text and background colour, and an optional logo file
-in `static/`. They are built in, so redeploy after changing them. `npm test`
+All of it lives in `src/lib/brand.ts`: the name (shown on every screen and in
+tab titles), an accent, text and background colour, an optional logo file in
+`static/`, and the body and heading fonts (system fonts by default; font files
+go in `static/`, if the font's licence lets you keep them in your repository). They are built in, so redeploy after changing them. `npm test`
 fails, naming the pair, if a colour would make text unreadable (WCAG AA).
 
 ## Database
