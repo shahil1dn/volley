@@ -2,8 +2,8 @@
 
 A pointer to now, not a log. Reasons live in `docs/DECISIONS.md`, scope in
 `SPEC.md`, design in `docs/ARCHITECTURE.md`, progress in `docs/volley-plan.md`.
-`git log --oneline` shows the trail. Nothing is pushed; there is no GitHub
-remote yet.
+`git log --oneline` shows the trail. The public repository will be
+`github.com/shahil1dn/volley` (ADR-016).
 
 ## How this project is run
 
@@ -56,11 +56,11 @@ remote yet.
     (ADR-012);
   - **admins invite hosts by link** (`/hosts`; ADR-011).
 - **Shahil is an admin** named "Shahil" on production (via `set-host`; his
-  password is unchanged). The first real invite (the society's VP, Ryan) hit
+  password is unchanged). The first real invite (to a committee member) hit
   two bugs, both fixed and deployed on 2026-10-01: every invite was refused live
   ("Cross-site POST form submissions are forbidden", caused by Referrer-Policy
   no-referrer), and the invite was saved under Shahil's name (browser autofill).
-  With a fresh link, Ryan's invite worked end to end (Shahil, 2026-10-01).
+  With a fresh link, the invite worked end to end (Shahil, 2026-10-01).
 - **Two Supabase projects, both London** (ADR-010). Production `aib-live-db`
   (ref `qeheedlsskaurqshmueb`) is connected to Vercel's **Production** only.
   Test `volley-test-db` (ref `gzwzfjukswcifikbsufm`) is connected to
@@ -101,7 +101,7 @@ remote yet.
   removed (`git worktree remove …`, then `git branch -d …`). Both branches are
   in `main`.
 - **Later:** the folder rename to `volley` (Milestone 4 step 5); the stale
-  diagrams artifact (https://claude.ai/artifact/73x7gxAHiXBawJLvJcK4gj; republish
+  diagrams artifact (a private page; republish
   it from ARCHITECTURE); a least-privilege database role (ADR-006).
 
 ## 3. Exact next pickup point
