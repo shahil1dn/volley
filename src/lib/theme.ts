@@ -91,6 +91,12 @@ const FAMILY = /^[A-Za-z0-9 -]+$/;
 const FONT_FILE = /^\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+\.(woff2|woff|otf|ttf)$/;
 const FORMAT: Record<string, string> = { woff2: 'woff2', woff: 'woff', otf: 'opentype', ttf: 'truetype' };
 
+// The stylesheet sizes logos for 32px; a copy's height scales every size by the same ratio.
+export function logoCss(height: number): string {
+	if (!Number.isInteger(height) || height < 16 || height > 96) throw new Error('brand.logoHeight must be a whole number of px from 16 to 96');
+	return `:root{--logo-scale:${height / 32}}`;
+}
+
 export function fontCss(fonts: Brand['fonts']): string {
 	for (const name of ['body', 'display'] as const) {
 		if (!FONT_LIST.test(fonts[name])) throw new Error(`brand.fonts.${name} must be a font-family list of letters, digits, spaces, quotes, commas and hyphens`);

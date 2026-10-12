@@ -14,10 +14,11 @@ export type Brand = {
 	};
 	/**
 	 * A file in `static/`, as a path from the site's root (e.g. '/logo.svg'), or
-	 * null to show the name as text. Shown 32px tall on phones, larger on the
-	 * projector; its alt text is `name`.
+	 * null to show the name as text. Its alt text is `name`.
 	 */
 	logo: string | null;
+	/** The logo's height on phones, in px (16 to 96). The projector scales it by the same amount. */
+	logoHeight: number;
 	fonts: {
 		/** Body text: a CSS font-family list. */
 		body: string;
@@ -44,6 +45,7 @@ export const brand: Brand = {
 		paper: '#ffffff',
 	},
 	logo: null,
+	logoHeight: 32,
 	fonts: {
 		body: SYSTEM_FONTS,
 		display: SYSTEM_FONTS,

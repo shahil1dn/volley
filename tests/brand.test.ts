@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { brand } from '../src/lib/brand.ts';
-import { contrast, contrastChecks, fontCss, palette, themeCss } from '../src/lib/theme.ts';
+import { contrast, contrastChecks, fontCss, logoCss, palette, themeCss } from '../src/lib/theme.ts';
 
 const SETTINGS = join('src', 'lib', 'brand.ts');
 
@@ -97,4 +97,13 @@ test('fontCss refuses anything that could end the rule or the <style> it is writ
 
 test("this copy's own fonts pass the same checks", () => {
 	assert.doesNotThrow(() => fontCss(brand.fonts));
+});
+
+test('logoCss scales logos from the 32px they are drawn at, and refuses a height outside 16 to 96', () => {
+	assert.equal(logoCss(32), ':root{--logo-scale:1}');
+	assert.equal(logoCss(48), ':root{--logo-scale:1.5}');
+	assert.equal(logoCss(16), ':root{--logo-scale:0.5}');
+	assert.equal(logoCss(96), ':root{--logo-scale:3}');
+	for (const bad of [15, 97, 40.5, Number.NaN]) assert.throws(() => logoCss(bad), /brand\.logoHeight/, String(bad));
+	assert.doesNotThrow(() => logoCss(brand.logoHeight));
 });

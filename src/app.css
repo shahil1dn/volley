@@ -1,7 +1,7 @@
 /* The default look: neutral, so any copy's own name, colours and logo lead.
    Colours and fonts come from src/lib/brand.ts (injected by +layout.svelte as
    --accent, --ink, --muted, --border, --line, --surface, --paper, --error,
-   --on-accent, --font, --font-display and --display-weight). The default is
+   --on-accent, --font, --font-display, --display-weight and --logo-scale). The default is
    system fonts: nothing to download or license, and native on every phone.
    Spacing sticks to 4/8/12/16/24/32/48/64. */
 :root {
@@ -35,7 +35,7 @@ a:hover { text-decoration-thickness: 2px; }
 
 /* ---------- brand ---------- */
 .brand { font-weight: 700; font-size: 16px; color: var(--ink); }
-.brand--logo { display: block; height: 32px; width: auto; }
+.brand--logo { display: block; height: calc(32px * var(--logo-scale, 1)); width: auto; }
 /* The strip at the top of every phone-sized screen: the brand, then where you are. */
 .masthead {
   display: flex; justify-content: space-between; align-items: center; gap: 16px;
@@ -131,7 +131,7 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 @media (max-width: 720px) { .host__top { grid-template-columns: minmax(0, 1fr); } }
 .host__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
 .host .brand { font-size: clamp(16px, 1.6vw, 28px); }
-.host .brand--logo { height: clamp(28px, 3vw, 56px); }
+.host .brand--logo { height: calc(clamp(28px, 3vw, 56px) * var(--logo-scale, 1)); }
 .host .label { font-size: clamp(16px, 1.5vw, 28px); }
 .host__question { font-size: clamp(28px, 4.2vw, 76px); margin-top: clamp(8px, 1.2vw, 20px); }
 .host__join {
