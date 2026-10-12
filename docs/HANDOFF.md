@@ -114,6 +114,9 @@ remote yet.
    trial 1 is `docs/trial-A15-record.md`). Still unverified: the cron's reachability under
    Standard Protection (read the first scheduled run's log), that the Deploy button works (click it
    once the repo is public, step 5), and `--disable-signup` (tested only against fakes).
+   **A13:** migration 0017 (explicit deny-all policies on the 14 tables, six foreign-key indexes) clears the
+   Security Advisor's INFO rows. It is applied to the test project only; production waits for Shahil's OK,
+   and Shahil reads the Advisor in the dashboard (ADR-006 amendment).
 
 ## 4. What will bite
 

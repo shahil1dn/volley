@@ -421,7 +421,9 @@ In this order (owner, 2026-09-30):
    run), and that the Deploy button works (step 5).
 4. A 10-minute, 200-phone load test, with measured numbers replacing the
    estimates in ARCHITECTURE §10 (A10), and the Supabase Security Advisor clean
-   (A13).
+   (A13). The load script is ready (`docs/load-test.md`). For A13, migration 0017 clears the
+   Advisor's INFO rows (deny-all policies, six indexes); applied to the test project, not yet to
+   production.
 5. The folder rename to `volley` and a public GitHub repository (needs the
    owner's OK).
 
