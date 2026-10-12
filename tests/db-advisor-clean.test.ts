@@ -36,7 +36,7 @@ test('every policy is a deny-all for anon and authenticated only, so it can neve
 		select p.polrelid::regclass::text as tbl, p.polname, p.polpermissive, p.polcmd,
 		  coalesce(pg_get_expr(p.polqual, p.polrelid), '') as using_expr,
 		  coalesce(pg_get_expr(p.polwithcheck, p.polrelid), '') as check_expr,
-		  array(select r.rolname from pg_roles r where r.oid = any(p.polroles) order by 1) as roles
+		  array(select r.rolname::text from pg_roles r where r.oid = any(p.polroles) order by 1)::text[] as roles
 		from pg_policy p where p.polrelid in (select oid from pg_class where relnamespace = 'public'::regnamespace)`);
 	assert.ok(rows.length >= 14);
 	for (const row of rows) {
