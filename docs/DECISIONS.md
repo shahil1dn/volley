@@ -643,7 +643,10 @@ here that is rare and guarded:
   A list of leaked passwords is only useful at a rate far above that.
 
 **What these do not cover.** The app's limits apply to sign-in through the app. Someone who calls Supabase
-Auth directly with the public key is limited by Supabase's own Auth rate limits, which were not checked here.
+Auth directly with the public key is limited only by Supabase's own Auth rate limits: by default 150 requests
+per 5 minutes per IP on `/auth/v1/token`, password grants included, with no per-account limit
+(https://supabase.com/docs/guides/auth/rate-limits, read 2026-10-12; adjustable under Authentication → Rate
+Limits). The production project's own setting was not checked.
 The 10-character minimum is length only: it does not stop a long, common password.
 
 **A copy on the Pro plan can switch it on:** Supabase's docs say it is configured in the project's Auth
