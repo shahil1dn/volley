@@ -78,11 +78,10 @@ export type VerdictInput = {
 	stateCallsPerSecond: number | null;
 	answersPerSecond: number;
 	budget: number; // ADR-004 (amended 2026-09-30): about 15 state calls a second
-	specLine: number; // SPEC A10 as written: under 2 a second, plus answers
 	callsRequired?: boolean; // false for a local run, where there is no edge cache to measure (default true)
 };
 
-export function verdictFor(input: VerdictInput): { pass: boolean; specLinePass: boolean; reasons: string[] } {
+export function verdictFor(input: VerdictInput): { pass: boolean; reasons: string[] } {
 	const reasons: string[] = [];
 	if (input.failedSubmits > 0) reasons.push(`${input.failedSubmits} failed submit${input.failedSubmits === 1 ? '' : 's'}`);
 	if (!input.integrityOk) reasons.push('stored counts do not match what was acknowledged');
@@ -90,8 +89,7 @@ export function verdictFor(input: VerdictInput): { pass: boolean; specLinePass: 
 	if (input.stateCallsPerSecond === null) {
 		if (callsRequired) reasons.push('function calls could not be measured');
 	} else if (callsRequired && input.stateCallsPerSecond > input.budget + input.answersPerSecond) reasons.push(`${input.stateCallsPerSecond} state calls a second is over the budget of ${input.budget} plus ${input.answersPerSecond} answers a second`);
-	const specLinePass = (input.callsRequired ?? true) && input.stateCallsPerSecond !== null && input.stateCallsPerSecond <= input.specLine + input.answersPerSecond;
-	return { pass: reasons.length === 0, specLinePass, reasons };
+	return { pass: reasons.length === 0, reasons };
 }
 
 // ---- the stored-counts check: what the phones were told against what the host's results download holds ----
@@ -187,7 +185,7 @@ export function buildReport(input: ReportInput) {
 	// the count says nothing about the edge: it is left out, not compared with the budget.
 	const measured = calls.headerPresent ? [calls.callsPerSecond, calls.generationsPerSecond].filter((n): n is number => n !== null) : [];
 	const stateCallsPerSecond = measured.length > 0 ? Math.max(...measured) : null;
-	const verdict = verdictFor({ failedSubmits, integrityOk: input.stored?.ok === true, stateCallsPerSecond, answersPerSecond, budget: input.budget, specLine: 2, callsRequired: !input.local });
+	const verdict = verdictFor({ failedSubmits, integrityOk: input.stored?.ok === true, stateCallsPerSecond, answersPerSecond, budget: input.budget, callsRequired: !input.local });
 	return {
 		host: input.host,
 		local: input.local,
@@ -248,11 +246,10 @@ export function reportText(report: Report): string {
 		lines.push(`  function calls seen in headers: ${n(calls.callsPerSecond)} a second (a LOWER BOUND: background refreshes behind STALE are never seen by a client)`);
 	} else lines.push('  no x-vercel-cache header on any state response (not a Vercel deployment): function calls cannot be counted from headers');
 	lines.push(`  distinct state versions served (serverNow): ${n(calls.generations)} = ${n(calls.generationsPerSecond)} function runs a second whose result reached a phone (also a lower bound)`);
-	lines.push(`  budget: ${report.budget} a second plus ${report.submits.answersPerSecond} answers a second (ADR-004); SPEC A10 as written: 2 plus answers`);
+	lines.push(`  budget: ${report.budget} a second plus ${report.submits.answersPerSecond} answers a second (ADR-004)`);
 	lines.push(`Event loop lag on this machine: p99 ${report.eventLoop.p99Ms} ms, max ${report.eventLoop.maxMs} ms (high values mean the numbers above are partly this machine)`);
 	for (const note of report.notes) lines.push(`Note: ${note}`);
 	lines.push('');
 	lines.push(`RESULT: ${report.verdict.pass ? 'PASS' : 'FAIL'}${report.verdict.reasons.length > 0 ? ` (${report.verdict.reasons.join('; ')})` : ''}${report.local && report.verdict.pass ? ' (local run: answers and stored counts only; the edge cache and function calls are measured on a deployment)' : ''}`);
-	lines.push(`SPEC A10 line (under 2 a second plus answers): ${report.local ? 'not measured locally' : report.verdict.specLinePass ? 'met' : 'not met'}`);
 	return lines.join('\n');
 }
