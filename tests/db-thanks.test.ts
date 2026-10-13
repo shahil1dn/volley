@@ -68,10 +68,13 @@ test('answers never open on a thank-you slide, so no phone can answer it', { ski
 			{ type: 'thanks', prompt: 'Thank you' },
 		]);
 		assert.equal((await act(host.userId, code, 'open')).status, 'ok');
+		// The same phone's answer is taken on the word cloud, so a refusal below is the slide's doing.
+		const phone = crypto.randomUUID();
+		assert.equal((await submit(db, code, phone, crypto.randomUUID(), 'hello')).status, 'ok');
 		assert.equal((await act(host.userId, code, 'next')).status, 'ok');
 		assert.equal((await act(host.userId, code, 'open')).status, 'illegal');
 		const run = (await db.query('select status, item_state, current_position from public.runs where code = $1', [code])).rows[0];
 		assert.deepEqual([run.status, run.item_state, run.current_position], ['live', 'closed', 1]);
-		assert.notEqual((await submit(db, code, crypto.randomUUID(), crypto.randomUUID(), 'hello')).status, 'ok');
+		assert.equal((await submit(db, code, phone, crypto.randomUUID(), 'again')).status, 'closed');
 	});
 });

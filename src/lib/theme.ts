@@ -91,6 +91,22 @@ const FAMILY = /^[A-Za-z0-9 -]+$/;
 const FONT_FILE = /^\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+\.(woff2|woff|otf|ttf)$/;
 const FORMAT: Record<string, string> = { woff2: 'woff2', woff: 'woff', otf: 'opentype', ttf: 'truetype' };
 
+// The thank-you link goes into a QR code the audience is asked to scan, built on every
+// projector load: an https address only, no login in it, and short enough to encode.
+export function thankYouLink(link: string | null): string | null {
+	if (link === null) return null;
+	let url: URL;
+	try {
+		url = new URL(link);
+	} catch {
+		throw new Error('brand.thankYou.link must be a web address starting with https://');
+	}
+	if (url.protocol !== 'https:') throw new Error('brand.thankYou.link must start with https://');
+	if (url.username || url.password) throw new Error('brand.thankYou.link must not carry a login');
+	if (link.length > 500) throw new Error('brand.thankYou.link must be 500 characters or fewer to fit in a QR code');
+	return link;
+}
+
 // The stylesheet sizes logos for 32px; a copy's height scales every size by the same ratio.
 export function logoCss(height: number): string {
 	if (!Number.isInteger(height) || height < 16 || height > 96) throw new Error('brand.logoHeight must be a whole number of px from 16 to 96');

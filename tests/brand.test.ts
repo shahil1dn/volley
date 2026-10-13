@@ -6,7 +6,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { brand } from '../src/lib/brand.ts';
 import { MAX_PROMPT_CHARS } from '../src/lib/session-limits.ts';
-import { contrast, contrastChecks, fontCss, logoCss, palette, themeCss } from '../src/lib/theme.ts';
+import { contrast, contrastChecks, fontCss, logoCss, palette, thankYouLink, themeCss } from '../src/lib/theme.ts';
 
 const SETTINGS = join('src', 'lib', 'brand.ts');
 
@@ -109,12 +109,17 @@ test('logoCss scales logos from the 32px they are drawn at, and refuses a height
 	assert.doesNotThrow(() => logoCss(brand.logoHeight));
 });
 
-test("the thank-you slide's default message fits a message's limit, and its link is an https address or none", () => {
+test("the thank-you slide's default message fits a message's limit, and its link passes the runtime check", () => {
 	const { message, link } = brand.thankYou;
 	assert.ok(message.trim().length >= 1 && [...message.trim()].length <= MAX_PROMPT_CHARS, 'brand.thankYou.message must be 1 to 140 characters');
-	if (link !== null) {
-		const url = new URL(link);
-		assert.equal(url.protocol, 'https:', 'brand.thankYou.link must start with https://');
-		assert.equal(url.username + url.password, '', 'brand.thankYou.link must not carry a login');
+	assert.equal(thankYouLink(link), link);
+});
+
+test('thankYouLink accepts an https address or none, and refuses anything else a QR code should not carry', () => {
+	assert.equal(thankYouLink(null), null);
+	assert.equal(thankYouLink('https://example.org/'), 'https://example.org/');
+	assert.equal(thankYouLink(`https://example.org/${'a'.repeat(480)}`)?.length, 500);
+	for (const bad of ['http://example.org', 'javascript:alert(1)', 'example.org', 'https://user:pw@example.org', `https://example.org/${'a'.repeat(481)}`]) {
+		assert.throws(() => thankYouLink(bad), /brand\.thankYou\.link/, bad);
 	}
 });

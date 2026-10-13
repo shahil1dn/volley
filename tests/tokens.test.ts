@@ -18,14 +18,23 @@ function sources(dir: string): string[] {
 
 // A colour written out: hex, or an rgb/hsl/hwb/lab/oklch function.
 const LITERAL_COLOUR = /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\(/;
-// QR codes stay white whatever the paper colour, so scanners can read them.
-const ALLOWED = [/\.(?:host|thanks)__qr\b[^}]*background: #fff;/];
+// QR codes stay white whatever the paper colour, so scanners can read them: on a QR's own
+// rule, and only there, that one declaration is let through. Anything else on the line still counts.
+const QR_RULE = /^\s*\.(?:host|thanks)__qr\s*\{/;
+const withoutExemption = (line: string) => (QR_RULE.test(line) ? line.replace('background: #fff;', '') : line);
+
+test('the QR exemption lets through only the white background on a QR rule', () => {
+	assert.equal(LITERAL_COLOUR.test(withoutExemption('.thanks__qr { width: 1px; background: #fff; }')), false);
+	assert.equal(LITERAL_COLOUR.test(withoutExemption('.thanks__qr { background: #fff; color: #123456; }')), true);
+	assert.equal(LITERAL_COLOUR.test(withoutExemption('.thanks__qr-evil { background: #fff; }')), true);
+	assert.equal(LITERAL_COLOUR.test(withoutExemption('.thanks__message { background: #fff; }')), true);
+});
 
 test('no stylesheet or component writes a colour literal; every colour is a theme variable', () => {
 	const offenders: string[] = [];
 	for (const file of sources(ROOT)) {
 		for (const [n, line] of readFileSync(file, 'utf8').split('\n').entries()) {
-			if (LITERAL_COLOUR.test(line) && !ALLOWED.some((ok) => ok.test(line))) offenders.push(`${file.replace(ROOT, 'src/')}:${n + 1}: ${line.trim()}`);
+			if (LITERAL_COLOUR.test(withoutExemption(line))) offenders.push(`${file.replace(ROOT, 'src/')}:${n + 1}: ${line.trim()}`);
 		}
 	}
 	assert.deepEqual(offenders, []);

@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import QRCode from 'qrcode';
 import { brand } from '$lib/brand';
+import { thanksQr } from '$lib/server/thanks-qr';
 import { CODE_PATTERN } from '$lib/server/host-token';
 import type { PageServerLoad } from './$types';
 
@@ -12,8 +13,5 @@ export const load: PageServerLoad = async ({ params, url }) => {
 	const joinUrl = `${url.origin}/j/${params.code}`;
 	// The code is checked above and the URL is ours, so the SVG is safe to inline.
 	const qrSvg = await QRCode.toString(joinUrl, { type: 'svg', margin: 1, color: { dark: '#1e1622', light: '#ffffff' } });
-	// The thank-you link comes from src/lib/brand.ts, checked by tests/brand.test.ts.
-	const thanksLink = brand.thankYou.link;
-	const thanksQrSvg = thanksLink ? await QRCode.toString(thanksLink, { type: 'svg', margin: 1, color: { dark: '#1e1622', light: '#ffffff' } }) : null;
-	return { code: params.code, joinUrl, qrSvg, thanksLink, thanksQrSvg };
+	return { code: params.code, joinUrl, qrSvg, thanks: await thanksQr(brand.thankYou.link) };
 };

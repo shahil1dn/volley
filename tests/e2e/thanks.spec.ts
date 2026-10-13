@@ -29,10 +29,22 @@ test('a session ends on a thank-you slide: nothing to answer, the message on pho
 	await page.waitForURL(/\/decks$/);
 	await builderReady(page);
 	await activityBox(page, 1).getByLabel('Question', { exact: true }).fill('One word?');
+	// Words already typed are kept when a row becomes a thank-you slide.
+	await page.getByRole('button', { name: 'Add activity' }).click();
+	const typed = activityBox(page, 2);
+	await typed.getByLabel('Question', { exact: true }).fill('See you next week');
+	await typed.getByLabel('Type', { exact: true }).selectOption({ label: 'Thank you' });
+	await expect(typed.getByLabel('Message', { exact: true })).toHaveValue('See you next week');
+	await typed.getByRole('button', { name: 'Remove activity 2' }).click();
 	await page.getByRole('button', { name: 'Add activity' }).click();
 	const slide = activityBox(page, 2);
 	await slide.getByLabel('Type', { exact: true }).selectOption({ label: 'Thank you' });
 	// The field is a message now, already holding the copy's own words.
+	await expect(slide.getByLabel('Message', { exact: true })).toHaveValue(brand.thankYou.message);
+	// Changing its mind drops those words, so they can't start a word cloud by accident; coming back refills them.
+	await slide.getByLabel('Type', { exact: true }).selectOption({ label: 'Word cloud' });
+	await expect(slide.getByLabel('Question', { exact: true })).toHaveValue('');
+	await slide.getByLabel('Type', { exact: true }).selectOption({ label: 'Thank you' });
 	await expect(slide.getByLabel('Message', { exact: true })).toHaveValue(brand.thankYou.message);
 	await page.getByRole('button', { name: 'Start session' }).click();
 	await page.waitForURL(/\/run\/[A-Z0-9]{5}\/control$/);
@@ -40,6 +52,11 @@ test('a session ends on a thank-you slide: nothing to answer, the message on pho
 
 	await page.getByRole('button', { name: 'Open answers' }).click();
 	await expect(statusValue(page, 'Answers')).toHaveText('Open');
+	// The projector before the slide: the join panel and its QR are there to be hidden.
+	const projector = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+	await projector.goto(`${BASE}/run/${code}`);
+	await expect(projector.getByText('Scan, or go to')).toBeVisible();
+	await expect(projector.getByRole('img', { name: /^QR code to join/ })).toHaveCount(1);
 	await page.getByRole('button', { name: 'Next', exact: true }).click();
 	await expect(statusValue(page, 'Activity')).toHaveText('2 of 2');
 	await expect(statusValue(page, 'Answers')).toHaveText('None');
@@ -50,13 +67,16 @@ test('a session ends on a thank-you slide: nothing to answer, the message on pho
 	const phonePage = await phone.newPage();
 	await phonePage.goto(`${BASE}/j/${code}`);
 	await expect(phonePage.getByRole('heading', { level: 1 })).toHaveText(brand.thankYou.message);
-	await expect(phonePage.getByRole('textbox')).toHaveCount(0);
+	await expect(phonePage.getByText('Keep this page open')).toHaveCount(0);
 	await phone.close();
 
-	const projector = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
-	await projector.goto(`${BASE}/run/${code}`);
-	await expect(projector.getByRole('heading', { level: 1 })).toHaveText(brand.thankYou.message);
+	await expect(projector.locator('.thanks__message')).toHaveText(brand.thankYou.message);
 	await expect(projector.getByText('Scan, or go to')).toHaveCount(0);
+	await expect(projector.getByRole('img', { name: /^QR code to join/ })).toHaveCount(0);
+	// Answers are never open here, so the header doesn't call them closed.
+	const roomLabel = projector.locator('.host__meta .label');
+	await expect(roomLabel).toContainText(`Room ${code}`);
+	await expect(roomLabel).not.toContainText('Answers');
 	// This copy's link decides whether a QR code is shown.
 	await expect(projector.getByRole('img', { name: /^QR code for / })).toHaveCount(brand.thankYou.link ? 1 : 0);
 	await projector.close();

@@ -43,6 +43,8 @@
 	const note = $derived(
 		ended ? ''
 		: connectionLost(failedPolls) && !missing ? 'Reconnecting…'
+		// Nothing is answered on a thank-you slide, so open, closed and paused mean nothing there.
+		: isThanks ? ''
 		: room?.status === 'frozen' ? 'Answers paused'
 		: room?.status === 'lobby' ? 'Starting soon'
 		: room?.itemState === 'closed' ? 'Answers closed'
@@ -120,7 +122,7 @@
 		{#if ended}
 			<div class="host__join host__join--ended">
 				<p class="host__ended">Session ended</p>
-				<p class="host__count">{count} {countNoun}</p>
+				{#if !isThanks}<p class="host__count">{count} {countNoun}</p>{/if}
 			</div>
 		{:else if !missing && !isThanks}
 			<div class="host__join">
@@ -142,10 +144,10 @@
 	{:else if isThanks}
 		<section class="thanks">
 			<h1 class="thanks__message">{prompt}</h1>
-			{#if data.thanksQrSvg && data.thanksLink}
+			{#if data.thanks}
 				<div class="thanks__link">
-					<div class="thanks__qr" role="img" aria-label="QR code for {data.thanksLink}">{@html data.thanksQrSvg}</div>
-					<p class="host__url">{data.thanksLink.replace(/^https?:\/\//, '').replace(/\/$/, '')}</p>
+					<div class="thanks__qr" role="img" aria-label="QR code for {data.thanks.link}">{@html data.thanks.svg}</div>
+					<p class="host__url">{data.thanks.address}</p>
 				</div>
 			{/if}
 		</section>

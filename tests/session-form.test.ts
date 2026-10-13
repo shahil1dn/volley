@@ -196,5 +196,5 @@ test("a thank-you slide's empty or over-long text is called a message, not a que
 
 test('a session cannot start with a thank-you slide: it has no answers to open, and opening answers is what starts a session', () => {
 	assert.match(refused(post([{ type: 'thanks', prompt: 'Thanks' }, cloud(1)])).errors.drafts[0].type ?? '', /Start with a word cloud, poll or Q&A/);
-	assert.equal(refused(post([{ type: 'thanks', prompt: 'Thanks' }])).errors.drafts[0].type !== undefined, true);
+	assert.equal(refused(post([{ type: 'thanks', prompt: 'Thanks' }])).errors.drafts[0].type, 'Start with a word cloud, poll or Q&A. A thank-you slide can come after.');
 });

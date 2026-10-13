@@ -178,7 +178,9 @@
 									row.type = event.currentTarget.value;
 									row.typeError = undefined;
 									// A thank-you slide starts from the copy's own words; the host can change them.
+									// Leaving it drops those words again, so they can't become a question unnoticed.
 									if (row.type === 'thanks' && !row.prompt.trim()) row.prompt = brand.thankYou.message;
+									else if (row.type !== 'thanks' && row.prompt === brand.thankYou.message) row.prompt = '';
 								}}
 							>
 								<!-- `selected` on each option, not `bind:value` on the select: binding
