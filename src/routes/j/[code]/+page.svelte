@@ -57,6 +57,7 @@
 	const prompt = $derived(typeof item?.settings.prompt === 'string' ? item.settings.prompt : 'Share a word or short phrase');
 	const isPoll = $derived(item?.type === 'poll');
 	const isQna = $derived(item?.type === 'qna');
+	const isThanks = $derived(item?.type === 'thanks');
 	const questions = $derived(room?.questions ?? []);
 	// The question the host has put on the big screen, if it is still in the list.
 	const onScreenId = $derived(room?.shown?.[0] ?? null);
@@ -231,6 +232,8 @@
 	{:else if room.status === 'ended'}
 		<h1>That's a wrap</h1>
 		<p class="hint">This session has ended. Thanks for joining in.</p>
+	{:else if isThanks}
+		<h1>{prompt}</h1>
 	{:else if accepting && isQna}
 		<h1>{prompt}</h1>
 		{#if mine.left > 0}

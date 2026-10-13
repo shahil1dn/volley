@@ -144,6 +144,12 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 .host__qr svg { display: block; width: 100%; height: auto; }
 .host__joinText { font-size: clamp(16px, 1.9vw, 34px); color: var(--muted); }
 .host__url { font-size: clamp(18px, 2.1vw, 40px); color: var(--ink); font-weight: 600; }
+/* The thank-you slide: the message large in the middle, the copy's link as a QR under it. */
+.thanks { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(24px, 3vw, 64px); text-align: center; padding: 2vw; }
+.thanks__message { font-size: clamp(40px, 6vw, 128px); max-width: 18ch; }
+.thanks__link { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.thanks__qr { width: clamp(140px, 18vw, 360px); line-height: 0; padding: 8px; background: #fff; border-radius: 8px; }
+.thanks__qr svg { display: block; width: 100%; height: auto; }
 .host__code { font-size: clamp(32px, 4.4vw, 84px); font-weight: 700; letter-spacing: 0.08em; color: var(--ink); line-height: 1.1; margin: 4px 0; font-variant-numeric: tabular-nums; }
 .host__join--ended { display: grid; gap: 4px; }
 .host__ended { font-size: clamp(28px, 3.6vw, 68px); font-weight: 700; color: var(--ink); line-height: 1.1; }

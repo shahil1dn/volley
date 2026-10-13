@@ -4,7 +4,8 @@ Live word clouds, polls and Q&A for workshops, talks and society meetings. The h
 session, everyone joins by code or QR code and answers from their phone (no account, no app), and
 the results grow on the big screen.
 
-- **Activities:** word cloud, multiple-choice poll, and anonymous Q&A with upvotes. A session holds
+- **Activities:** word cloud, multiple-choice poll, anonymous Q&A with upvotes, and a thank-you slide
+  to close on (with a QR code to your site, if you set one). A session holds
   1 to 10 of them under one room code.
 - **Private by design:** participants give no name or email. All answers are deleted 24 hours after
   a session ends. Only hosts have accounts, and setup checks that public sign-up is switched off.

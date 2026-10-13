@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { brand } from '../src/lib/brand.ts';
+import { MAX_PROMPT_CHARS } from '../src/lib/session-limits.ts';
 import { contrast, contrastChecks, fontCss, logoCss, palette, themeCss } from '../src/lib/theme.ts';
 
 const SETTINGS = join('src', 'lib', 'brand.ts');
@@ -106,4 +107,14 @@ test('logoCss scales logos from the 32px they are drawn at, and refuses a height
 	assert.equal(logoCss(96), ':root{--logo-scale:3}');
 	for (const bad of [15, 97, 40.5, Number.NaN]) assert.throws(() => logoCss(bad), /brand\.logoHeight/, String(bad));
 	assert.doesNotThrow(() => logoCss(brand.logoHeight));
+});
+
+test("the thank-you slide's default message fits a message's limit, and its link is an https address or none", () => {
+	const { message, link } = brand.thankYou;
+	assert.ok(message.trim().length >= 1 && [...message.trim()].length <= MAX_PROMPT_CHARS, 'brand.thankYou.message must be 1 to 140 characters');
+	if (link !== null) {
+		const url = new URL(link);
+		assert.equal(url.protocol, 'https:', 'brand.thankYou.link must start with https://');
+		assert.equal(url.username + url.password, '', 'brand.thankYou.link must not carry a login');
+	}
 });

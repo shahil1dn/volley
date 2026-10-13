@@ -180,3 +180,21 @@ test('a refused form gives back exactly what was typed: untrimmed, in order, wit
 	);
 	assert.equal(parsed.drafts.length, typed.length);
 });
+
+test('a thank-you slide is accepted with its message, and any options sent with it are dropped', () => {
+	const parsed = parseSessionForm(post([cloud(0), { type: 'thanks', prompt: '  Thank you for joining ', options: ['stray', 'ones'] }]));
+	assert.equal(parsed.ok, true);
+	if (!parsed.ok) throw new Error('unreachable');
+	assert.deepEqual(parsed.items[1], { type: 'thanks', prompt: 'Thank you for joining' });
+});
+
+test("a thank-you slide's empty or over-long text is called a message, not a question", () => {
+	const parsed = refused(post([{ type: 'thanks', prompt: ' ' }, { type: 'thanks', prompt: 'x'.repeat(MAX_PROMPT_CHARS + 1) }]));
+	assert.equal(parsed.errors.drafts[0].prompt, 'Write the message.');
+	assert.equal(parsed.errors.drafts[1].prompt, `Keep the message to ${MAX_PROMPT_CHARS} characters or fewer.`);
+});
+
+test('a session cannot start with a thank-you slide: it has no answers to open, and opening answers is what starts a session', () => {
+	assert.match(refused(post([{ type: 'thanks', prompt: 'Thanks' }, cloud(1)])).errors.drafts[0].type ?? '', /Start with a word cloud, poll or Q&A/);
+	assert.equal(refused(post([{ type: 'thanks', prompt: 'Thanks' }])).errors.drafts[0].type !== undefined, true);
+});

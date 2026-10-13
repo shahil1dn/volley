@@ -18,8 +18,8 @@ function sources(dir: string): string[] {
 
 // A colour written out: hex, or an rgb/hsl/hwb/lab/oklch function.
 const LITERAL_COLOUR = /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\(/;
-// The QR code stays white whatever the paper colour, so scanners can read it.
-const ALLOWED = [/\.host__qr\b[^}]*background: #fff;/];
+// QR codes stay white whatever the paper colour, so scanners can read them.
+const ALLOWED = [/\.(?:host|thanks)__qr\b[^}]*background: #fff;/];
 
 test('no stylesheet or component writes a colour literal; every colour is a theme variable', () => {
 	const offenders: string[] = [];

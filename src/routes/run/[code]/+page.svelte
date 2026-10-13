@@ -28,6 +28,7 @@
 	const bars = $derived(isPoll ? pollBars(room?.item?.settings.options, words) : []);
 	const mostVotes = $derived(Math.max(1, ...bars.map((bar) => bar.votes)));
 	const isQna = $derived(room?.item?.type === 'qna');
+	const isThanks = $derived(room?.item?.type === 'thanks');
 	// The projector shows one question at a time, chosen by the host; phones see the whole list.
 	const shown = $derived(room?.shown ?? null);
 	const waiting = $derived(room?.waiting ?? 0);
@@ -114,14 +115,14 @@
 	<header class="host__top">
 		<div>
 			<div class="host__meta"><Brand /><p class="label">Room {data.code}{room?.hostName ? ` · ${room.hostName} hosting` : ''}{note ? ` · ${note}` : ''}</p></div>
-			<h1 class="host__question">{missing ? "We can't find that room" : prompt}</h1>
+			{#if !isThanks}<h1 class="host__question">{missing ? "We can't find that room" : prompt}</h1>{/if}
 		</div>
 		{#if ended}
 			<div class="host__join host__join--ended">
 				<p class="host__ended">Session ended</p>
 				<p class="host__count">{count} {countNoun}</p>
 			</div>
-		{:else if !missing}
+		{:else if !missing && !isThanks}
 			<div class="host__join">
 				<div class="host__qr" role="img" aria-label="QR code to join at {data.joinUrl}">{@html data.qrSvg}</div>
 				<div>
@@ -138,6 +139,16 @@
 		<p class="cloud__empty" aria-live="polite">Loading…</p>
 	{:else if missing}
 		<p class="cloud__empty">Check the code and try again.</p>
+	{:else if isThanks}
+		<section class="thanks">
+			<h1 class="thanks__message">{prompt}</h1>
+			{#if data.thanksQrSvg && data.thanksLink}
+				<div class="thanks__link">
+					<div class="thanks__qr" role="img" aria-label="QR code for {data.thanksLink}">{@html data.thanksQrSvg}</div>
+					<p class="host__url">{data.thanksLink.replace(/^https?:\/\//, '').replace(/\/$/, '')}</p>
+				</div>
+			{/if}
+		</section>
 	{:else if isPoll}
 		<ol class="poll" aria-label="Poll results">
 			{#each bars as bar (bar.label)}

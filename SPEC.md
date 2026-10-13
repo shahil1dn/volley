@@ -24,7 +24,7 @@ A rebuild of this repository (`~/Documents/projects/volley`, formerly `menti-pil
 ## Objective
 
 A society committee member signs in, builds a deck of a few activities (word
-cloud, multiple-choice poll and anonymous Q&A with upvotes, ADR-008; a timed quiz is out of scope for v1, ADR-007)
+cloud, multiple-choice poll, anonymous Q&A with upvotes, ADR-008, and a closing thank-you slide, ADR-017; a timed quiz is out of scope for v1, ADR-007)
 and runs it from a laptop on a
 projector. Up to 200 people join by QR code with no account and answer from any
 phone. Results appear on the projector within about 2 seconds, the host can hide
@@ -59,6 +59,10 @@ own copy by telling an AI agent to follow `AGENTS.md`.
     up to 5 each) and upvote any question once, with undo. Sorted by votes,
     then oldest first. The host hides questions and marks them answered;
     answered questions leave the main list.
+7b. Thank-you slide (ADR-017): a message of 1–140 characters, filled in from
+    `brand.thankYou.message` and editable. Nothing is answered on it, so it
+    cannot be a session's first activity. Phones show the message; the
+    projector shows it large, with `brand.thankYou.link` as a QR code if set.
 8. **Out of scope for the first release (ADR-007):** the timed quiz, with its
    scheduled start, server-clock countdown, speed bands, nickname leaderboard
    and correct-answer reveal. It is left for later or for a community

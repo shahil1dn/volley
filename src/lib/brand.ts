@@ -19,6 +19,12 @@ export type Brand = {
 	logo: string | null;
 	/** The logo's height on phones, in px (16 to 96). The projector scales it by the same amount. */
 	logoHeight: number;
+	/**
+	 * The thank-you slide. `message` fills in the slide's text in the session
+	 * builder (the host can change it). `link`, if not null, is an https address
+	 * shown as a QR code on the projector, such as your website.
+	 */
+	thankYou: { message: string; link: string | null };
 	fonts: {
 		/** Body text: a CSS font-family list. */
 		body: string;
@@ -46,6 +52,7 @@ export const brand: Brand = {
 	},
 	logo: null,
 	logoHeight: 32,
+	thankYou: { message: 'Thank you for joining', link: null },
 	fonts: {
 		body: SYSTEM_FONTS,
 		display: SYSTEM_FONTS,

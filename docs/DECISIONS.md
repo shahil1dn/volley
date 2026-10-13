@@ -705,3 +705,18 @@ quoted in these docs were updated to the new ones. Switzer was in 67 commits bef
 Zarathustra stays (OFL). The original history and the three files are kept privately, outside the repository.
 The private `aib-volley` copy adds Switzer back in its own commit: section 01 allows self-hosting on the
 society's own site, and a private repository is not "made available to any other person".
+
+## ADR-017: A thank-you slide is an activity type with nothing to answer (2026-10-13)
+
+The owner asked for an optional closing slide: a warm thank-you, and for the society a QR code to its website.
+
+- **An activity type, `thanks`**, chosen in the builder like a poll (migration 0018), not a "finish with a
+  thank-you" switch: future activity types reuse the same path (owner's pick).
+- **Its words come from the brand** (`brand.thankYou.message`), filled into the builder and editable per
+  session; the link is fixed in the brand (`brand.thankYou.link`, an https address or null) and is shown
+  only on the projector, as a QR code with the address under it. Phones show the message alone (owner's pick).
+- **Nothing is answered on it.** `host_action`'s 'open' already refuses every type but word cloud, poll and
+  Q&A, so its answers never open and `submit_answer` never accepts one; no answer path changed.
+- **It cannot come first.** A session starts by opening answers on its first activity, so a session that began
+  with a thank-you slide could never start. The form says so beside the type, and `start_session` refuses it.
+- The projector hides the join panel on the slide: people are leaving, not joining.

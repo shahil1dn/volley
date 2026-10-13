@@ -56,8 +56,11 @@ export function parseSessionForm(form: FormData): ParsedSession {
 		const found: DraftErrors = {};
 		const prompt = draft.prompt.trim();
 		if (!TYPES.has(draft.type)) found.type = 'Choose a type.';
-		if (prompt === '') found.prompt = 'Write the question.';
-		else if (chars(prompt) > MAX_PROMPT_CHARS) found.prompt = `Keep the question to ${MAX_PROMPT_CHARS} characters or fewer.`;
+		// A session starts by opening answers on its first activity, and a thank-you slide has none.
+		else if (i === 0 && draft.type === 'thanks') found.type = 'Start with a word cloud, poll or Q&A. A thank-you slide can come after.';
+		const what = draft.type === 'thanks' ? 'message' : 'question';
+		if (prompt === '') found.prompt = `Write the ${what}.`;
+		else if (chars(prompt) > MAX_PROMPT_CHARS) found.prompt = `Keep the ${what} to ${MAX_PROMPT_CHARS} characters or fewer.`;
 
 		if (draft.type === 'poll') {
 			// Counted before the echo's cap, so a hand-made post of 7 is refused, not trimmed to a valid 6.

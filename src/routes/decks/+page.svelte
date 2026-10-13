@@ -177,6 +177,8 @@
 								onchange={(event) => {
 									row.type = event.currentTarget.value;
 									row.typeError = undefined;
+									// A thank-you slide starts from the copy's own words; the host can change them.
+									if (row.type === 'thanks' && !row.prompt.trim()) row.prompt = brand.thankYou.message;
 								}}
 							>
 								<!-- `selected` on each option, not `bind:value` on the select: binding
@@ -189,7 +191,7 @@
 							<!-- No maxlength on the question or the options: the browser counts UTF-16
 							     units and the limit counts characters (an emoji is one), so it would be
 							     stricter than the server. The server's message beside the field is the limit. -->
-							<label class="label" for="prompt-{row.id}">Question</label>
+							<label class="label" for="prompt-{row.id}">{row.type === 'thanks' ? 'Message' : 'Question'}</label>
 							<input
 								id="prompt-{row.id}"
 								name="prompt"
@@ -248,7 +250,7 @@
 				{#each rows as row, i (row.id)}
 					<li>
 						<span class="label">{i + 1} · {typeName(row.type)}{row.type === 'poll' ? ` · ${row.options.length} options` : ''}</span>
-						<span class={row.prompt.trim() ? '' : 'hint'}>{row.prompt.trim() || 'No question yet'}</span>
+						<span class={row.prompt.trim() ? '' : 'hint'}>{row.prompt.trim() || (row.type === 'thanks' ? 'No message yet' : 'No question yet')}</span>
 					</li>
 				{/each}
 			</ol>

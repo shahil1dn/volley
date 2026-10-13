@@ -55,6 +55,7 @@
 	const ANSWER_LABELS: Record<string, string> = { open: 'Open', closed: 'Closed', revealed: 'Shown' };
 	const isPoll = $derived(view?.item?.type === 'poll');
 	const isQna = $derived(view?.item?.type === 'qna');
+	const isThanks = $derived(view?.item?.type === 'thanks');
 	// "3 of 12": this question's turn among every visible question asked so far,
 	// and how many others are waiting (unanswered, not on screen).
 	const asked = $derived((view?.questions ?? []).filter(([, , , hidden]) => !hidden));
@@ -159,11 +160,14 @@
 		<div class="control__top" role="group" aria-label="Status and main action">
 			<dl class="status" aria-live="polite">
 				<div class="status__item"><dt>Session</dt><dd>{SESSION_LABELS[view.status] ?? view.status}</dd></div>
-				<div class="status__item"><dt>Answers</dt><dd>{ANSWER_LABELS[answers ?? ''] ?? answers}</dd></div>
+				<div class="status__item"><dt>Answers</dt><dd>{isThanks ? 'None' : (ANSWER_LABELS[answers ?? ''] ?? answers)}</dd></div>
 				<div class="status__item"><dt>Activity</dt><dd>{view.currentPosition + 1} of {view.itemCount}</dd></div>
 			</dl>
 			<div class="control__main">
-				{#if isQna && view.status === 'lobby'}
+				{#if isThanks}
+					<!-- Nothing is answered on a thank-you slide: it is on screen as soon as it is reached. -->
+					<p class="hint">On screen now. Nothing to answer.</p>
+				{:else if isQna && view.status === 'lobby'}
 					<!-- Nothing can move until the session is live, so the first step is opening answers. -->
 					<button class="btn" disabled={busy} onclick={() => act('open')}>Open answers</button>
 				{:else if isQna}
@@ -242,7 +246,7 @@
 					{/each}
 				</ul>
 			{/if}
-		{:else}
+		{:else if !isThanks}
 			<h2>{isPoll ? 'Votes' : 'Words'}</h2>
 			{#if view.tallies.length === 0}
 				<p class="hint">No answers yet.</p>

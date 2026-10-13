@@ -12,4 +12,5 @@ export const ACTIVITY_TYPES = [
 	['word_cloud', 'Word cloud'],
 	['poll', 'Poll'],
 	['qna', 'Q&A'],
+	['thanks', 'Thank you'],
 ] as const;
