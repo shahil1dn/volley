@@ -79,6 +79,11 @@ a:hover { text-decoration-thickness: 2px; }
 .stack { display: grid; gap: 16px; margin-top: 24px; }
 fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 .phone__foot { margin-top: 24px; }
+/* The thank-you slide on a phone: the last thing people see, so it fills the screen
+   rather than sitting at the top of an empty page. */
+.phone-thanks { min-height: calc(100svh - 140px); display: flex; flex-direction: column; justify-content: center; gap: 16px; }
+.phone-thanks::before { content: ""; width: 48px; height: 4px; border-radius: 2px; background: var(--accent); }
+.phone .phone-thanks__message { font-size: clamp(36px, 11vw, 48px); line-height: 1.1; margin: 0; }
 /* What this phone has sent, straight under the question. */
 .sent { color: var(--ink); font-size: 16px; }
 .sent strong { font-weight: 600; }

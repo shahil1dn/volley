@@ -233,7 +233,10 @@
 		<h1>That's a wrap</h1>
 		<p class="hint">This session has ended. Thanks for joining in.</p>
 	{:else if isThanks}
-		<h1>{prompt}</h1>
+		<section class="phone-thanks">
+			<h1 class="phone-thanks__message">{prompt}</h1>
+			<p class="hint">You can close this page now.</p>
+		</section>
 	{:else if accepting && isQna}
 		<h1>{prompt}</h1>
 		{#if mine.left > 0}
