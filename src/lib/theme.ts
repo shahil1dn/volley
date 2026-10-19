@@ -2,8 +2,10 @@
 // measures the pairs that must stay readable (WCAG 2.2 AA).
 import type { Brand } from './brand.ts';
 
-// Not a brand colour: an error should look like an error on any copy.
+// Not a brand colour: an error should look like an error on any copy. A dark red
+// can't be read on a dark page, so a copy with dark paper gets a light red instead.
 const ERROR = '#9b1c1c';
+const ERROR_ON_DARK = '#ff9e9e';
 
 export type Palette = {
 	accent: string;
@@ -61,7 +63,7 @@ export function palette(colours: Brand['colours']): Palette {
 		line: mix(ink, paper, 0.14),
 		surface: mix(ink, paper, 0.06),
 		paper: colours.paper,
-		error: ERROR,
+		error: contrast(ERROR, colours.paper) >= 4.5 ? ERROR : ERROR_ON_DARK,
 	};
 }
 

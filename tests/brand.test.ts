@@ -123,3 +123,11 @@ test('thankYouLink accepts an https address or none, and refuses anything else a
 		assert.throws(() => thankYouLink(bad), /brand\.thankYou\.link/, bad);
 	}
 });
+
+test('a dark page gets a light error red, and every pair on it still reads; a light page keeps the dark red', () => {
+	const night = palette({ accent: '#e8a87c', ink: '#f5f0f7', paper: '#2d214c' });
+	assert.equal(night.error, '#ff9e9e');
+	const failing = contrastChecks(night).filter(({ ratio, needs }) => ratio < needs).map(({ pair }) => pair);
+	assert.deepEqual(failing, []);
+	assert.equal(palette({ accent: '#0e6f64', ink: '#17191c', paper: '#ffffff' }).error, '#9b1c1c');
+});
