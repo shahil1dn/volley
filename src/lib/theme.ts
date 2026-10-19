@@ -83,7 +83,9 @@ export function contrastChecks(p: Palette): { pair: string; ratio: number; needs
 
 export function themeCss(p: Palette): string {
 	const vars = Object.entries(p).map(([name, value]) => `--${name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}:${value}`);
-	return `:root{${vars.join(';')}}`;
+	// The browser draws its own controls (radio buttons, scrollbars) light unless told the page is dark.
+	const scheme = luminance(p.paper) < luminance(p.ink) ? 'dark' : 'light';
+	return `:root{${vars.join(';')};color-scheme:${scheme}}`;
 }
 
 // This CSS goes into the page through {@html}, so every value must be unable to end

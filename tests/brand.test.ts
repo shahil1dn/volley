@@ -131,3 +131,8 @@ test('a dark page gets a light error red, and every pair on it still reads; a li
 	assert.deepEqual(failing, []);
 	assert.equal(palette({ accent: '#0e6f64', ink: '#17191c', paper: '#ffffff' }).error, '#9b1c1c');
 });
+
+test("themeCss tells the browser whether the page is dark, so its own controls (radio buttons, scrollbars) match", () => {
+	assert.ok(themeCss(palette({ accent: '#e8a87c', ink: '#f5f0f7', paper: '#2d214c' })).includes('color-scheme:dark'));
+	assert.ok(themeCss(palette({ accent: '#0e6f64', ink: '#17191c', paper: '#ffffff' })).includes('color-scheme:light'));
+});
