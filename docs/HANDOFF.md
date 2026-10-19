@@ -106,7 +106,15 @@ A pointer to now, not a log. Reasons live in `docs/DECISIONS.md`, scope in
 
 ## 3. Exact next pickup point
 
-0. **Milestone 4 step 5 done (2026-10-12).** Public repo https://github.com/shahil1dn/volley; the society's
+0. **The AI Builders look is live (2026-10-19).** aib-live deploys from the private copy
+   (`~/Documents/projects/aib-volley`, deploy `aib-live-dl9okclpd`): plum, the society logo at
+   `logoHeight: 56`, Zarathustra headings and Fontshare's official Switzer 400 to 700 (private only, ADR-016).
+   New engine settings in this repo: `brand.fonts`, `brand.logoHeight`, `brand.thankYou` (ADR-012 amendment,
+   ADR-017). The thank-you slide (migration 0018) is on the test project and production; its live use has
+   not been tried yet (start a session ending on one). Features are built here first, then
+   `git fetch upstream && git merge upstream/main` in the private copy, where `src/lib/brand.ts` is the
+   only expected clash.
+00. **Milestone 4 step 5 done (2026-10-12).** Public repo https://github.com/shahil1dn/volley; the society's
    private copy https://github.com/shahil1dn/aib-volley at `~/Documents/projects/aib-volley` (ADR-016:
    features are built here first, then `git fetch upstream && git merge upstream/main` there; its push to
    upstream is disabled). The aib-live Vercel link (`.vercel/`) lives only in the private copy, so deploy the
