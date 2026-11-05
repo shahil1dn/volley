@@ -172,6 +172,7 @@ test('the host view includes hidden words and full settings', { skip }, async ()
 			shown: null,
 			questions: [],
 			responses: 0,
+			formShown: false,
 		});
 	});
 });

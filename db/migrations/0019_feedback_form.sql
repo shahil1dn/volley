@@ -7,6 +7,8 @@
 -- Its ratings are secret until the host shows them: get_state, which is public
 -- and cached, carries only how many forms were sent until the item is revealed.
 -- host_view and host_export are host-only and carry everything.
+-- Once shown, a form can't be opened again in that run (runs.shown_forms), so
+-- nobody can compare two sets of its results.
 --
 -- Tallies, kept on write (SPEC 19): key '<question number>:<rating>' (numbers
 -- from 0) and key 'n', the count of forms sent.
@@ -17,6 +19,12 @@
 
 alter table public.deck_items drop constraint deck_items_type_check;
 alter table public.deck_items add constraint deck_items_type_check check (type in ('word_cloud', 'poll', 'quiz', 'qna', 'thanks', 'feedback'));
+
+-- The feedback forms shown in this run, by item. A shown form stays closed for the rest
+-- of the run, Next then Back included: reopening it and showing it again would let anyone
+-- subtract the two results and read a late answer on its own. It goes with the run when
+-- the purge deletes it.
+alter table public.runs add column if not exists shown_forms uuid[] not null default '{}';
 
 -- The top of a scale (every scale starts at 1), or null for an unknown one.
 create or replace function public.feedback_scale_max(p_scale text) returns int
@@ -354,7 +362,8 @@ return (
 	where r.code = p_code
 );
 
--- 0015's host view plus `responses`, the count of forms sent on a feedback form.
+-- 0015's host view plus `responses`, the count of forms sent on a feedback form, and
+-- `formShown`, whether it has been shown (and so can't be opened again) in this run.
 -- Its ratings are in `tallies` whether or not they are on the projector yet.
 create or replace function public.host_view(p_host_id uuid, p_code text) returns jsonb
 language sql stable
@@ -381,6 +390,7 @@ return (
 		'responses', case when i.type = 'feedback' then coalesce((
 			select t.count from public.tallies t where t.run_id = r.id and t.item_id = i.id and t.key = 'n'
 		), 0) else 0 end,
+		'formShown', coalesce(i.type = 'feedback' and i.id = any(r.shown_forms), false),
 		'shown', case when i.type = 'qna' then (
 			select q.id from public.questions q where q.run_id = r.id and q.item_id = i.id and q.on_screen
 		) end,
@@ -401,10 +411,11 @@ return (
 	where r.code = p_code
 );
 
--- 0015's host_action with three changes for the feedback form: 'open' accepts
--- it; 'reveal' (Show results) also works while its answers are open, closing
--- them in the same step; and 'hide'/'unhide' refuse it, since a hidden rating
--- would change the average without saying so.
+-- 0015's host_action with four changes for the feedback form: 'open' accepts
+-- it, unless it has been shown in this run; 'reveal' (Show results) also works
+-- while its answers are open, closing them in the same step, and records it as
+-- shown; and 'hide'/'unhide' refuse it, since a hidden rating would change the
+-- average without saying so.
 create or replace function public.host_action(p_host_id uuid, p_code text, p_action text, p_key text default null)
 returns jsonb
 language plpgsql
@@ -424,6 +435,7 @@ declare
 	v_cur public.questions;
 	v_target bigint;
 	v_renew boolean := false;
+	v_shown_forms uuid[];
 	illegal constant jsonb := jsonb_build_object('status', 'illegal');
 begin
 	-- Locked, so two control tabs pressing buttons at once apply in turn.
@@ -444,6 +456,7 @@ begin
 	v_item_state := v_run.item_state;
 	v_position := v_run.current_position;
 	v_ended_at := v_run.ended_at;
+	v_shown_forms := v_run.shown_forms;
 
 	case p_action
 		when 'open' then
@@ -453,6 +466,10 @@ begin
 				or v_item_state <> 'closed'
 				or v_item.type is null
 				or v_item.type not in ('word_cloud', 'poll', 'qna', 'feedback') then
+				return illegal;
+			end if;
+			-- Once shown, a feedback form is closed for good in this run.
+			if v_item.type = 'feedback' and v_item.id = any(v_shown_forms) then
 				return illegal;
 			end if;
 			v_status := 'live';
@@ -469,6 +486,9 @@ begin
 				return illegal;
 			end if;
 			v_item_state := 'revealed';
+			if v_item.type = 'feedback' and not v_item.id = any(v_shown_forms) then
+				v_shown_forms := v_shown_forms || v_item.id;
+			end if;
 		when 'next', 'back' then
 			v_position := v_position + case p_action when 'next' then 1 else -1 end;
 			if v_status <> 'live' or v_position < 0 or v_position >= v_item_count then
@@ -584,6 +604,7 @@ begin
 		opens_at = case when v_position <> v_run.current_position then null else opens_at end,
 		closes_at = case when v_position <> v_run.current_position then null else closes_at end,
 		ended_at = v_ended_at,
+		shown_forms = v_shown_forms,
 		version = version + 1,
 		last_activity_at = now()
 	where id = v_run.id

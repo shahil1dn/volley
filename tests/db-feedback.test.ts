@@ -339,6 +339,41 @@ test('Show results works straight from open on a feedback form only; nothing on 
 	});
 });
 
+test('a shown form stays closed for the rest of the run, Next then Back included; another form is not affected', { skip }, async () => {
+	await inRolledBackTransaction(db, async () => {
+		const { userId } = await makeRun(db);
+		const started = await start(db, userId, [
+			{ type: 'feedback', prompt: 'The morning', questions: THREE },
+			{ type: 'feedback', prompt: 'The afternoon', questions: THREE },
+		]);
+		assert.equal(started.status, 'ok');
+		const code = started.code as string;
+		// Before Show results, answers close and reopen as on any activity.
+		assert.equal((await act(db, userId, code, 'open')).status, 'ok');
+		assert.equal((await act(db, userId, code, 'close')).status, 'ok');
+		assert.equal((await act(db, userId, code, 'open')).status, 'ok');
+		assert.equal((await send(code, [5, 10, 5])).status, 'ok');
+		assert.equal((await hostView(userId, code)).formShown, false);
+
+		assert.equal((await act(db, userId, code, 'reveal')).status, 'ok');
+		assert.equal((await hostView(userId, code)).formShown, true);
+		assert.equal((await act(db, userId, code, 'next')).status, 'ok');
+		// The next form is its own: it opens, and is not marked shown.
+		assert.equal((await hostView(userId, code)).formShown, false);
+		assert.equal((await act(db, userId, code, 'open')).status, 'ok');
+		assert.equal((await act(db, userId, code, 'back')).status, 'ok');
+
+		assert.equal((await state(code)).itemState, 'closed');
+		assert.equal((await hostView(userId, code)).formShown, true, 'still shown after Next and Back');
+		assert.deepEqual(await act(db, userId, code, 'open'), { status: 'illegal' });
+		assert.equal((await send(code, [1, 1, 1])).status, 'closed');
+		// Its results can go back up: nothing new can have arrived since.
+		assert.equal((await act(db, userId, code, 'reveal')).status, 'ok');
+		const runId = (await db.query('select id from public.runs where code = $1', [code])).rows[0].id as string;
+		assert.deepEqual(await tallies(runId), { '0:5': 1, '1:10': 1, '2:5': 1, n: 1 });
+	});
+});
+
 test('a frozen session cannot show a form, and a phone cannot send one', { skip }, async () => {
 	await inRolledBackTransaction(db, async () => {
 		const form = await openForm();
