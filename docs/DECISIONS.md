@@ -720,3 +720,45 @@ The owner asked for an optional closing slide: a warm thank-you, and for the soc
 - **It cannot come first.** A session starts by opening answers on its first activity, so a session that began
   with a thank-you slide could never start. The form says so beside the type, and `start_session` refuses it.
 - The projector hides the join panel on the slide: people are leaving, not joining.
+
+## ADR-018: A feedback form is one activity of rating questions, its results hidden until the host shows them (2026-11-05)
+
+The owner asked for a feedback form: a few ratings people give at the end of a talk. This changes SPEC's scope,
+which listed scales as out of scope.
+
+**The owner's decisions (2026-11-05):**
+
+- **One screen, sent once.** One activity, type `feedback`, holds 1 to 8 rating questions; a phone shows them all
+  with one Send button.
+- **Results stay hidden until the host shows them.** While it runs, the projector shows the form's title, its
+  questions and how many people have answered. The host sees the results live on the control page and in the
+  CSV, and presses Show results to put them on the projector.
+- **Each question picks its own scale**: 1 to 5 stars, 1 to 10, or Very bad to Very good.
+- **Ratings only**, no comment box.
+
+**How it is built (migration 0019):**
+
+- **Settings** are `{prompt, questions: [{text, scale}]}`. The title is the `prompt` (1 to 140 characters, like
+  any question); each question is 1 to 80 characters with a scale of `stars` (1 to 5), `ten` (1 to 10) or
+  `words` (Very bad, Bad, Okay, Good, Very good, stored as 1 to 5). `start_session` checks all of it.
+- **An answer is the whole form**: a JSON list of whole numbers, one per question, in order, e.g. `[4,9,2]`.
+  `submit_answer` refuses a list that is short, long, has a gap, or holds anything but a plain whole number inside
+  its question's scale (so `0`, `4.5`, `"4"` and `1e1` are refused). The phone keeps Send disabled until every
+  question is rated, but the database is the rule.
+- **One form per person, not changeable** (like a poll vote): `answer_limit` is 1, through the same quota row as
+  every other answer, so concurrent sends store one. A retry with the same submit id is stored once and gets the
+  same answer (SPEC 12). The phone keeps its own ratings (SPEC 13) and shows them back, never the room's results.
+- **Tallies are kept on write** (SPEC 19), in the existing `tallies` table: key `<question number>:<rating>`
+  (question numbers from 0), plus key `n` for the number of forms sent. Each form's rows are updated in question
+  order, so two forms sent at once always lock rows in the same order and cannot deadlock.
+- **Hidden means absent, not undrawn.** The shared state is public and cached, so until the item is revealed
+  `get_state` sends no feedback tallies at all, only `responses` (the count of forms sent). After Show it sends
+  the rating tallies. `host_view` and `host_export` are host-only and always carry everything.
+- **Show results is the existing `reveal`.** For a feedback form only, `reveal` is also allowed while answers are
+  open, so one press closes answers and shows the results together, with no moment where they are half done.
+  Other types still need answers closed first. Moving to another activity and back hides the results again.
+- **Nothing to hide or moderate**: ratings carry no text from the public, so `hide` and `unhide` are refused on a
+  feedback form (hiding a rating would change the average without saying so).
+- **It can come first** in a session: it opens answers like a poll.
+- **The numbers on screen** are worked out in `src/lib/feedback.ts` from the tallies: per question, the count for
+  each point of its scale and the average, rounded half up to one decimal with whole-number arithmetic.

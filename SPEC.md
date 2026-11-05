@@ -24,7 +24,7 @@ A rebuild of this repository (`~/Documents/projects/volley`, formerly `menti-pil
 ## Objective
 
 A society committee member signs in, builds a deck of a few activities (word
-cloud, multiple-choice poll, anonymous Q&A with upvotes, ADR-008, and a closing thank-you slide, ADR-017; a timed quiz is out of scope for v1, ADR-007)
+cloud, multiple-choice poll, anonymous Q&A with upvotes, ADR-008, a closing thank-you slide, ADR-017, and a feedback form of ratings, ADR-018; a timed quiz is out of scope for v1, ADR-007)
 and runs it from a laptop on a
 projector. Up to 200 people join by QR code with no account and answer from any
 phone. Results appear on the projector within about 2 seconds, the host can hide
@@ -63,6 +63,15 @@ own copy by telling an AI agent to follow `AGENTS.md`.
     `brand.thankYou.message` and editable. Nothing is answered on it, so it
     cannot be a session's first activity. Phones show the message; the
     projector shows it large, with `brand.thankYou.link` as a QR code if set.
+7c. Feedback form (ADR-018): a title of 1–140 characters and 1–8 rating
+    questions of 1–80 characters, each with its own scale: 1–5 stars, 1–10, or
+    Very bad to Very good. A phone rates every question on one screen and sends
+    once; nothing can be sent half done or changed afterwards, and there is no
+    comment box. While it runs, the projector shows the title, the questions and
+    how many have answered; the results stay out of the shared state until the
+    host presses Show results. Then the projector shows each question's average
+    (one decimal) and the count for each point. The host sees the results live on
+    the control page and in the CSV. It can be a session's first activity.
 8. **Out of scope for the first release (ADR-007):** the timed quiz, with its
    scheduled start, server-clock countdown, speed bands, nickname leaderboard
    and correct-answer reveal. It is left for later or for a community
@@ -124,7 +133,7 @@ own copy by telling an AI agent to follow `AGENTS.md`.
 
 ## Out of scope
 
-- Ranking, scales, open text, images.
+- Ranking, open text, images. (Rating scales joined with the feedback form, ADR-018.)
 - Starter packs, deck import/export, sharing decks between copies.
 - Per-host theming beyond the copy-wide name, colours and logo.
 - A public SDK, loading activities from outside the repo, an activity gallery,
@@ -178,6 +187,13 @@ Each check fails if the behaviour is missing.
 | A21 | Browser test: phones ask and upvote; the projector and the phones show the list in vote order within 3s; hide and "answered" reach them. |
 | A22 | DB test: only an admin can invite, list, remove or cancel; a link works once, not after 7 days, and only for the account with the invited email; an admin can't remove or reset themselves. |
 | A23 | Browser test: an admin invites; the invitee sets a password and is signed in; the projector names them; a reset link replaces the password; removal ends their access at once. |
+| A24 | DB test: a feedback form's shared state carries no rating counts before Show and does after; the number of forms sent is in it throughout. Shown to fail with the stripping removed. |
+| A25 | DB test: `submit_answer` refuses a form with a question missing, an extra question, a rating outside its scale (0; 6 on stars; 11 on 1–10), a rating that isn't a whole number, and a partly filled form. |
+| A26 | DB test: a participant's second form is refused; the same submit id sent twice stores one form and gets the same answer; 10 concurrent sends from one participant store exactly one. |
+| A27 | DB test: `start_session` accepts a form of 1 and of 8 questions, and refuses 0, 9, an unknown scale, and an empty or 81-character question. |
+| A28 | Unit test: each question's counts and its average to one decimal match numbers worked out by hand. |
+| A29 | Retention: the purge removes a feedback form's answers, tallies and quotas with its run. |
+| A30 | Browser test: 3 phones rate; the projector shows how many answered, then the results within 3s of Show results. |
 
 ## Must verify before the slice that needs it
 
