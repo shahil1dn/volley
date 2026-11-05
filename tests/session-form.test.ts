@@ -3,18 +3,32 @@
 // through start_session.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_ACTIVITIES, MAX_OPTION_CHARS, MAX_OPTIONS, MAX_PROMPT_CHARS, MIN_OPTIONS } from '../src/lib/session-limits.ts';
+import {
+	MAX_ACTIVITIES,
+	MAX_FORM_QUESTION_CHARS,
+	MAX_FORM_QUESTIONS,
+	MAX_OPTION_CHARS,
+	MAX_OPTIONS,
+	MAX_PROMPT_CHARS,
+	MIN_FORM_QUESTIONS,
+	MIN_OPTIONS,
+} from '../src/lib/session-limits.ts';
 import { parseSessionForm } from '../src/lib/server/session-form.ts';
 
-type Activity = { type: string; prompt: string; options?: string[] };
+type Activity = { type: string; prompt: string; options?: string[]; questions?: [string, string][] };
 
-// Builds the post the page makes: parallel type/prompt fields, and options<N> per activity.
+// Builds the post the page makes: parallel type/prompt fields, options<N> per activity,
+// and a feedback form's questions<N> with scales<N> beside them.
 function post(activities: Activity[]): FormData {
 	const form = new FormData();
 	for (const [i, activity] of activities.entries()) {
 		form.append('type', activity.type);
 		form.append('prompt', activity.prompt);
 		for (const option of activity.options ?? []) form.append(`options${i}`, option);
+		for (const [text, scale] of activity.questions ?? []) {
+			form.append(`questions${i}`, text);
+			form.append(`scales${i}`, scale);
+		}
 	}
 	return form;
 }
@@ -173,9 +187,9 @@ test('a refused form gives back exactly what was typed: untrimmed, in order, wit
 	assert.deepEqual(
 		parsed.drafts,
 		[
-			{ type: 'word_cloud', prompt: 'Question 0', options: [] },
-			{ type: 'poll', prompt: '  Spaced out?  ', options: ['  one ', 'two', 'two', ''] },
-			{ type: 'qna', prompt: '', options: [] },
+			{ type: 'word_cloud', prompt: 'Question 0', options: [], questions: [], scales: [] },
+			{ type: 'poll', prompt: '  Spaced out?  ', options: ['  one ', 'two', 'two', ''], questions: [], scales: [] },
+			{ type: 'qna', prompt: '', options: [], questions: [], scales: [] },
 		],
 	);
 	assert.equal(parsed.drafts.length, typed.length);
@@ -195,6 +209,59 @@ test("a thank-you slide's empty or over-long text is called a message, not a que
 });
 
 test('a session cannot start with a thank-you slide: it has no answers to open, and opening answers is what starts a session', () => {
-	assert.match(refused(post([{ type: 'thanks', prompt: 'Thanks' }, cloud(1)])).errors.drafts[0].type ?? '', /Start with a word cloud, poll or Q&A/);
-	assert.equal(refused(post([{ type: 'thanks', prompt: 'Thanks' }])).errors.drafts[0].type, 'Start with a word cloud, poll or Q&A. A thank-you slide can come after.');
+	assert.match(refused(post([{ type: 'thanks', prompt: 'Thanks' }, cloud(1)])).errors.drafts[0].type ?? '', /Start with a word cloud, poll, Q&A or feedback form/);
+	assert.equal(refused(post([{ type: 'thanks', prompt: 'Thanks' }])).errors.drafts[0].type, 'Start with a word cloud, poll, Q&A or feedback form. A thank-you slide can come after.');
+});
+
+// ---------- feedback forms (ADR-018) ----------
+
+const form = (questions: [string, string][], prompt = 'How did it go?'): Activity => ({ type: 'feedback', prompt, questions });
+
+test('a feedback form comes back with its questions trimmed and in order, each with its scale, and can come first', () => {
+	const parsed = parseSessionForm(post([form([[' The talk ', 'stars'], ['Come again?', 'ten'], ['The room', 'words']], ' Feedback '), cloud(1)]));
+	assert.deepEqual(parsed, {
+		ok: true,
+		items: [
+			{ type: 'feedback', prompt: 'Feedback', questions: [{ text: 'The talk', scale: 'stars' }, { text: 'Come again?', scale: 'ten' }, { text: 'The room', scale: 'words' }] },
+			{ type: 'word_cloud', prompt: 'Question 1' },
+		],
+	});
+});
+
+test('a feedback form needs 1 to 8 questions, counted before the echo is cut', () => {
+	for (const n of [MIN_FORM_QUESTIONS, MAX_FORM_QUESTIONS]) {
+		const questions = Array.from({ length: n }, (_, j): [string, string] => [`Q${j}`, 'stars']);
+		assert.equal(parseSessionForm(post([form(questions)])).ok, true, `${n} questions`);
+	}
+	for (const n of [0, MAX_FORM_QUESTIONS + 1]) {
+		const questions = Array.from({ length: n }, (_, j): [string, string] => [`Q${j}`, 'stars']);
+		const parsed = refused(post([form(questions)]));
+		assert.equal(parsed.errors.drafts[0].questions, `A feedback form needs ${MIN_FORM_QUESTIONS} to ${MAX_FORM_QUESTIONS} questions.`, `${n} questions`);
+		assert.ok(parsed.drafts[0].questions.length <= MAX_FORM_QUESTIONS);
+	}
+});
+
+test("an empty or over-long question, or an unknown scale, is named on that question; the form's title is called a title", () => {
+	const parsed = refused(
+		post([form([['Fine', 'stars'], ['  ', 'ten'], ['x'.repeat(MAX_FORM_QUESTION_CHARS + 1), 'words'], ['Thumbs?', 'thumbs']], ' ')]),
+	);
+	const found = parsed.errors.drafts[0];
+	assert.equal(found.prompt, 'Write the title.');
+	assert.deepEqual(found.question, { 1: 'Write the question, or remove this one.', 2: `Keep each question to ${MAX_FORM_QUESTION_CHARS} characters or fewer.` });
+	assert.deepEqual(found.scale, { 3: 'Choose a scale.' });
+	// Exactly the limit is fine.
+	assert.equal(parseSessionForm(post([form([['x'.repeat(MAX_FORM_QUESTION_CHARS), 'ten']])])).ok, true);
+});
+
+test('a question sent without its scale is refused, not given a default', () => {
+	const post1 = post([form([['One', 'stars']])]);
+	post1.append('questions0', 'Two');
+	assert.deepEqual(refused(post1).errors.drafts[0].scale, { 1: 'Choose a scale.' });
+});
+
+test('questions sent with an activity that is not a feedback form are dropped, and a refused form hands its questions back', () => {
+	const parsed = parseSessionForm(post([{ type: 'poll', prompt: 'Tea?', options: ['Tea', 'Coffee'], questions: [['stray', 'stars']] }]));
+	assert.deepEqual(parsed, { ok: true, items: [{ type: 'poll', prompt: 'Tea?', options: ['Tea', 'Coffee'] }] });
+	const back = refused(post([form([[' kept as typed ', 'ten'], ['', 'words']])]));
+	assert.deepEqual(back.drafts[0], { type: 'feedback', prompt: 'How did it go?', options: [], questions: [' kept as typed ', ''], scales: ['ten', 'words'] });
 });

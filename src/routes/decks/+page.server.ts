@@ -26,7 +26,13 @@ export const actions: Actions = {
 		if (result.status !== 'ok') {
 			// The form passed our checks but not the database's: the two have drifted.
 			return fail(400, {
-				drafts: parsed.items.map((item) => ({ type: item.type, prompt: item.prompt, options: item.options ?? [] })),
+				drafts: parsed.items.map((item) => ({
+					type: item.type,
+					prompt: item.prompt,
+					options: item.options ?? [],
+					questions: item.questions?.map((q) => q.text) ?? [],
+					scales: item.questions?.map((q) => q.scale) ?? [],
+				})),
 				errors: { form: 'The session was refused. Check each activity and try again.', drafts: parsed.items.map(() => ({})) },
 			});
 		}

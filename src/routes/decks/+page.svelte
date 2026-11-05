@@ -6,28 +6,51 @@
 	import { brand } from '$lib/brand';
 	import { guardReply, type GuardReply } from '$lib/guard-reply';
 	import type { Draft, DraftErrors } from '$lib/session-draft';
-	import { ACTIVITY_TYPES, MAX_ACTIVITIES, MAX_OPTIONS, MIN_OPTIONS } from '$lib/session-limits';
+	import { SCALE_LIST } from '$lib/feedback';
+	import { ACTIVITY_TYPES, MAX_ACTIVITIES, MAX_FORM_QUESTIONS, MAX_OPTIONS, MIN_FORM_QUESTIONS, MIN_OPTIONS } from '$lib/session-limits';
 
 	let { data, form } = $props();
 
 	const typeName = (value: string) => ACTIVITY_TYPES.find(([v]) => v === value)?.[1] ?? value;
 
 	type Option = { id: number; value: string; error?: string };
-	type Row = { id: number; type: string; prompt: string; options: Option[]; typeError?: string; promptError?: string; optionsError?: string };
+	// A feedback form's rating question and the scale it is rated on.
+	type FormQuestion = { id: number; text: string; scale: string; error?: string; scaleError?: string };
+	type Row = {
+		id: number;
+		type: string;
+		prompt: string;
+		options: Option[];
+		questions: FormQuestion[];
+		typeError?: string;
+		promptError?: string;
+		optionsError?: string;
+		questionsError?: string;
+	};
 
+	const DEFAULT_SCALE = SCALE_LIST[0][0];
 	// Ids are only for keeping each row's inputs together as others come and go.
 	let nextId = 0;
-	// Every poll keeps at least MIN_OPTIONS boxes, so choosing Poll shows them ready to fill.
+	const makeQuestion = (text = '', scale: string = DEFAULT_SCALE): FormQuestion => ({ id: nextId++, text, scale });
+	// Every poll keeps at least MIN_OPTIONS boxes, and every feedback form MIN_FORM_QUESTIONS,
+	// so choosing the type shows them ready to fill.
 	function makeRow(draft?: Draft, errors?: DraftErrors): Row {
 		const count = Math.max(MIN_OPTIONS, draft?.options.length ?? 0);
+		const questionCount = Math.max(MIN_FORM_QUESTIONS, draft?.questions.length ?? 0);
 		return {
 			id: nextId++,
 			type: draft?.type ?? 'word_cloud',
 			prompt: draft?.prompt ?? '',
 			options: Array.from({ length: count }, (_, j) => ({ id: nextId++, value: draft?.options[j] ?? '', error: errors?.option?.[j] })),
+			questions: Array.from({ length: questionCount }, (_, j) => ({
+				...makeQuestion(draft?.questions[j], draft?.scales[j] || DEFAULT_SCALE),
+				error: errors?.question?.[j],
+				scaleError: errors?.scale?.[j],
+			})),
 			typeError: errors?.type,
 			promptError: errors?.prompt,
 			optionsError: errors?.options,
+			questionsError: errors?.questions,
 		};
 	}
 
@@ -53,6 +76,10 @@
 		for (const row of rows) {
 			const select = document.getElementById(`type-${row.id}`);
 			if (select instanceof HTMLSelectElement) row.type = select.value;
+			for (const question of row.questions) {
+				const scale = document.getElementById(`scale-${question.id}`);
+				if (scale instanceof HTMLSelectElement) question.scale = scale.value;
+			}
 		}
 		ready = true;
 		focusFirstProblem();
@@ -100,6 +127,11 @@
 		row.promptError = errors.prompt;
 		row.optionsError = errors.options;
 		for (const [j, option] of row.options.entries()) option.error = row.type === 'poll' ? errors.option?.[j] : undefined;
+		row.questionsError = errors.questions;
+		for (const [j, question] of row.questions.entries()) {
+			question.error = row.type === 'feedback' ? errors.question?.[j] : undefined;
+			question.scaleError = row.type === 'feedback' ? errors.scale?.[j] : undefined;
+		}
 	}
 	// An option's message can point at another option ("Same as option 1"), so any
 	// edit, add or removal in a poll drops all of that poll's option messages.
@@ -137,6 +169,24 @@
 		clearOptionErrors(row);
 		focusSoon(`add-option-${row.id}`);
 	}
+	function addQuestion(row: Row) {
+		if (row.questions.length >= MAX_FORM_QUESTIONS) return;
+		const question = makeQuestion();
+		row.questions.push(question);
+		row.questionsError = undefined;
+		focusSoon(`question-${question.id}`);
+	}
+	function removeQuestion(row: Row, j: number) {
+		if (row.questions.length <= MIN_FORM_QUESTIONS) return;
+		row.questions.splice(j, 1);
+		row.questionsError = undefined;
+		focusSoon(`add-question-${row.id}`);
+	}
+	const summaryDetail = (row: Row) =>
+		row.type === 'poll' ? ` · ${row.options.length} options`
+		: row.type === 'feedback' ? ` · ${row.questions.length} ${row.questions.length === 1 ? 'question' : 'questions'}`
+		: '';
+	const promptName = (type: string) => (type === 'thanks' ? 'Message' : type === 'feedback' ? 'Title' : 'Question');
 </script>
 
 <svelte:head>
@@ -193,7 +243,7 @@
 							<!-- No maxlength on the question or the options: the browser counts UTF-16
 							     units and the limit counts characters (an emoji is one), so it would be
 							     stricter than the server. The server's message beside the field is the limit. -->
-							<label class="label" for="prompt-{row.id}">{row.type === 'thanks' ? 'Message' : 'Question'}</label>
+							<label class="label" for="prompt-{row.id}">{promptName(row.type)}</label>
 							<input
 								id="prompt-{row.id}"
 								name="prompt"
@@ -234,6 +284,52 @@
 								<p class="hint">{row.options.length} of {MAX_OPTIONS}</p>
 							</div>
 						</div>
+					{:else if row.type === 'feedback'}
+						<div class="options" role="group" aria-labelledby="questions-{row.id}">
+							<div class="options__head">
+								<h3 id="questions-{row.id}">Rating questions</h3>
+								<p class="hint">{MIN_FORM_QUESTIONS} to {MAX_FORM_QUESTIONS}, each with its own scale</p>
+							</div>
+							{#each row.questions as question, j (question.id)}
+								<div class="rating-question">
+									<div class="field">
+										<label class="label" for="question-{question.id}">Question {j + 1}</label>
+										<input
+											id="question-{question.id}"
+											name="questions{i}"
+											bind:value={question.text}
+											aria-invalid={question.error ? 'true' : undefined}
+											aria-describedby={question.error ? `question-error-${question.id}` : undefined}
+											oninput={() => (question.error = undefined)}
+										/>
+										{#if question.error}<p class="error" id="question-error-{question.id}">{question.error}</p>{/if}
+									</div>
+									<div class="field">
+										<label class="label" for="scale-{question.id}">Scale<span class="visually-hidden"> for question {j + 1}</span></label>
+										<!-- `selected` on each option, as for the type above, so a choice made before the script ran is kept. -->
+										<select
+											id="scale-{question.id}"
+											name="scales{i}"
+											aria-invalid={question.scaleError ? 'true' : undefined}
+											aria-describedby={question.scaleError ? `scale-error-${question.id}` : undefined}
+											onchange={(event) => {
+												question.scale = event.currentTarget.value;
+												question.scaleError = undefined;
+											}}
+										>
+											{#each SCALE_LIST as [value, name] (value)}<option {value} selected={question.scale === value}>{name}</option>{/each}
+										</select>
+										{#if question.scaleError}<p class="error" id="scale-error-{question.id}">{question.scaleError}</p>{/if}
+									</div>
+									<button type="button" class="btn btn--link rating-question__remove" aria-label="Remove question {j + 1}" disabled={!ready || row.questions.length <= MIN_FORM_QUESTIONS} onclick={() => removeQuestion(row, j)}>Remove</button>
+								</div>
+							{/each}
+							{#if row.questionsError}<p class="error" role="alert">{row.questionsError}</p>{/if}
+							<div class="adder">
+								<button type="button" class="btn btn--quiet btn--small" id="add-question-{row.id}" disabled={!ready || row.questions.length >= MAX_FORM_QUESTIONS} onclick={() => addQuestion(row)}>Add question</button>
+								<p class="hint">{row.questions.length} of {MAX_FORM_QUESTIONS}</p>
+							</div>
+						</div>
 					{/if}
 				</div>
 				</li>
@@ -251,8 +347,8 @@
 			<ol class="summary__list">
 				{#each rows as row, i (row.id)}
 					<li>
-						<span class="label">{i + 1} · {typeName(row.type)}{row.type === 'poll' ? ` · ${row.options.length} options` : ''}</span>
-						<span class={row.prompt.trim() ? '' : 'hint'}>{row.prompt.trim() || (row.type === 'thanks' ? 'No message yet' : 'No question yet')}</span>
+						<span class="label">{i + 1} · {typeName(row.type)}{summaryDetail(row)}</span>
+						<span class={row.prompt.trim() ? '' : 'hint'}>{row.prompt.trim() || `No ${promptName(row.type).toLowerCase()} yet`}</span>
 					</li>
 				{/each}
 			</ol>
