@@ -335,8 +335,8 @@ an index.
 
 | Request | Database call | Rows touched | Index |
 |---|---|---|---|
-| Phone or projector reads state | `get_state(code)` on cache miss only | 1 run, 1 item, ≤100 tallies, ≤40 questions, ≤10 players | `runs(code)` unique, `tallies(run_id, item_id, count desc, key) where not hidden`, `questions(run_id, item_id, votes desc, created_at, id) where not hidden and not answered`, `players(run_id, score desc)` |
-| Phone sends an answer | `submit_answer(...)` | 1 rate row, 1 response, 1 quota, 1 tally, 1 run | primary keys, `responses(participant_id, submit_id)` unique |
+| Phone or projector reads state | `get_state(code)` on cache miss only | 1 run, 1 item, ≤100 tallies (none for a feedback form until Show results), ≤40 questions, ≤10 players, and a feedback form's count of forms (1 tally) | `runs(code)` unique, `tallies(run_id, item_id, count desc, key) where not hidden`, the `tallies` primary key for the count, `questions(run_id, item_id, votes desc, created_at, id) where not hidden and not answered`, `players(run_id, score desc)` |
+| Phone sends an answer | `submit_answer(...)` | 1 rate row, 1 response, 1 quota, 1 tally (a feedback form: one per question, plus its count), 1 run | primary keys, `responses(participant_id, submit_id)` unique |
 | Phone upvotes a question, or takes it back | `vote_question(...)` | 1 rate row, 1 vote, 1 question, 1 run | primary keys |
 | Phone joins | none (token signed by the server) | 0 | – |
 | Host action (open, next, hide, answered, end) | `host_action(...)` | 1 run, plus the tally or question for hide and answered | primary keys |
