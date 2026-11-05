@@ -306,7 +306,8 @@
 				</fieldset>
 			{/each}
 			<button class="btn btn--block" disabled={busy || unrated > 0}>{busy ? 'Sending…' : 'Send'}</button>
-			{#if unrated > 0}<p class="hint" aria-live="polite">Rate every question to send. {unrated} to go.</p>{/if}
+			<!-- Always on the page, so a screen reader hears it change, including when the form is ready. -->
+			<p class="hint" aria-live="polite">{unrated > 0 ? `Rate every question to send. ${unrated} to go.` : 'Ready to send.'}</p>
 			{#if notice}<p class="error" role="alert">{notice}</p>{/if}
 		</form>
 	{:else if accepting && isFeedback}

@@ -29,14 +29,15 @@ export function csvCell(value: string | number): string {
 	return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
-// Nothing on a feedback form can be hidden or answered, so those cells stay empty.
+// Nothing on a feedback form can be hidden, so Hidden is always no, as on any row a
+// spreadsheet filter keeps; Answered is for Q&A only and stays empty.
 function feedbackRows(item: RunExport['items'][number], activity: string[]): string[][] {
 	const [position, type] = activity;
 	const sent = item.tallies.find(([key]) => key === 'n')?.[1] ?? 0;
-	const rows = [[...activity, 'Forms sent', String(sent), '', '']];
+	const rows = [[...activity, 'Forms sent', String(sent), 'no', '']];
 	for (const result of feedbackResults(formQuestions({ questions: item.form }), item.tallies)) {
-		for (const [i, count] of result.counts.entries()) rows.push([position, type, result.text, ratingLabel(result.scale, i + 1), String(count), '', '']);
-		rows.push([position, type, result.text, 'Average', result.averageTenths === null ? '' : formatAverage(result.averageTenths), '', '']);
+		for (const [i, count] of result.counts.entries()) rows.push([position, type, result.text, ratingLabel(result.scale, i + 1), String(count), 'no', '']);
+		rows.push([position, type, result.text, 'Average', result.averageTenths === null ? '' : formatAverage(result.averageTenths), 'no', '']);
 	}
 	return rows;
 }

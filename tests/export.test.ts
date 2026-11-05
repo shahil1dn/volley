@@ -54,20 +54,20 @@ test("resultsCsv: a feedback form's rows are the forms sent, then each point of 
 	assert.equal(
 		csv,
 		'\uFEFFActivity,Type,Question,Answer,Count,Hidden,Answered\r\n' +
-			'1,feedback,Rate us,Forms sent,2,,\r\n' +
-			'1,feedback,The talk,1 star,0,,\r\n' +
-			'1,feedback,The talk,2 stars,0,,\r\n' +
-			'1,feedback,The talk,3 stars,0,,\r\n' +
-			'1,feedback,The talk,4 stars,1,,\r\n' +
-			'1,feedback,The talk,5 stars,1,,\r\n' +
-			'1,feedback,The talk,Average,4.5,,\r\n' +
+			'1,feedback,Rate us,Forms sent,2,no,\r\n' +
+			'1,feedback,The talk,1 star,0,no,\r\n' +
+			'1,feedback,The talk,2 stars,0,no,\r\n' +
+			'1,feedback,The talk,3 stars,0,no,\r\n' +
+			'1,feedback,The talk,4 stars,1,no,\r\n' +
+			'1,feedback,The talk,5 stars,1,no,\r\n' +
+			'1,feedback,The talk,Average,4.5,no,\r\n' +
 			// A question typed like a formula reaches the spreadsheet as text.
-			"1,feedback,'=Room,Very bad,0,,\r\n" +
-			"1,feedback,'=Room,Bad,2,,\r\n" +
-			"1,feedback,'=Room,Okay,0,,\r\n" +
-			"1,feedback,'=Room,Good,0,,\r\n" +
-			"1,feedback,'=Room,Very good,0,,\r\n" +
-			"1,feedback,'=Room,Average,2.0,,\r\n",
+			"1,feedback,'=Room,Very bad,0,no,\r\n" +
+			"1,feedback,'=Room,Bad,2,no,\r\n" +
+			"1,feedback,'=Room,Okay,0,no,\r\n" +
+			"1,feedback,'=Room,Good,0,no,\r\n" +
+			"1,feedback,'=Room,Very good,0,no,\r\n" +
+			"1,feedback,'=Room,Average,2.0,no,\r\n",
 	);
 	// No raw tally key ("0:5") ever reaches the file.
 	assert.doesNotMatch(csv, /\d:\d/);
@@ -76,9 +76,9 @@ test("resultsCsv: a feedback form's rows are the forms sent, then each point of 
 test('resultsCsv: a feedback form nobody answered still lists every point, with no average', () => {
 	const csv = resultsCsv({ code: 'ABCDE', items: [{ position: 2, type: 'feedback', prompt: 'Rate', form: [{ text: 'Q', scale: 'ten' }], tallies: [], questions: [] }] });
 	const lines = csv.trim().split('\r\n');
-	assert.equal(lines[1], '3,feedback,Rate,Forms sent,0,,');
+	assert.equal(lines[1], '3,feedback,Rate,Forms sent,0,no,');
 	assert.equal(lines.length, 1 + 1 + 10 + 1);
-	assert.equal(lines.at(-1), '3,feedback,Q,Average,,,');
+	assert.equal(lines.at(-1), '3,feedback,Q,Average,,no,');
 });
 
 // Each character half its type size wide: close enough to test placement.

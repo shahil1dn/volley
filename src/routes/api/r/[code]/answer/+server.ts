@@ -8,7 +8,8 @@ import type { RequestHandler } from './$types';
 const COOKIE = 'volley_participant';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // A cheap guard before the database, which holds the real limits: 25 characters
-// for a word, 280 for a Q&A question. `.length` counts UTF-16 units and an emoji
+// for a word, 280 for a Q&A question, and a feedback form's list of ratings (25 at
+// most: eight questions rated 10). `.length` counts UTF-16 units and an emoji
 // is two, so the question's limit doubled; it was 200 until a 201-character
 // question was found never to arrive.
 const MAX_RAW_VALUE = 2 * 280;
