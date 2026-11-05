@@ -106,7 +106,8 @@ test('A30: phones rate a feedback form; the projector shows the count, then the 
 	// The count reaches the projector; the results do not.
 	await expect(projector.getByText('3 people have answered')).toBeVisible({ timeout: 3_000 });
 	await expect(projector.getByRole('list', { name: 'Feedback results' })).toHaveCount(0);
-	for (const average of AVERAGES) await expect(projector.getByText(average, { exact: true })).toHaveCount(0);
+	// Each average is drawn with "average out of" beside it, so none is on the screen yet.
+	await expect(projector.getByText('average out of')).toHaveCount(0);
 	await projector.screenshot({ path: `${SCREENS}/projector-before.png` });
 
 	// The host has them live, before Show results.
@@ -116,22 +117,23 @@ test('A30: phones rate a feedback form; the projector shows the count, then the 
 	}
 	await control.screenshot({ path: `${SCREENS}/control.png`, fullPage: true });
 
-	await control.getByRole('button', { name: 'Show results' }).click();
-	await expect(statusValue(control, 'Answers')).toHaveText('Shown');
+	// The 3 seconds run from the press, not from when the control page catches up.
 	const shownAt = Date.now();
+	await control.getByRole('button', { name: 'Show results' }).click();
 	const results = projector.getByRole('list', { name: 'Feedback results' });
 	await expect(results).toBeVisible({ timeout: 3_000 });
 	for (const [q, average] of AVERAGES.entries()) {
 		await expect(results.getByRole('listitem').filter({ hasText: QUESTIONS[q].text }).first()).toContainText(average, { timeout: 3_000 });
 	}
 	expect(Date.now() - shownAt).toBeLessThan(3_000);
+	await expect(statusValue(control, 'Answers')).toHaveText('Shown');
 	// The counts are there for each point: two people gave the talk 4 stars.
 	await expect(results.getByText('4 stars: 2', { exact: true })).toBeAttached();
 	await projector.screenshot({ path: `${SCREENS}/projector-after.png` });
 
 	// Showing the results closed answers, and a phone that already sent still sees only its own.
 	await expect(phones[0].getByRole('heading', { name: 'Thanks for your feedback' })).toBeVisible();
-	await expect(phones[0].getByText(AVERAGES[0], { exact: true })).toHaveCount(0);
+	await expect(phones[0].getByText('average out of')).toHaveCount(0);
 	const late = await newPhone(browser);
 	await late.goto(`/j/${code}`);
 	await expect(late.getByRole('heading', { name: 'Waiting for the next question' })).toBeVisible();

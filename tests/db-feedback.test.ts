@@ -187,6 +187,8 @@ test('A26: the same submit id sent twice stores one form and gets the same answe
 		const again = await send(form.code, [4, 7, 2], me, submitId);
 		assert.deepEqual(first, { status: 'ok', left: 0 });
 		assert.deepEqual(again, first);
+		// A retry is the first answer whatever it carries: a changed form under the same id counts for nothing.
+		assert.deepEqual(await send(form.code, [1, 1, 1], me, submitId), first);
 		// A retry after Show results still gets the answer it got before (SPEC 12).
 		assert.equal((await act(db, form.userId, form.code, 'reveal')).status, 'ok');
 		assert.deepEqual(await send(form.code, [4, 7, 2], me, submitId), first);
@@ -219,6 +221,17 @@ test('A26: 10 concurrent forms from one participant store exactly one', { skip }
 });
 
 // ---------- A24: results stay out of the shared state until Show ----------
+
+test('the largest form, 8 questions rated 10 out of 10, is stored and shown in full', { skip }, async () => {
+	await inRolledBackTransaction(db, async () => {
+		const form = await openForm(db, Array.from({ length: 8 }, (_, n) => ({ text: `Question ${n + 1}`, scale: 'ten' })));
+		assert.deepEqual(await send(form.code, Array(8).fill(10)), { status: 'ok', left: 0 });
+		const keys = Array.from({ length: 8 }, (_, q) => [`${q}:10`, 1]);
+		assert.deepEqual(await tallies(form.runId), Object.fromEntries([...keys, ['n', 1]]));
+		assert.equal((await act(db, form.userId, form.code, 'reveal')).status, 'ok');
+		assert.deepEqual((await state(form.code)).tallies, keys);
+	});
+});
 
 test('A24: the shared state has no ratings before Show results and has them after; the count of forms throughout', { skip }, async () => {
 	await inRolledBackTransaction(db, async () => {

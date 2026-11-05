@@ -1,6 +1,6 @@
 // The /decks form's server-side reader: the trust boundary for a session's
-// shape. No database here; tests/db-qna.test.ts sends what this accepts
-// through start_session.
+// shape. No database here; tests/db-qna.test.ts and, for a feedback form,
+// tests/db-feedback.test.ts send what this accepts through start_session.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
