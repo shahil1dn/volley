@@ -45,6 +45,13 @@ async function newPhone(browser: Browser): Promise<Page> {
 }
 
 const question = (page: Page, text: string) => page.getByRole('group', { name: text, exact: true });
+// The radio is hidden and its label is what a person taps (a star, a number, a word),
+// so the test taps the label too, then checks the radio it holds.
+async function rate(page: Page, text: string, rating: string) {
+	const radio = question(page, text).getByRole('radio', { name: rating, exact: true });
+	await question(page, text).locator('label', { has: page.getByRole('radio', { name: rating, exact: true }) }).click();
+	await expect(radio).toBeChecked();
+}
 
 test('A30: phones rate a feedback form; the projector shows the count, then the results within 3s of Show results', async ({ browser }) => {
 	const laptop = await browser.newContext({ baseURL: BASE, viewport: { width: 1280, height: 900 } });
@@ -84,7 +91,7 @@ test('A30: phones rate a feedback form; the projector shows the count, then the 
 		// Send waits until every question has a rating.
 		for (const [q, rating] of FORMS[p].entries()) {
 			await expect(send).toBeDisabled();
-			await question(phone, QUESTIONS[q].text).getByRole('radio', { name: rating, exact: true }).check();
+			await rate(phone, QUESTIONS[q].text, rating);
 		}
 		if (p === 0) await phone.screenshot({ path: `${SCREENS}/phone-form.png`, fullPage: true });
 		await send.click();
