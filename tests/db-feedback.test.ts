@@ -220,6 +220,29 @@ test('A26: 10 concurrent forms from one participant store exactly one', { skip }
 	}
 });
 
+test('a form sent while Show results is being pressed is refused, never counted after the results are up', { skip }, async () => {
+	const host = await connectAsOwner();
+	const form = await openForm(host);
+	const phone = await connectAsOwner();
+	const ipHash = `test-${randomUUID()}`;
+	try {
+		// The press is made but not yet committed when the form arrives.
+		await host.query('begin');
+		assert.equal((await act(host, form.userId, form.code, 'reveal')).status, 'ok');
+		const sending = submit(phone, form.code, randomUUID(), randomUUID(), JSON.stringify([5, 10, 5]), ipHash);
+		await new Promise((done) => setTimeout(done, 500));
+		await host.query('commit');
+		assert.deepEqual(await sending, { status: 'closed' });
+		assert.deepEqual(await tallies(form.runId, host), {});
+	} finally {
+		await host.query('rollback');
+		await phone.end();
+		await host.query('delete from auth.users where id = $1', [form.userId]);
+		await host.query('delete from public.rate_limits where key = any($1)', [[`ip:${ipHash}`, `run:${form.runId}`]]);
+		await host.end();
+	}
+});
+
 // ---------- A24: results stay out of the shared state until Show ----------
 
 test('the largest form, 8 questions rated 10 out of 10, is stored and shown in full', { skip }, async () => {

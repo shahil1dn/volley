@@ -42,9 +42,12 @@ begin
 	exception when invalid_text_representation then
 		return null;
 	end;
-	if json_typeof(v_form) is distinct from 'array'
-		or jsonb_typeof(v_questions) is distinct from 'array'
-		or json_array_length(v_form) <> jsonb_array_length(v_questions) then
+	-- Two steps: SQL does not promise to test an OR left to right, and the length of
+	-- something that is not a list is an error, not a refusal.
+	if json_typeof(v_form) is distinct from 'array' or jsonb_typeof(v_questions) is distinct from 'array' then
+		return null;
+	end if;
+	if json_array_length(v_form) <> jsonb_array_length(v_questions) then
 		return null;
 	end if;
 
@@ -108,8 +111,8 @@ return case p_type
 	else coalesce((p_settings ->> 'answersPerPerson')::int, 3)
 end;
 
--- Unchanged from 0010 except the last step: a feedback form adds one to each of
--- its ratings and to the count of forms sent.
+-- Unchanged from 0010 except for a feedback form: it holds the run while it is
+-- counted, and adds one to each of its ratings and to the count of forms sent.
 create or replace function public.submit_answer(
 	p_code text,
 	p_participant_id uuid,
@@ -200,6 +203,18 @@ begin
 		return jsonb_build_object('status', 'invalid');
 	end if;
 	v_limit := public.answer_limit(v_item.type, v_item.settings);
+
+	-- Show results makes a form's results public in one step, so no form may be counted
+	-- after it. The run above was read without a lock, so take it now and check again:
+	-- a press already made refuses this form, and a press made now waits for it.
+	if v_item.type = 'feedback' then
+		perform 1 from public.runs
+		where id = v_run.id and status = 'live' and item_state = 'open' and current_position = v_run.current_position
+		for update;
+		if not found then
+			return jsonb_build_object('status', 'closed');
+		end if;
+	end if;
 
 	-- The response and the quota succeed or fail together. A full quota rolls
 	-- back only this block, so the rate-limit counts above still stand: a
@@ -673,8 +688,11 @@ begin
 			when 'feedback' then
 				-- Questions are told apart by their place, not their text, so two
 				-- alike are allowed.
-				if jsonb_typeof(v_item -> 'questions') is distinct from 'array'
-					or jsonb_array_length(v_item -> 'questions') not between 1 and 8
+				-- A list first, on its own: SQL does not promise to test an OR left to right.
+				if jsonb_typeof(v_item -> 'questions') is distinct from 'array' then
+					raise exception 'invalid item' using errcode = 'VQ002';
+				end if;
+				if jsonb_array_length(v_item -> 'questions') not between 1 and 8
 					or exists (
 						select 1 from jsonb_array_elements(v_item -> 'questions') q
 						where jsonb_typeof(q -> 'text') is distinct from 'string'
