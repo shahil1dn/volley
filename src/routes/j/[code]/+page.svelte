@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { normaliseWord } from '$lib/words';
+	import { formQuestions, ratingLabel, SCALES } from '$lib/feedback';
 	import Brand from '$lib/Brand.svelte';
 	import { brand } from '$lib/brand';
 	import {
@@ -58,13 +59,27 @@
 	const isPoll = $derived(item?.type === 'poll');
 	const isQna = $derived(item?.type === 'qna');
 	const isThanks = $derived(item?.type === 'thanks');
+	const isFeedback = $derived(item?.type === 'feedback');
+	const formItems = $derived(isFeedback ? formQuestions(item?.settings) : []);
 	const questions = $derived(room?.questions ?? []);
 	// The question the host has put on the big screen, if it is still in the list.
 	const onScreenId = $derived(room?.shown?.[0] ?? null);
 	const options = $derived(isPoll && Array.isArray(item?.settings.options) ? item.settings.options.map(String) : []);
 	const allowed = $derived(Number(item?.settings.answersPerPerson ?? DEFAULT_ANSWERS));
 	const mine = $derived(sent[position] ?? { words: [], left: allowed });
-	const accepting = $derived(room?.status === 'live' && room.itemState === 'open' && (item?.type === 'word_cloud' || isPoll || isQna));
+	const accepting = $derived(room?.status === 'live' && room.itemState === 'open' && (item?.type === 'word_cloud' || isPoll || isQna || isFeedback));
+
+	// A feedback form's ratings so far, one per question (null: not rated yet). Started
+	// afresh only when the activity or its number of questions changes, not on every poll.
+	let ratings = $state<(number | null)[]>([]);
+	let ratingsFor: number | null = null;
+	$effect(() => {
+		if (ratingsFor === position && ratings.length === formItems.length) return;
+		ratingsFor = position;
+		ratings = formItems.map(() => null);
+	});
+	// Counted against the questions, not the list, so it is never 0 before the list is made.
+	const unrated = $derived(formItems.filter((_, q) => ratings[q] == null).length);
 
 	async function poll() {
 		try {
@@ -129,15 +144,15 @@
 		return { status: 'network' };
 	}
 
-	function record(word: string | null, left: number) {
+	function record(words: string[], left: number) {
 		const entry = sent[position] ?? { words: [], left };
-		sent[position] = { words: word ? [...entry.words, word] : entry.words, left };
+		sent[position] = { words: [...entry.words, ...words], left };
 		saveSent(code, $state.snapshot(sent));
 	}
 
-	// Sends one answer (a word, or a poll option's position) and records what the
-	// phone shows for it. True when the server accepted it.
-	async function deliver(value: string, shown: string): Promise<boolean> {
+	// Sends one answer (a word, a poll option's position, or a whole feedback form)
+	// and records what the phone shows for it. True when the server accepted it.
+	async function deliver(value: string, shown: string[]): Promise<boolean> {
 		if (pending?.value !== value) pending = { submitId: newSubmitId(), value };
 
 		busy = true;
@@ -146,11 +161,12 @@
 		busy = false;
 
 		if (result.status === 'ok' || result.status === 'limit') {
-			record(result.status === 'ok' ? shown : null, result.left ?? 0);
+			record(result.status === 'ok' ? shown : [], result.left ?? 0);
 			pending = null;
 			return result.status === 'ok';
 		}
-		notice = (isQna && result.status === 'invalid' ? MESSAGES.questionInvalid : MESSAGES[result.status]) ?? MESSAGES.network;
+		const invalid = isQna ? MESSAGES.questionInvalid : isFeedback ? MESSAGES.formInvalid : MESSAGES.invalid;
+		notice = (result.status === 'invalid' ? invalid : MESSAGES[result.status]) ?? MESSAGES.network;
 		// Refused for good: the next Send is a new answer. After a network failure or
 		// a busy room, the same answer keeps its id.
 		if (result.status !== 'network' && result.status !== 'rate_limited') pending = null;
@@ -165,7 +181,7 @@
 			notice = MESSAGES.invalid;
 			return;
 		}
-		if (await deliver(value, value)) draft = '';
+		if (await deliver(value, [value])) draft = '';
 	}
 
 	async function ask(event: SubmitEvent) {
@@ -176,7 +192,7 @@
 			notice = MESSAGES.questionInvalid;
 			return;
 		}
-		if (await deliver(value, value)) draft = '';
+		if (await deliver(value, [value])) draft = '';
 	}
 
 	async function upvote(id: number) {
@@ -197,7 +213,16 @@
 	async function vote(event: SubmitEvent) {
 		event.preventDefault();
 		if (busy || choice === '') return;
-		await deliver(choice, options[Number(choice)] ?? '');
+		await deliver(choice, [options[Number(choice)] ?? '']);
+	}
+
+	// The whole form at once, as the list of ratings in question order. What the
+	// phone keeps is the ratings themselves, so it can show them back.
+	async function rate(event: SubmitEvent) {
+		event.preventDefault();
+		if (busy || unrated > 0) return;
+		const form = formItems.map((_, q) => ratings[q]);
+		await deliver(JSON.stringify(form), form.map(String));
 	}
 
 	onMount(() => {
@@ -237,6 +262,56 @@
 			<h1 class="phone-thanks__message">{prompt}</h1>
 			<p class="hint">You can close this page now.</p>
 		</section>
+	{:else if isFeedback && mine.words.length > 0}
+		<!-- Shown whatever the host does next with this form: what this phone sent, never the room's results. -->
+		<section class="phone-thanks">
+			<h1 class="phone-thanks__message">Thanks for your feedback</h1>
+			<h2 class="sent-form__title">What you sent</h2>
+			<ul class="sent-form">
+				{#each formItems as question, q (q)}
+					<li><span>{question.text}</span> <strong>{ratingLabel(question.scale, Number(mine.words[q]))}</strong></li>
+				{/each}
+			</ul>
+		</section>
+	{:else if accepting && isFeedback && mine.left > 0}
+		<h1 id="form-title">{prompt}</h1>
+		<p class="hint">Rate each one, then send. You can send it once.</p>
+		<form class="stack" aria-labelledby="form-title" onsubmit={rate}>
+			{#each formItems as question, q (q)}
+				<fieldset class="rating">
+					<legend class="rating__question">{question.text}</legend>
+					<div class="rating__scale rating__scale--{question.scale}">
+						{#each Array.from({ length: SCALES[question.scale].points }, (_, n) => n + 1) as point (point)}
+							<label class="rating__point" class:rating__point--lit={question.scale === 'stars' && (ratings[q] ?? 0) >= point}>
+								<input
+									class="visually-hidden"
+									type="radio"
+									name="rating-{q}"
+									value={point}
+									checked={ratings[q] === point}
+									onchange={() => (ratings[q] = point)}
+								/>
+								{#if question.scale === 'stars'}
+									<svg class="rating__star" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z" /></svg>
+									<span class="visually-hidden">{ratingLabel('stars', point)}</span>
+								{:else if question.scale === 'ten'}
+									{point}<span class="visually-hidden"> out of 10</span>
+								{:else}
+									{ratingLabel('words', point)}
+								{/if}
+							</label>
+						{/each}
+					</div>
+					{#if question.scale === 'stars'}<p class="rating__chosen" aria-hidden="true">{ratings[q] ? ratingLabel('stars', ratings[q]) : 'Not rated yet'}</p>{/if}
+				</fieldset>
+			{/each}
+			<button class="btn btn--block" disabled={busy || unrated > 0}>{busy ? 'Sending…' : 'Send'}</button>
+			{#if unrated > 0}<p class="hint" aria-live="polite">Rate every question to send. {unrated} to go.</p>{/if}
+			{#if notice}<p class="error" role="alert">{notice}</p>{/if}
+		</form>
+	{:else if accepting && isFeedback}
+		<h1>{prompt}</h1>
+		<p class="sent" aria-live="polite">You've already sent this form. Thanks for your feedback.</p>
 	{:else if accepting && isQna}
 		<h1>{prompt}</h1>
 		{#if mine.left > 0}

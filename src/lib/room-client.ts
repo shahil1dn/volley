@@ -20,6 +20,9 @@ export type RoomState = {
 	// votes], null if none), and how many others wait their turn (counted to 100).
 	shown: [number, string, number] | null;
 	waiting: number;
+	// A feedback form: how many forms have been sent. Its ratings are in `tallies`
+	// only once the host shows them; until then `tallies` is empty (ADR-018).
+	responses: number;
 	players: [string, number][];
 };
 
@@ -76,6 +79,7 @@ export const MESSAGES: Record<string, string> = {
 	rate_limited: 'Lots of answers are arriving at once. Wait a few seconds, then send again.',
 	invalid: 'Answers need 1 to 25 characters.',
 	questionInvalid: 'Questions need 1 to 280 characters.',
+	formInvalid: 'Rate every question, then send again.',
 	network: "That didn't send. Check your connection and send again. Your answer is kept.",
 };
 
