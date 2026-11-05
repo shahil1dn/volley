@@ -35,8 +35,9 @@
 	// The state carries a form's ratings only once the host has shown them (ADR-018).
 	const results = $derived(isFeedback && room?.itemState === 'revealed' ? feedbackResults(formItems, room.tallies) : null);
 	const responses = $derived(room?.responses ?? 0);
-	// Up to 8 questions on one screen that can't scroll: 1, 2, 2x2, 3x2 or 4x2.
-	const resultColumns = $derived(formItems.length <= 1 ? 1 : formItems.length <= 4 ? 2 : formItems.length <= 6 ? 3 : 4);
+	// Up to 8 questions on one screen that can't scroll. Up to 3 sit in one row, so each
+	// chart gets the full height; more go in two rows: 2x2, 3x2 or 4x2.
+	const resultColumns = $derived(formItems.length <= 3 ? Math.max(1, formItems.length) : Math.ceil(formItems.length / 2));
 	// The projector shows one question at a time, chosen by the host; phones see the whole list.
 	const shown = $derived(room?.shown ?? null);
 	const waiting = $derived(room?.waiting ?? 0);

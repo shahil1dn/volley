@@ -99,7 +99,7 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 .activity__head h2 { margin: 0; font-size: 18px; }
 .activity__main { display: grid; gap: 16px; }
 /* Type and question share a row once there is room. */
-@media (min-width: 560px) { .activity__main { grid-template-columns: 160px minmax(0, 1fr); align-items: start; } }
+@media (min-width: 560px) { .activity__main { grid-template-columns: 180px minmax(0, 1fr); align-items: start; } }
 /* A poll's options sit under its question, grouped by their heading and spacing.
    (Not a tinted panel: input borders only reach 3:1 against paper.) */
 .options { display: grid; gap: 16px; }
@@ -108,13 +108,14 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 .option__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 /* A feedback form's question with its scale beside it, and Remove at the end of the row.
    On a phone the question takes the full width and the scale goes under it. */
-.rating-question { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+/* Lined up by their tops, so the labels match (a select is a few pixels shorter than an input). */
+.rating-question { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; }
 .rating-question > .field:first-child { grid-column: 1 / -1; }
 @media (min-width: 560px) {
-  .rating-question { grid-template-columns: minmax(0, 1fr) 210px auto; }
+  .rating-question { grid-template-columns: minmax(0, 1fr) 240px auto; }
   .rating-question > .field:first-child { grid-column: auto; }
 }
-.rating-question__remove { min-height: var(--tap); }
+.rating-question__remove { min-height: var(--tap); align-self: end; }
 /* An add control with its count beside it; ruled when it closes the list. */
 .adder { display: flex; align-items: center; gap: 16px; }
 .adder--ruled { padding-top: 24px; border-top: 1px solid var(--line); }
