@@ -23,6 +23,8 @@
 		shown: number | null;
 		// A feedback form: how many forms have been sent. Its ratings are in `tallies`.
 		responses: number;
+		// A feedback form shown once in this run: it can't take answers again (ADR-018).
+		formShown: boolean;
 	};
 
 	const POLL_MS = 2000;
@@ -177,15 +179,20 @@
 					<!-- Nothing can move until the session is live, so the first step is opening answers. -->
 					<button class="btn" disabled={busy} onclick={() => act('open')}>Open answers</button>
 				{:else if isFeedback && answers === 'revealed'}
-					<p class="hint">Results are on the projector.</p>
+					<p class="hint">Results are on the projector. This form is closed for good.</p>
+				{:else if isFeedback && view.formShown}
+					<!-- Shown before, then Next and Back: no answers can arrive, but the same results can go back up. -->
+					<p class="hint control__note">Results were shown, so this form is closed for good.</p>
+					<button class="btn" disabled={busy || !live} onclick={() => act('reveal')}>Show results</button>
 				{:else if isFeedback && view.status !== 'lobby'}
-					<!-- Show results also closes answers, in the same step. -->
+					<!-- Show results also closes answers, in the same step, and for good. -->
 					{#if answers === 'open'}
 						<button class="btn btn--quiet" disabled={busy || ended} onclick={() => act('close')}>Close answers</button>
 					{:else}
 						<button class="btn btn--quiet" disabled={busy || ended || view.status === 'frozen'} onclick={() => act('open')}>Open answers</button>
 					{/if}
 					<button class="btn" disabled={busy || !live} onclick={() => act('reveal')}>Show results</button>
+					<p class="hint control__note">Closes this form for good.</p>
 				{:else if isQna}
 					<button class="btn btn--quiet" disabled={busy || !live} onclick={() => act('question_back', String(view?.shown ?? ''))}>Previous question</button>
 					<button class="btn" disabled={busy || !live} onclick={() => act('question_next', String(view?.shown ?? ''))}>Next question</button>
@@ -266,7 +273,11 @@
 			<h2>Results</h2>
 			<p class="hint" aria-live="polite">
 				{view.responses} {view.responses === 1 ? 'person has' : 'people have'} answered.
-				{answers === 'revealed' ? 'These are on the projector now.' : 'Only you can see these until you press Show results, which also closes answers.'}
+				{answers === 'revealed'
+					? 'These are on the projector now.'
+					: view.formShown
+						? 'These were on the projector. Show results puts them back.'
+						: 'Only you can see these until you press Show results, which closes this form for good.'}
 			</p>
 			{#each results as result, q (q)}
 				<table class="ratings">

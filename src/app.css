@@ -329,13 +329,17 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
   background: var(--paper); border-bottom: 1px solid var(--line);
 }
 .control__top .status { margin: 0; }
-.control__main { display: flex; gap: 8px; }
+.control__main { display: flex; align-items: center; gap: 8px; }
+/* A line beside the main button, in the bar: what pressing it can't undo. */
+.control__note { margin: 0; }
 @media (max-width: 599px) {
   .control__top { gap: 8px 16px; padding: 8px 16px; }
   .control__top .status { gap: 4px 16px; }
   .control__top .status dd { font-size: 16px; }
   .control__top .control__main { flex: 1 1 100%; }
   .control__main .btn { flex: 1 1 auto; padding-inline: 12px; white-space: nowrap; }
+  .control__main { flex-wrap: wrap; }
+  .control__note { flex: 1 1 100%; }
 }
 
 /* ---------- control: a feedback form's live results ---------- */

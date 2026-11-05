@@ -69,6 +69,9 @@ test('A30: phones rate a feedback form; the projector shows the count, then the 
 		await box.getByLabel(`Question ${j + 1}`, { exact: true }).fill(text);
 		await box.getByLabel(`Scale for question ${j + 1}`, { exact: true }).selectOption({ label: scale });
 	}
+	// A thank-you slide after it, so the host can move on and come back.
+	await control.getByRole('button', { name: 'Add activity' }).click();
+	await activityBox(control, 2).getByLabel('Type', { exact: true }).selectOption({ label: 'Thank you' });
 	await expect(control.getByRole('complementary', { name: 'Your session' })).toContainText('1 · Feedback form · 3 questions');
 	await control.screenshot({ path: `${SCREENS}/builder.png`, fullPage: true });
 	await control.getByRole('button', { name: 'Start session' }).click();
@@ -138,6 +141,15 @@ test('A30: phones rate a feedback form; the projector shows the count, then the 
 	await late.goto(`/j/${code}`);
 	await expect(late.getByRole('heading', { name: 'Waiting for the next question' })).toBeVisible();
 	await expect(late.getByRole('button', { name: 'Send' })).toHaveCount(0);
+
+	// Shown once, the form is closed for good: after Next then Back there is no Open answers.
+	await expect(control.getByText('Results are on the projector. This form is closed for good.')).toBeVisible();
+	await control.getByRole('button', { name: 'Next', exact: true }).click();
+	await expect(statusValue(control, 'Activity')).toHaveText('2 of 2');
+	await control.getByRole('button', { name: 'Previous', exact: true }).click();
+	await expect(statusValue(control, 'Activity')).toHaveText('1 of 2');
+	await expect(control.getByText('Results were shown, so this form is closed for good.')).toBeVisible();
+	await expect(control.getByRole('button', { name: 'Open answers' })).toHaveCount(0);
 
 	await Promise.all([...phones, late, projector].map((page) => page.context().close()));
 	await laptop.close();
