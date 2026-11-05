@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { cloudPng } from '$lib/cloud-png';
 	import { connectionLost } from '$lib/room-client';
+	import { feedbackResults, formatAverage, formQuestions, pointLabel, ratingLabel } from '$lib/feedback';
 	import Brand from '$lib/Brand.svelte';
 	import { brand } from '$lib/brand';
 
@@ -20,6 +21,8 @@
 		questions: [number, string, number, boolean, boolean, number | null][];
 		// Q&A: the id of the question on the projector now.
 		shown: number | null;
+		// A feedback form: how many forms have been sent. Its ratings are in `tallies`.
+		responses: number;
 	};
 
 	const POLL_MS = 2000;
@@ -56,6 +59,9 @@
 	const isPoll = $derived(view?.item?.type === 'poll');
 	const isQna = $derived(view?.item?.type === 'qna');
 	const isThanks = $derived(view?.item?.type === 'thanks');
+	const isFeedback = $derived(view?.item?.type === 'feedback');
+	// The host sees a form's results live, before the projector does.
+	const results = $derived(isFeedback ? feedbackResults(formQuestions(view?.item?.settings), view?.tallies ?? []) : []);
 	// "3 of 12": this question's turn among every visible question asked so far,
 	// and how many others are waiting (unanswered, not on screen).
 	const asked = $derived((view?.questions ?? []).filter(([, , , hidden]) => !hidden));
@@ -170,6 +176,16 @@
 				{:else if isQna && view.status === 'lobby'}
 					<!-- Nothing can move until the session is live, so the first step is opening answers. -->
 					<button class="btn" disabled={busy} onclick={() => act('open')}>Open answers</button>
+				{:else if isFeedback && answers === 'revealed'}
+					<p class="hint">Results are on the projector.</p>
+				{:else if isFeedback && view.status !== 'lobby'}
+					<!-- Show results also closes answers, in the same step. -->
+					{#if answers === 'open'}
+						<button class="btn btn--quiet" disabled={busy || ended} onclick={() => act('close')}>Close answers</button>
+					{:else}
+						<button class="btn btn--quiet" disabled={busy || ended || view.status === 'frozen'} onclick={() => act('open')}>Open answers</button>
+					{/if}
+					<button class="btn" disabled={busy || !live} onclick={() => act('reveal')}>Show results</button>
 				{:else if isQna}
 					<button class="btn btn--quiet" disabled={busy || !live} onclick={() => act('question_back', String(view?.shown ?? ''))}>Previous question</button>
 					<button class="btn" disabled={busy || !live} onclick={() => act('question_next', String(view?.shown ?? ''))}>Next question</button>
@@ -246,6 +262,26 @@
 					{/each}
 				</ul>
 			{/if}
+		{:else if isFeedback}
+			<h2>Results</h2>
+			<p class="hint" aria-live="polite">
+				{view.responses} {view.responses === 1 ? 'person has' : 'people have'} answered.
+				{answers === 'revealed' ? 'These are on the projector now.' : 'Only you can see these until you press Show results, which also closes answers.'}
+			</p>
+			{#each results as result, q (q)}
+				<table class="ratings">
+					<caption>
+						{result.text}
+						<span class="ratings__average">{result.averageTenths === null ? 'No ratings yet' : `Average ${formatAverage(result.averageTenths)} from ${result.total}`}</span>
+					</caption>
+					<thead>
+						<tr>{#each result.counts as _, i (i)}<th scope="col"><span aria-hidden="true">{pointLabel(result.scale, i + 1)}</span><span class="visually-hidden">{ratingLabel(result.scale, i + 1)}</span></th>{/each}</tr>
+					</thead>
+					<tbody>
+						<tr>{#each result.counts as n, i (i)}<td>{n}</td>{/each}</tr>
+					</tbody>
+				</table>
+			{/each}
 		{:else if !isThanks}
 			<h2>{isPoll ? 'Votes' : 'Words'}</h2>
 			{#if view.tallies.length === 0}

@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { connectionLost, isNewer, waitingCount, type RoomState } from '$lib/room-client';
 	import { pollBars } from '$lib/poll';
+	import { feedbackResults, formatAverage, formQuestions, pointLabel, ratingLabel, SCALES } from '$lib/feedback';
 	import { centreOut, wordSizeVw } from '$lib/words';
 	import Brand from '$lib/Brand.svelte';
 	import { brand } from '$lib/brand';
@@ -29,13 +30,23 @@
 	const mostVotes = $derived(Math.max(1, ...bars.map((bar) => bar.votes)));
 	const isQna = $derived(room?.item?.type === 'qna');
 	const isThanks = $derived(room?.item?.type === 'thanks');
+	const isFeedback = $derived(room?.item?.type === 'feedback');
+	const formItems = $derived(isFeedback ? formQuestions(room?.item?.settings) : []);
+	// The state carries a form's ratings only once the host has shown them (ADR-018).
+	const results = $derived(isFeedback && room?.itemState === 'revealed' ? feedbackResults(formItems, room.tallies) : null);
+	const responses = $derived(room?.responses ?? 0);
+	// Up to 8 questions on one screen that can't scroll: 1, 2, 2x2, 3x2 or 4x2.
+	const resultColumns = $derived(formItems.length <= 1 ? 1 : formItems.length <= 4 ? 2 : formItems.length <= 6 ? 3 : 4);
 	// The projector shows one question at a time, chosen by the host; phones see the whole list.
 	const shown = $derived(room?.shown ?? null);
 	const waiting = $derived(room?.waiting ?? 0);
 	const waitingLabel = $derived(`${waitingCount(waiting)} more waiting`);
-	const count = $derived(isQna ? (room?.questions ?? []).length : answers);
+	const count = $derived(isQna ? (room?.questions ?? []).length : isFeedback ? responses : answers);
 	const countNoun = $derived(
-		isQna ? (count === 1 ? 'question' : 'questions') : isPoll ? (count === 1 ? 'vote' : 'votes') : count === 1 ? 'answer' : 'answers',
+		isQna ? (count === 1 ? 'question' : 'questions')
+		: isPoll ? (count === 1 ? 'vote' : 'votes')
+		: isFeedback ? 'answered'
+		: count === 1 ? 'answer' : 'answers',
 	);
 	const prompt = $derived(typeof room?.item?.settings.prompt === 'string' ? room.item.settings.prompt : '');
 	// Ended takes over the join box instead, so nobody scans into a finished room.
@@ -150,6 +161,39 @@
 					<p class="host__url">{data.thanks.address}</p>
 				</div>
 			{/if}
+		</section>
+	{:else if isFeedback && results}
+		<ol class="form-results" style:--columns={resultColumns} aria-label="Feedback results">
+			{#each results as result, q (q)}
+				{@const most = Math.max(1, ...result.counts)}
+				<li class="form-result">
+					<p class="form-result__question">{result.text}</p>
+					<p class="form-result__average">
+						{#if result.averageTenths === null}<span class="form-result__out">No ratings</span>
+						{:else}{formatAverage(result.averageTenths)}<span class="form-result__out"> average out of {SCALES[result.scale].points}, from {result.total}</span>{/if}
+					</p>
+					<ol class="form-result__bars">
+						{#each result.counts as n, i (i)}
+							<li class="form-result__bar">
+								<span class="visually-hidden">{ratingLabel(result.scale, i + 1)}: {n}</span>
+								<span class="form-result__count" aria-hidden="true">{n}</span>
+								<span class="form-result__track" aria-hidden="true"><span class="form-result__fill" style:height="{(n / most) * 100}%"></span></span>
+								<span class="form-result__point" aria-hidden="true">{pointLabel(result.scale, i + 1)}</span>
+							</li>
+						{/each}
+					</ol>
+				</li>
+			{/each}
+		</ol>
+	{:else if isFeedback}
+		<section class="form-wait" aria-label="Feedback form">
+			<ul class="form-wait__questions">
+				{#each formItems as question, q (q)}<li>{question.text} <span class="form-wait__scale">{SCALES[question.scale].name}</span></li>{/each}
+			</ul>
+			<div>
+				<p class="form-wait__count" aria-live="polite">{responses} {responses === 1 ? 'person has' : 'people have'} answered</p>
+				{#if !ended}<p class="form-wait__hint">Results show here when the host is ready.</p>{/if}
+			</div>
 		</section>
 	{:else if isPoll}
 		<ol class="poll" aria-label="Poll results">

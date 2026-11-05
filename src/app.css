@@ -234,6 +234,31 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 .sent-form li { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); color: var(--ink); overflow-wrap: anywhere; }
 .sent-form strong { flex: none; font-weight: 600; }
 
+/* A feedback form on the projector, before Show results: its questions and how many have answered. */
+.form-wait { min-height: 0; overflow: hidden; display: grid; align-content: center; gap: clamp(24px, 4vh, 64px); padding: 0 2vw; }
+.form-wait__questions { list-style: none; margin: 0; padding: 0; display: grid; gap: clamp(8px, 1.4vh, 20px); }
+.form-wait__questions li { font-size: clamp(20px, 2.4vw, 44px); font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+.form-wait__scale { font-size: 0.6em; color: var(--muted); font-weight: 500; margin-left: 0.5em; white-space: nowrap; }
+.form-wait__count { font-size: clamp(32px, 5vw, 100px); font-weight: 700; line-height: 1.1; color: var(--ink); font-variant-numeric: tabular-nums; }
+.form-wait__hint { margin-top: 8px; font-size: clamp(18px, 2.2vw, 40px); color: var(--muted); }
+/* After Show results: one block per question, laid out to fill the screen without scrolling,
+   separated by space and a hairline rather than boxes. */
+.form-results {
+  min-height: 0; list-style: none; margin: 0; padding: 0 2vw;
+  display: grid; grid-template-columns: repeat(var(--columns, 1), minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr);
+  gap: clamp(16px, 3vh, 48px) clamp(24px, 3vw, 64px);
+}
+.form-result { min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: clamp(4px, 1vh, 16px); padding-top: clamp(8px, 1.4vh, 20px); border-top: 1px solid var(--line); }
+.form-result__question { font-size: clamp(16px, 1.8vw, 36px); font-weight: 600; line-height: 1.25; color: var(--ink); overflow-wrap: anywhere; }
+.form-result__average { font-size: clamp(32px, 4.4vw, 88px); font-weight: 700; line-height: 1; color: var(--accent); font-variant-numeric: tabular-nums; }
+.form-result__out { font-size: clamp(14px, 1.3vw, 26px); font-weight: 500; color: var(--muted); letter-spacing: 0; }
+.form-result__bars { min-height: 0; list-style: none; margin: 0; padding: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: clamp(4px, 0.6vw, 12px); }
+.form-result__bar { position: relative; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; justify-items: center; gap: 4px; }
+.form-result__count { font-size: clamp(13px, 1.2vw, 24px); font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.form-result__track { width: 100%; min-height: 12px; display: flex; align-items: flex-end; background: var(--line); border-radius: 6px; overflow: hidden; }
+.form-result__fill { display: block; width: 100%; background: var(--accent); border-radius: 6px; transition: height 400ms ease; }
+.form-result__point { font-size: clamp(11px, 1vw, 20px); line-height: 1.15; color: var(--muted); text-align: center; overflow-wrap: anywhere; }
+
 /* Q&A on the phone: each question with its votes and an upvote toggle. */
 .questions { list-style: none; margin: 0; padding: 0; display: grid; }
 .question {
@@ -257,7 +282,7 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 @keyframes pop { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .cloud__word { animation: none; }
-  .poll__bar { transition: none; }
+  .poll__bar, .form-result__fill { transition: none; }
 }
 
 /* ---------- host control ---------- */
@@ -311,3 +336,11 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
   .control__top .control__main { flex: 1 1 100%; }
   .control__main .btn { flex: 1 1 auto; padding-inline: 12px; white-space: nowrap; }
 }
+
+/* ---------- control: a feedback form's live results ---------- */
+/* One small table per question: its scale's points across, the count under each. */
+.ratings { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 24px; font-variant-numeric: tabular-nums; }
+.ratings caption { text-align: left; padding-bottom: 8px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.ratings__average { display: block; font-size: 14px; font-weight: 500; color: var(--muted); }
+.ratings th { position: relative; padding: 4px 2px; border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 500; line-height: 1.2; color: var(--muted); overflow-wrap: anywhere; }
+.ratings td { padding: 8px 2px; border-bottom: 1px solid var(--line); text-align: center; font-size: 18px; font-weight: 600; color: var(--ink); }
