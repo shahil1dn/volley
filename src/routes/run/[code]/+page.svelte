@@ -19,6 +19,7 @@
 	let failedPolls = $state(0);
 	let cloud = $state<HTMLUListElement>();
 	let questionBox = $state<HTMLElement>();
+	let formBox = $state<HTMLElement>();
 
 	const words = $derived(room?.tallies ?? []);
 	const biggest = $derived(words[0]?.[1] ?? 1);
@@ -94,6 +95,18 @@
 		return () => observer.disconnect();
 	});
 
+	// A long form (up to 8 questions and their titles) shrinks to fit the screen the same
+	// way, again when its count changes or its results go up.
+	$effect(() => {
+		if (!formBox) return;
+		void [formItems, results, responses];
+		const box = formBox;
+		fitToBox(box);
+		const observer = new ResizeObserver(() => fitToBox(box));
+		observer.observe(box);
+		return () => observer.disconnect();
+	});
+
 	async function poll() {
 		try {
 			const response = await fetch(`/api/r/${data.code}/state`);
@@ -129,7 +142,7 @@
 	<header class="host__top">
 		<div>
 			<div class="host__meta"><Brand /><p class="label">Room {data.code}{room?.hostName ? ` · ${room.hostName} hosting` : ''}{note ? ` · ${note}` : ''}</p></div>
-			{#if !isThanks}<h1 class="host__question">{missing ? "We can't find that room" : prompt}</h1>{/if}
+			{#if !isThanks}<h1 class="host__question" class:host__question--form={isFeedback}>{missing ? "We can't find that room" : prompt}</h1>{/if}
 		</div>
 		{#if ended}
 			<div class="host__join host__join--ended">
@@ -164,7 +177,7 @@
 			{/if}
 		</section>
 	{:else if isFeedback && results}
-		<ol class="form-results" style:--columns={resultColumns} aria-label="Feedback results">
+		<ol class="form-results" style:--columns={resultColumns} aria-label="Feedback results" bind:this={formBox}>
 			{#each results as result, q (q)}
 				{@const most = Math.max(1, ...result.counts)}
 				<li class="form-result">
@@ -187,7 +200,7 @@
 			{/each}
 		</ol>
 	{:else if isFeedback}
-		<section class="form-wait" aria-label="Feedback form">
+		<section class="form-wait" aria-label="Feedback form" bind:this={formBox}>
 			<ul class="form-wait__questions">
 				{#each formItems as question, q (q)}<li>{question.text} <span class="form-wait__scale">{SCALES[question.scale].name}</span></li>{/each}
 			</ul>
