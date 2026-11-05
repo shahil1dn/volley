@@ -170,7 +170,7 @@
 					<p class="form-result__question">{result.text}</p>
 					<p class="form-result__average">
 						{#if result.averageTenths === null}<span class="form-result__out">No ratings</span>
-						{:else}{formatAverage(result.averageTenths)}<span class="form-result__out"> average out of {SCALES[result.scale].points}, from {result.total}</span>{/if}
+						{:else}{formatAverage(result.averageTenths)} <span class="form-result__out">average out of {SCALES[result.scale].points}, from {result.total}</span>{/if}
 					</p>
 					<ol class="form-result__bars">
 						{#each result.counts as n, i (i)}

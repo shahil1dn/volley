@@ -305,7 +305,7 @@
 										{#if question.error}<p class="error" id="question-error-{question.id}">{question.error}</p>{/if}
 									</div>
 									<div class="field">
-										<label class="label" for="scale-{question.id}">Scale<span class="visually-hidden"> for question {j + 1}</span></label>
+										<label class="label" for="scale-{question.id}">Scale <span class="visually-hidden">for question {j + 1}</span></label>
 										<!-- `selected` on each option, as for the type above, so a choice made before the script ran is kept. -->
 										<select
 											id="scale-{question.id}"
