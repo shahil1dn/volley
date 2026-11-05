@@ -748,6 +748,10 @@ which listed scales as out of scope.
 - **One form per person, not changeable** (like a poll vote): `answer_limit` is 1, through the same quota row as
   every other answer, so concurrent sends store one. A retry with the same submit id is stored once and gets the
   same answer (SPEC 12). The phone keeps its own ratings (SPEC 13) and shows them back, never the room's results.
+- **One person means one phone browser**, the same as a poll (the owner, 2026-11-05: "Keep as is"). A person is
+  the phone's signed cookie, so clearing it lets someone send another form; only the room's write cap slows a
+  script. It is kept so joining stays fully anonymous: no sign-in, no name. A cap per network address was
+  rejected, because a campus shares one address and the cap would turn away real phones.
 - **Tallies are kept on write** (SPEC 19), in the existing `tallies` table: key `<question number>:<rating>`
   (question numbers from 0), plus key `n` for the number of forms sent. Each form's rows are updated in question
   order, so two forms sent at once always lock rows in the same order and cannot deadlock.
@@ -757,6 +761,12 @@ which listed scales as out of scope.
 - **Show results is the existing `reveal`.** For a feedback form only, `reveal` is also allowed while answers are
   open, so one press closes answers and shows the results together, with no moment where they are half done.
   Other types still need answers closed first. Moving to another activity and back hides the results again.
+  A form being counted as the host presses is counted first; one that arrives after is refused.
+- **Once shown, a form is closed for good** in that run (the owner, 2026-11-05: "Lock it after Show").
+  `runs.shown_forms` lists the feedback forms shown, and `host_action('open')` refuses them, Next then Back
+  included. Reopening one and showing it again would let anyone subtract the two sets of results and read a
+  late answer on its own. Its results can still go back up, since nothing new can arrive. The list goes with
+  the run when the purge deletes it. The control page says so beside Show results.
 - **Nothing to hide or moderate**: ratings carry no text from the public, so `hide` and `unhide` are refused on a
   feedback form (hiding a rating would change the average without saying so).
 - **It can come first** in a session: it opens answers like a poll.
