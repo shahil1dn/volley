@@ -436,6 +436,24 @@ In this order (owner, 2026-09-30):
 
 Also: one gate command (build, typecheck, all tests, exit code intact, A17).
 
+## Feedback form (ADR-018, SPEC 7c, 2026-11-05)
+
+Branch `claude/feedback-form-076bbc`. Migration 0019, checks A24 to A30. Each slice is proven before the next.
+
+- [ ] **F1. The database takes a feedback form.** `start_session` stores a checked form, `submit_answer` takes one
+  whole form per person, `get_state` leaves the ratings out until Show, the purge removes it all.
+  Verify: `node --env-file=.env.local --test tests/db-feedback.test.ts` green (A24 to A27, A29), and the secrecy
+  test red with the stripping removed.
+- [ ] **F2. A host builds a feedback form on `/decks` and starts it.** Title, 1 to 8 questions, a scale each.
+  Verify: `tests/session-form.test.ts` feedback cases; the browser test starts one.
+- [ ] **F3. A phone rates every question on one screen and sends once**, then sees its own ratings.
+  Verify: the browser test's phone steps; screenshots at 375px, light and dark.
+- [ ] **F4. The projector shows the count, then the results on Show results; the control page shows them live.**
+  Verify: `tests/feedback.test.ts` golden numbers (A28); `tests/e2e/feedback.spec.ts` (A30).
+- [ ] **F5. The CSV carries each question's counts and average.** Verify: `tests/export.test.ts` feedback case.
+- [ ] **F6. Receipts, design check, review.** Verify: `npm run check`, `npm run build`, `npm test`,
+  `npm run test:e2e` all exit 0; vibe-audit; code review and the three-reviewer check.
+
 ## Found along the way
 
 (New tasks discovered while building go here.)
