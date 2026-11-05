@@ -37,6 +37,50 @@ test('resultsCsv: one row per answer or question per activity, BOM first, CRLF l
 	);
 });
 
+test("resultsCsv: a feedback form's rows are the forms sent, then each point of each question's scale and its average", () => {
+	const csv = resultsCsv({
+		code: 'ABCDE',
+		items: [
+			{
+				position: 0,
+				type: 'feedback',
+				prompt: 'Rate us',
+				form: [{ text: 'The talk', scale: 'stars' }, { text: '=Room', scale: 'words' }],
+				tallies: [['n', 2, false], ['0:5', 1, false], ['0:4', 1, false], ['1:2', 2, false]],
+				questions: [],
+			},
+		],
+	});
+	assert.equal(
+		csv,
+		'\uFEFFActivity,Type,Question,Answer,Count,Hidden,Answered\r\n' +
+			'1,feedback,Rate us,Forms sent,2,,\r\n' +
+			'1,feedback,The talk,1 star,0,,\r\n' +
+			'1,feedback,The talk,2 stars,0,,\r\n' +
+			'1,feedback,The talk,3 stars,0,,\r\n' +
+			'1,feedback,The talk,4 stars,1,,\r\n' +
+			'1,feedback,The talk,5 stars,1,,\r\n' +
+			'1,feedback,The talk,Average,4.5,,\r\n' +
+			// A question typed like a formula reaches the spreadsheet as text.
+			"1,feedback,'=Room,Very bad,0,,\r\n" +
+			"1,feedback,'=Room,Bad,2,,\r\n" +
+			"1,feedback,'=Room,Okay,0,,\r\n" +
+			"1,feedback,'=Room,Good,0,,\r\n" +
+			"1,feedback,'=Room,Very good,0,,\r\n" +
+			"1,feedback,'=Room,Average,2.0,,\r\n",
+	);
+	// No raw tally key ("0:5") ever reaches the file.
+	assert.doesNotMatch(csv, /\d:\d/);
+});
+
+test('resultsCsv: a feedback form nobody answered still lists every point, with no average', () => {
+	const csv = resultsCsv({ code: 'ABCDE', items: [{ position: 2, type: 'feedback', prompt: 'Rate', form: [{ text: 'Q', scale: 'ten' }], tallies: [], questions: [] }] });
+	const lines = csv.trim().split('\r\n');
+	assert.equal(lines[1], '3,feedback,Rate,Forms sent,0,,');
+	assert.equal(lines.length, 1 + 1 + 10 + 1);
+	assert.equal(lines.at(-1), '3,feedback,Q,Average,,,');
+});
+
 // Each character half its type size wide: close enough to test placement.
 const measure = (text: string, px: number) => text.length * px * 0.5;
 const BOX = { left: 64, top: 200, width: 1472, height: 636 };

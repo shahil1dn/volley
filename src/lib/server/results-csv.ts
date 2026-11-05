@@ -1,6 +1,8 @@
 // The host's results download: one row per answer per activity, straight from
 // the tallies, so its counts are the ones the projector showed. A Q&A's rows
-// are its questions, counted by upvotes.
+// are its questions, counted by upvotes. A feedback form's rows are the forms
+// sent, then for each question a count per point of its scale and the average.
+import { feedbackResults, formatAverage, formQuestions, ratingLabel } from '../feedback.ts';
 
 export type RunExport = {
 	code: string;
@@ -8,6 +10,8 @@ export type RunExport = {
 		position: number;
 		type: string;
 		prompt: string | null;
+		// A feedback form's questions and scales; null for other types.
+		form?: unknown;
 		tallies: [string, number, boolean][];
 		questions: [string, number, boolean, boolean][];
 	}[];
@@ -25,10 +29,26 @@ export function csvCell(value: string | number): string {
 	return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
+// Nothing on a feedback form can be hidden or answered, so those cells stay empty.
+function feedbackRows(item: RunExport['items'][number], activity: string[]): string[][] {
+	const [position, type] = activity;
+	const sent = item.tallies.find(([key]) => key === 'n')?.[1] ?? 0;
+	const rows = [[...activity, 'Forms sent', String(sent), '', '']];
+	for (const result of feedbackResults(formQuestions({ questions: item.form }), item.tallies)) {
+		for (const [i, count] of result.counts.entries()) rows.push([position, type, result.text, ratingLabel(result.scale, i + 1), String(count), '', '']);
+		rows.push([position, type, result.text, 'Average', result.averageTenths === null ? '' : formatAverage(result.averageTenths), '', '']);
+	}
+	return rows;
+}
+
 export function resultsCsv(run: RunExport): string {
 	const rows = [HEADER];
 	for (const item of run.items) {
 		const activity = [String(item.position + 1), item.type, item.prompt ?? ''];
+		if (item.type === 'feedback') {
+			rows.push(...feedbackRows(item, activity));
+			continue;
+		}
 		for (const [answer, count, hidden] of item.tallies) {
 			rows.push([...activity, answer, String(count), hidden ? 'yes' : 'no', '']);
 		}
