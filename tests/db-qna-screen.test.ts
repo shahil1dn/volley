@@ -302,7 +302,7 @@ test('what reaches the projector is a question\'s id, text and votes, and nothin
 		assert.equal(shown.length, 3);
 		assert.deepEqual([typeof shown[0], shown[1], shown[2]], ['number', 'A?', 1]);
 		assert.deepEqual(Object.keys(await state(s)).sort(), [
-			'closesAt', 'code', 'currentPosition', 'hostName', 'item', 'itemState', 'opensAt', 'players', 'questions', 'serverNow', 'shown', 'status', 'tallies', 'version', 'waiting',
+			'closesAt', 'code', 'currentPosition', 'hostName', 'item', 'itemState', 'opensAt', 'players', 'questions', 'responses', 'serverNow', 'shown', 'status', 'tallies', 'version', 'waiting',
 		]);
 	});
 });
