@@ -111,6 +111,35 @@ export function thankYouLink(link: string | null): string | null {
 	return link;
 }
 
+// A thank-you picture is an image in static/; the path goes into a CSS url(), so it can't
+// carry anything that would end it.
+const PICTURE_FILE = /^\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+\.(webp|avif|jpg|jpeg|png)$/;
+type ThankYouBackground = { phone: string; projector: string };
+
+// Both pictures or none: a phone and a projector showing different looks would be a mistake.
+export function thankYouBackground(background: ThankYouBackground | null | undefined): ThankYouBackground | null {
+	if (background === null || background === undefined) return null;
+	if (typeof background.phone !== 'string' || typeof background.projector !== 'string') {
+		throw new Error('brand.thankYou.background must set both pictures, phone and projector, or be null');
+	}
+	for (const which of ['phone', 'projector'] as const) {
+		if (!PICTURE_FILE.test(background[which]) || background[which].includes('..')) {
+			throw new Error(`brand.thankYou.background.${which} must be a .webp, .avif, .jpg or .png path in static/, starting with /`);
+		}
+	}
+	return background;
+}
+
+// The pictures and the shade laid over them, as custom properties: nothing is fetched until
+// the thank-you slide draws its backdrop. The shade is the paper colour, so the words, in ink,
+// read on it as they do on the paper.
+export function thanksBackdropCss(background: ThankYouBackground | null | undefined, p: Palette): string {
+	const checked = thankYouBackground(background);
+	if (checked === null) return '';
+	const shade = parseHex(p.paper, 'paper').join(' ');
+	return `:root{--thanks-phone:url("${checked.phone}");--thanks-projector:url("${checked.projector}");--thanks-shade:${shade}}`;
+}
+
 // The stylesheet sizes logos for 32px; a copy's height scales every size by the same ratio.
 export function logoCss(height: number): string {
 	if (!Number.isInteger(height) || height < 16 || height > 96) throw new Error('brand.logoHeight must be a whole number of px from 16 to 96');

@@ -23,8 +23,14 @@ export type Brand = {
 	 * The thank-you slide. `message` fills in the slide's text in the session
 	 * builder (the host can change it). `link`, if not null, is an https address
 	 * shown as a QR code on the projector, such as your website.
+	 *
+	 * `background`, if set, is a picture behind the slide: a tall one for phones and
+	 * a wide one for the projector, both files in `static/` as paths from the site's
+	 * root (.webp, .avif, .jpg or .png). It fills the screen, anchored at the bottom,
+	 * under a shade of your paper colour, and loads only on the thank-you slide. Check
+	 * the words stay readable on your picture. Leave it null (or out) for plain paper.
 	 */
-	thankYou: { message: string; link: string | null };
+	thankYou: { message: string; link: string | null; background?: { phone: string; projector: string } | null };
 	fonts: {
 		/** Body text: a CSS font-family list. */
 		body: string;
@@ -52,7 +58,7 @@ export const brand: Brand = {
 	},
 	logo: null,
 	logoHeight: 32,
-	thankYou: { message: 'Thank you for joining', link: null },
+	thankYou: { message: 'Thank you for joining', link: null, background: null },
 	fonts: {
 		body: SYSTEM_FONTS,
 		display: SYSTEM_FONTS,

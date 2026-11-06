@@ -2,11 +2,12 @@
 // (SPEC 26, A16), and whatever colours it sets stay readable.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { brand } from '../src/lib/brand.ts';
 import { MAX_PROMPT_CHARS } from '../src/lib/session-limits.ts';
-import { contrast, contrastChecks, fontCss, logoCss, palette, thankYouLink, themeCss } from '../src/lib/theme.ts';
+import { contrast, contrastChecks, fontCss, logoCss, palette, thankYouBackground, thankYouLink, thanksBackdropCss, themeCss } from '../src/lib/theme.ts';
 
 const SETTINGS = join('src', 'lib', 'brand.ts');
 
@@ -135,4 +136,37 @@ test('a dark page gets a light error red, and every pair on it still reads; a li
 test("themeCss tells the browser whether the page is dark, so its own controls (radio buttons, scrollbars) match", () => {
 	assert.ok(themeCss(palette({ accent: '#e8a87c', ink: '#f5f0f7', paper: '#2d214c' })).includes('color-scheme:dark'));
 	assert.ok(themeCss(palette({ accent: '#0e6f64', ink: '#17191c', paper: '#ffffff' })).includes('color-scheme:light'));
+});
+
+const NIGHT = palette({ accent: '#e8a87c', ink: '#f5f0f7', paper: '#2d214c' });
+const PICTURES = { phone: '/thanks/tall.webp', projector: '/thanks/wide.jpg' };
+
+test('thankYouBackground takes both pictures or none, each an image in static/', () => {
+	assert.equal(thankYouBackground(null), null);
+	assert.equal(thankYouBackground(undefined), null, 'a copy that predates the setting has no picture');
+	assert.deepEqual(thankYouBackground(PICTURES), PICTURES);
+	for (const type of ['webp', 'avif', 'jpg', 'jpeg', 'png']) assert.doesNotThrow(() => thankYouBackground({ ...PICTURES, phone: `/a.${type}` }), type);
+	const bad: [string, unknown, RegExp][] = [
+		['only the phone picture', { phone: '/a.webp' }, /both pictures/],
+		['only the projector picture', { projector: '/a.webp' }, /both pictures/],
+		['a picture that is not text', { phone: 5, projector: '/a.webp' }, /both pictures/],
+		['not a picture', { ...PICTURES, phone: '/a.svg' }, /background\.phone/],
+		['a page, not a picture', { ...PICTURES, projector: '/index.html' }, /background\.projector/],
+		['outside static', { ...PICTURES, phone: 'https://evil.example/a.webp' }, /background\.phone/],
+		['climbing out of static', { ...PICTURES, phone: '/../a.webp' }, /background\.phone/],
+		['a quote that would end the CSS', { ...PICTURES, projector: '/a").webp' }, /background\.projector/],
+	];
+	for (const [why, value, message] of bad) assert.throws(() => thankYouBackground(value as never), message, why);
+});
+
+test('thanksBackdropCss names both pictures and the shade from the paper colour, and nothing without pictures', () => {
+	assert.equal(thanksBackdropCss(null, NIGHT), '');
+	assert.equal(thanksBackdropCss(PICTURES, NIGHT), ':root{--thanks-phone:url("/thanks/tall.webp");--thanks-projector:url("/thanks/wide.jpg");--thanks-shade:45 33 76}');
+});
+
+test("this copy's thank-you pictures, if it has any, are files in static/", () => {
+	const background = thankYouBackground(brand.thankYou.background);
+	for (const path of background ? [background.phone, background.projector] : []) {
+		assert.ok(existsSync(join('static', path)), `brand.thankYou.background: ${path} is not in static/`);
+	}
 });
