@@ -7,6 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import type pg from 'pg';
 import { connectAsOwner } from '../../scripts/pg-connect.ts';
 import { activityBox, addHost, BASE, builderReady, signIn, startSession, statusValue } from './helpers.ts';
+import { MAX_ACTIVITIES } from '../../src/lib/session-limits.ts';
 
 const admin = createClient(process.env.SUPABASE_URL ?? '', process.env.SUPABASE_SECRET_KEY ?? '', {
 	auth: { persistSession: false, autoRefreshToken: false },
@@ -52,7 +53,7 @@ test('the summary beside the activity list follows what is typed', async ({ brow
 	const page = await hostPage(browser, 1440, 900, '/decks');
 	await builderReady(page);
 	const summary = summaryOf(page);
-	await expect(summary).toContainText('1 of 10 activities');
+	await expect(summary).toContainText(`1 of ${MAX_ACTIVITIES} activities`);
 	await expect(summary.getByRole('listitem')).toHaveCount(1);
 	await expect(summary).toContainText('1 · Word cloud');
 	await expect(summary).toContainText('No question yet');
@@ -67,13 +68,13 @@ test('the summary beside the activity list follows what is typed', async ({ brow
 	await expect(summary).toContainText('1 · Poll · 3 options');
 
 	await page.getByRole('button', { name: 'Add activity' }).click();
-	await expect(summary).toContainText('2 of 10 activities');
+	await expect(summary).toContainText(`2 of ${MAX_ACTIVITIES} activities`);
 	await expect(summary.getByRole('listitem')).toHaveCount(2);
 	await expect(summary).toContainText('2 · Word cloud');
 
 	await page.getByRole('button', { name: 'Remove activity 1' }).click();
 	await expect(summary.getByRole('listitem')).toHaveCount(1);
-	await expect(summary).toContainText('1 of 10 activities');
+	await expect(summary).toContainText(`1 of ${MAX_ACTIVITIES} activities`);
 	await expect(summary).not.toContainText('How was the week?');
 });
 

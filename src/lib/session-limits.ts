@@ -1,8 +1,8 @@
 // The shape of a session, shared by the /decks form and its server action.
-// The database repeats these limits in `start_session` (migrations 0014 and
-// 0019) and is the last word; a test starts a session at each edge to keep the
+// The database repeats these limits in `start_session` (migrations 0019 and
+// 0020) and is the last word; a test starts a session at each edge to keep the
 // two in step.
-export const MAX_ACTIVITIES = 10;
+export const MAX_ACTIVITIES = 40;
 export const MIN_OPTIONS = 2;
 export const MAX_OPTIONS = 6;
 export const MAX_PROMPT_CHARS = 140;

@@ -347,7 +347,8 @@ Owner decision. Amends ADR-007.
   (`MAX_ACTIVITIES` in `src/lib/session-limits.ts`, and `start_session` in
   migration 0014); a poll takes 2 to 6 separate options. The server action
   checks the shape itself. Ten is the builder session's choice; the owner can
-  change it in those two places.
+  change it in those two places. **Later (2026-11-06):** 40, so a long workshop
+  (the society's crash course) fits in one room code; owner's pick (migration 0020).
 - **The activity contract** now has a third activity. `defineActivity` is still
   not extracted; see the plan's Milestone 2 note on its two halves.
 
