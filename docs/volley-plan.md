@@ -447,7 +447,8 @@ Branch `claude/feedback-form-076bbc`. Migration 0019, checks A24 to A30. Each sl
   Done 2026-11-05 (f0673a3, 9374ee8): the 3 A24 tests failed with get_state's stripping taken out and passed
   with it back. A form sent while Show results is pressed was counted after the results went up; that test failed
   first, then passed once submit_answer holds the run for a feedback form.
-- [x] **F2. A host builds a feedback form on `/decks` and starts it.** Title, 1 to 8 questions, a scale each.
+- [x] **F2. A host builds a feedback form on `/decks` and starts it.** Title, 1 to 6 questions (was 8 until
+  2026-11-06), a scale each.
   Verify: `tests/session-form.test.ts` feedback cases; the browser test starts one.
 - [x] **F3. A phone rates every question on one screen and sends once**, then sees its own ratings.
   Verify: the browser test's phone steps; screenshots at 375px, light and dark.
@@ -459,6 +460,11 @@ Branch `claude/feedback-form-076bbc`. Migration 0019, checks A24 to A30. Each sl
   Done 2026-11-05: vibe-audit on a light and a dark brand (phone 375px, builder, control, projector 1920 and 1280);
   /code-review and the three-reviewer check, every finding checked against the code. Two calls left to the owner:
   a fresh cookie is a fresh participant, and a shown form can be reopened.
+- [x] **F7. Up to 6 questions, phone pages of up to 3 (2026-11-06).** 1–3 one page; 4–6 two (2+2, 3+2, 3+3) with
+  Next once a page is rated, Back that keeps the ratings, Send on the last page; projector all at once.
+  Verify: `tests/db-feedback.test.ts` A27 (6 accepted, 7 refused), `tests/feedback.test.ts` formPages, and the
+  5-question browser test in `tests/e2e/feedback.spec.ts`. Done: A27 failed before 0019 was re-applied with the new
+  cap and passed after; the browser test failed with Next's every-question rule removed and passed with it back.
 
 ## Found along the way
 

@@ -728,8 +728,13 @@ which listed scales as out of scope.
 
 **The owner's decisions (2026-11-05):**
 
-- **One screen, sent once.** One activity, type `feedback`, holds 1 to 8 rating questions; a phone shows them all
-  with one Send button.
+- **Sent once, up to 3 questions a screen.** One activity, type `feedback`, holds 1 to 6 rating questions (the
+  owner, 2026-11-06, was 1 to 8: "support up to 6 questions, 3 questions max per screen from participant, with a
+  next and back button"). A phone shows 1 to 3 on one screen; 4 to 6 on two pages as even as can be, the longer
+  first (2+2, 3+2, 3+3, `formPages` in `src/lib/feedback.ts`). Next waits until every question on its page is
+  rated, Back keeps the ratings, and Send is on the last page only. The server still gets the whole form once.
+  Unsent ratings live in memory only, like any unsent answer, so a reload starts the form again. The projector
+  shows all the questions at once: 1 to 3 in a row, 4 to 6 in two rows.
 - **Results stay hidden until the host shows them.** While it runs, the projector shows the form's title, its
   questions and how many people have answered. The host sees the results live on the control page and in the
   CSV, and presses Show results to put them on the projector.

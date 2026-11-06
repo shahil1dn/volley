@@ -63,11 +63,13 @@ own copy by telling an AI agent to follow `AGENTS.md`.
     `brand.thankYou.message` and editable. Nothing is answered on it, so it
     cannot be a session's first activity. Phones show the message; the
     projector shows it large, with `brand.thankYou.link` as a QR code if set.
-7c. Feedback form (ADR-018): a title of 1–140 characters and 1–8 rating
+7c. Feedback form (ADR-018): a title of 1–140 characters and 1–6 rating
     questions of 1–80 characters, each with its own scale: 1–5 stars, 1–10, or
-    Very bad to Very good. A phone rates every question on one screen and sends
-    once; nothing can be sent half done or changed afterwards, and there is no
-    comment box. While it runs, the projector shows the title, the questions and
+    Very bad to Very good. A phone shows up to 3 questions at a time: a form of
+    4–6 is two pages (2+2, 3+2, 3+3) with Next, once that page is rated, and Back,
+    which keeps the ratings. It sends the whole form once, from the last page;
+    nothing can be sent half done or changed afterwards, and there is no comment
+    box. While it runs, the projector shows the title, all the questions at once and
     how many have answered; the results stay out of the shared state until the
     host presses Show results. Then the projector shows each question's average
     (one decimal) and the count for each point. The host sees the results live on
@@ -190,10 +192,10 @@ Each check fails if the behaviour is missing.
 | A24 | DB test: a feedback form's shared state carries no rating counts before Show and does after; the number of forms sent is in it throughout. Shown to fail with the stripping removed. |
 | A25 | DB test: `submit_answer` refuses a form with a question missing, an extra question, a rating outside its scale (0; 6 on stars; 11 on 1–10), a rating that isn't a whole number, and a partly filled form. |
 | A26 | DB test: a participant's second form is refused; the same submit id sent twice stores one form and gets the same answer; 10 concurrent sends from one participant store exactly one. |
-| A27 | DB test: `start_session` accepts a form of 1 and of 8 questions, and refuses 0, 9, an unknown scale, and an empty or 81-character question. |
+| A27 | DB test: `start_session` accepts a form of 1 and of 6 questions, and refuses 0, 7, an unknown scale, and an empty or 81-character question. |
 | A28 | Unit test: each question's counts and its average to one decimal match numbers worked out by hand. |
 | A29 | Retention: the purge removes a feedback form's answers, tallies and quotas with its run. |
-| A30 | Browser test: 3 phones rate; the projector shows how many answered, then the results within 3s of Show results. |
+| A30 | Browser test: 3 phones rate; the projector shows how many answered, then the results within 3s of Show results. A 5-question form is two phone pages, 3 then 2: Next waits for its page, Back keeps the ratings, Send is on the last page (shown to fail with the Next rule removed). |
 
 ## Must verify before the slice that needs it
 
