@@ -296,9 +296,9 @@
 		</section>
 	{:else if accepting && isFeedback && mine.left > 0}
 		<h1 id="form-title">{prompt}</h1>
-		<p class="hint">Rate each one, then send. You can send it once.</p>
+		<p class="hint">Rate each one{pages.length > 1 ? ', page by page,' : ','} then send. You can send it once.</p>
 		<form class="stack" aria-labelledby="form-title" onsubmit={rate}>
-			{#if pages.length > 1}<p class="hint form-progress" bind:this={formTop}><span class="visually-hidden">Page</span> {formPage + 1} of {pages.length}</p>{/if}
+			{#if pages.length > 1}<p class="hint form-progress" aria-live="polite" bind:this={formTop}><span class="visually-hidden">Page</span> {formPage + 1} of {pages.length}</p>{/if}
 			{#each pageQuestions as question, i (pageRange[0] + i)}
 				{@const q = pageRange[0] + i}
 				<fieldset class="rating">
@@ -329,7 +329,7 @@
 				</fieldset>
 			{/each}
 			<div class="form-nav">
-				{#if formPage > 0}<button type="button" class="btn btn--quiet" onclick={() => turnPage(formPage - 1)}>Back</button>{/if}
+				{#if formPage > 0}<button type="button" class="btn btn--quiet" disabled={busy} onclick={() => turnPage(formPage - 1)}>Back</button>{/if}
 				{#if onLastPage}
 					<button class="btn" disabled={busy || unrated > 0}>{busy ? 'Sending…' : 'Send'}</button>
 				{:else}

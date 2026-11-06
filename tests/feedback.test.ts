@@ -76,8 +76,10 @@ test('formPages: 1 to 3 questions are one phone page; 4 to 6 are two, the longer
 	assert.deepEqual(formPages(4), [[0, 2], [2, 4]]);
 	assert.deepEqual(formPages(5), [[0, 3], [3, 5]]);
 	assert.deepEqual(formPages(6), [[0, 3], [3, 6]]);
+	// Past the cap (a form saved before it was 6), still no page holds more than 3.
+	assert.deepEqual(formPages(7), [[0, 3], [3, 5], [5, 7]]);
 	// No page ever holds more than 3, and together they hold every question once, in order.
-	for (let n = 1; n <= 6; n++) {
+	for (let n = 1; n <= 9; n++) {
 		const pages = formPages(n);
 		assert.ok(pages.every(([from, to]) => to - from >= 1 && to - from <= 3), `${n}: 1 to 3 a page`);
 		assert.deepEqual(pages.flatMap(([from, to]) => Array.from({ length: to - from }, (_, i) => from + i)), Array.from({ length: n }, (_, i) => i));

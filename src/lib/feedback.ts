@@ -39,13 +39,21 @@ export function formQuestions(settings: unknown): FeedbackQuestion[] {
 const PER_PAGE = 3;
 
 /**
- * A form split into phone pages, each as [first, end) question numbers. Up to 3 questions are
- * one page; 4 to 6 are two pages as even as can be, the longer first: 2+2, 3+2, 3+3.
+ * A form split into phone pages, each as [first, end) question numbers: as few pages as hold
+ * at most 3 each, as even as can be, the longer first. Up to 3 is one page; 4 to 6 are two
+ * (2+2, 3+2, 3+3).
  */
 export function formPages(count: number): [number, number][] {
-	if (count <= PER_PAGE) return [[0, count]];
-	const first = Math.ceil(count / 2);
-	return [[0, first], [first, count]];
+	const pageCount = Math.max(1, Math.ceil(count / PER_PAGE));
+	const size = Math.floor(count / pageCount);
+	const longer = count % pageCount;
+	const pages: [number, number][] = [];
+	for (let page = 0, from = 0; page < pageCount; page++) {
+		const to = from + size + (page < longer ? 1 : 0);
+		pages.push([from, to]);
+		from = to;
+	}
+	return pages;
 }
 
 export type QuestionResult = FeedbackQuestion & {
