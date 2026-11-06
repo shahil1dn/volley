@@ -27,8 +27,9 @@ export type Brand = {
 	 * `background`, if set, is a picture behind the slide: a tall one for phones and
 	 * a wide one for the projector, both files in `static/` as paths from the site's
 	 * root (.webp, .avif, .jpg or .png). It fills the screen, anchored at the bottom,
-	 * under a shade of your paper colour, and loads only on the thank-you slide. Check
-	 * the words stay readable on your picture. Leave it null (or out) for plain paper.
+	 * under a shade of your paper colour pushed away from your ink, and loads only on the
+	 * thank-you slide. Check the words stay readable on your picture. Leave it null (or
+	 * out) for plain paper.
 	 */
 	thankYou: { message: string; link: string | null; background?: { phone: string; projector: string } | null };
 	fonts: {

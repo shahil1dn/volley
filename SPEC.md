@@ -61,8 +61,12 @@ own copy by telling an AI agent to follow `AGENTS.md`.
     answered questions leave the main list.
 7b. Thank-you slide (ADR-017): a message of 1–140 characters, filled in from
     `brand.thankYou.message` and editable. Nothing is answered on it, so it
-    cannot be a session's first activity. Phones show the message; the
-    projector shows it large, with `brand.thankYou.link` as a QR code if set.
+    cannot be a session's first activity. Phones show the message and "You can
+    close this page now." in the middle of the screen; the projector shows it
+    large, with `brand.thankYou.link` as a QR code if set, and in the middle of
+    the whole screen if not. `brand.thankYou.background`, if set, puts a tall
+    picture behind phones and a wide one behind the projector, under a shade,
+    on this slide only.
 7c. Feedback form (ADR-018): a title of 1–140 characters and 1–6 rating
     questions of 1–80 characters, each with its own scale: 1–5 stars, 1–10, or
     Very bad to Very good. A phone shows up to 3 questions at a time: a form of

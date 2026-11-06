@@ -97,7 +97,8 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 .phone .phone-slide__message { font-size: clamp(36px, 11vw, 48px); line-height: 1.1; margin: 0; }
 .phone-slide__hint { margin: 0; }
 /* The thank-you picture, when the copy has one (brand.thankYou.background), behind the whole
-   screen under a shade of the paper colour, strongest at the top where the words are. */
+   screen under a shade of the paper colour pushed away from the ink (thanksBackdropCss),
+   strongest at the top where the words are. */
 .thanks-backdrop {
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background:

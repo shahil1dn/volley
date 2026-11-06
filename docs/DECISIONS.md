@@ -721,6 +721,27 @@ The owner asked for an optional closing slide: a warm thank-you, and for the soc
   with a thank-you slide could never start. The form says so beside the type, and `start_session` refuses it.
 - The projector hides the join panel on the slide: people are leaving, not joining.
 
+**Amendment (2026-11-06): an optional picture behind the slide, and its words in the middle.** The society
+wanted its website's night sky behind the slide on phones and the projector.
+
+- **`brand.thankYou.background`** is `{ phone, projector }`: a tall and a wide picture in `static/` (.webp,
+  .avif, .jpg or .png), both or neither. Null or left out means plain paper, so older copies need no edit. The
+  brand tests refuse a half-set pair, a file that isn't a picture, and a file missing from `static/`.
+- **It is fetched only on the slide.** The paths go into CSS custom properties, and the one element that uses
+  them is drawn only on the thank-you slide, so no other screen asks for the picture.
+- **A shade sits between the picture and the words**: the approved mockup's gradient, strongest at the top,
+  in the paper colour pushed 55% of the way to black on a dark page (to white on a light one). On the
+  night-sea look that lands next to the mockup's #1a0e26; the paper colour itself left a star behind the
+  projector's room label below AA.
+- **Over the picture**, the muted grey (checked only against flat paper) becomes the ink colour, and the
+  header's words carry a soft shadow of the shade, so a star behind small words can't take them below AA.
+  Checked against the worst pixel behind each line at 375, 390, 1280 and 1920 with the society's pictures. A
+  different picture can put something bright behind small words at another size, so a copy that sets one
+  checks its own.
+- **Phones**, on every copy, show the message and "You can close this page now." in the middle of the whole
+  screen, across and down, with no accent line (owner, 2026-11-06). **The projector**, with no link, centres
+  the message on the whole screen rather than in the space under the header.
+
 ## ADR-018: A feedback form is one activity of rating questions, its results hidden until the host shows them (2026-11-05)
 
 The owner asked for a feedback form: a few ratings people give at the end of a talk. This changes SPEC's scope,
