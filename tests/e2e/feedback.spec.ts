@@ -154,3 +154,73 @@ test('A30: phones rate a feedback form; the projector shows the count, then the 
 	await Promise.all([...phones, late, projector].map((page) => page.context().close()));
 	await laptop.close();
 });
+
+// A form of 4 to 6 questions is two phone pages (ADR-018): 5 is 3 then 2.
+const FIVE = [
+	{ text: 'The talk', scale: 'Stars, 1 to 5', rating: '4 stars' },
+	{ text: 'The slides', scale: '1 to 10', rating: '8 out of 10' },
+	{ text: 'The room', scale: 'Very bad to Very good', rating: 'Good' },
+	{ text: 'The food', scale: 'Stars, 1 to 5', rating: '3 stars' },
+	{ text: 'Would you come again?', scale: '1 to 10', rating: '9 out of 10' },
+];
+
+test('a 5-question form is two phone pages, 3 then 2: Next waits for its page, Back keeps the ratings, Send is on the last page', async ({ browser }) => {
+	const laptop = await browser.newContext({ baseURL: BASE, viewport: { width: 1280, height: 900 } });
+	const control = await laptop.newPage();
+	await signIn(control, hostEmail, hostPassword);
+	await control.waitForURL('**/decks');
+	await builderReady(control);
+	const box = activityBox(control, 1);
+	await box.getByLabel('Type', { exact: true }).selectOption({ label: 'Feedback form' });
+	await box.getByLabel('Title', { exact: true }).fill('Rate the day');
+	for (const [j, { text, scale }] of FIVE.entries()) {
+		if (j > 0) await box.getByRole('button', { name: 'Add question' }).click();
+		await box.getByLabel(`Question ${j + 1}`, { exact: true }).fill(text);
+		await box.getByLabel(`Scale for question ${j + 1}`, { exact: true }).selectOption({ label: scale });
+	}
+	await control.getByRole('button', { name: 'Start session' }).click();
+	await control.waitForURL(/\/run\/[A-Z0-9]{5}\/control$/);
+	const code = /\/run\/([A-Z0-9]{5})\/control$/.exec(control.url())?.[1] ?? '';
+	await control.getByRole('button', { name: 'Open answers' }).click();
+
+	const phone = await newPhone(browser);
+	await phone.goto(`/j/${code}`);
+	await expect(phone.getByRole('heading', { name: 'Rate the day' })).toBeVisible();
+	await expect(phone.getByText('1 of 2')).toBeVisible();
+	// Page 1 is the first three questions, with Next and no Send.
+	for (const q of FIVE.slice(0, 3)) await expect(question(phone, q.text)).toBeVisible();
+	for (const q of FIVE.slice(3)) await expect(question(phone, q.text)).toHaveCount(0);
+	await expect(phone.getByRole('button', { name: 'Send' })).toHaveCount(0);
+	const next = phone.getByRole('button', { name: 'Next' });
+	for (const q of FIVE.slice(0, 3)) {
+		await expect(next).toBeDisabled();
+		await rate(phone, q.text, q.rating);
+	}
+	await expect(next).toBeEnabled();
+	await next.click();
+
+	// Page 2 is the last two, and the keyboard is on its first question.
+	await expect(phone.getByText('2 of 2')).toBeVisible();
+	for (const q of FIVE.slice(0, 3)) await expect(question(phone, q.text)).toHaveCount(0);
+	await expect(question(phone, FIVE[3].text).getByRole('radio').first()).toBeFocused();
+	// Back keeps what was chosen on page 1, and lands on the first question's choice.
+	await phone.getByRole('button', { name: 'Back' }).click();
+	for (const q of FIVE.slice(0, 3)) await expect(question(phone, q.text).getByRole('radio', { name: q.rating, exact: true })).toBeChecked();
+	await expect(question(phone, FIVE[0].text).getByRole('radio', { name: FIVE[0].rating, exact: true })).toBeFocused();
+	await next.click();
+	const send = phone.getByRole('button', { name: 'Send' });
+	for (const q of FIVE.slice(3)) {
+		await expect(send).toBeDisabled();
+		await rate(phone, q.text, q.rating);
+	}
+	await send.click();
+	await expect(phone.getByRole('heading', { name: 'Thanks for your feedback' })).toBeVisible();
+	for (const q of FIVE) await expect(phone.getByRole('listitem').filter({ hasText: q.text })).toContainText(q.rating);
+
+	// The host has the whole form, sent once: all five questions counted.
+	await expect(control.getByText('1 person has answered.')).toBeVisible();
+	for (const q of FIVE) await expect(control.getByRole('table', { name: q.text })).toContainText('from 1');
+
+	await phone.context().close();
+	await laptop.close();
+});

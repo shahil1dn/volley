@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { page } from '$app/state';
 	import { normaliseWord } from '$lib/words';
-	import { formQuestions, ratingLabel, SCALES } from '$lib/feedback';
+	import { formPages, formQuestions, ratingLabel, SCALES } from '$lib/feedback';
 	import Brand from '$lib/Brand.svelte';
 	import { brand } from '$lib/brand';
 	import {
@@ -69,17 +69,28 @@
 	const mine = $derived(sent[position] ?? { words: [], left: allowed });
 	const accepting = $derived(room?.status === 'live' && room.itemState === 'open' && (item?.type === 'word_cloud' || isPoll || isQna || isFeedback));
 
-	// A feedback form's ratings so far, one per question (null: not rated yet). Started
-	// afresh only when the activity or its number of questions changes, not on every poll.
+	// A feedback form's ratings so far, one per question (null: not rated yet), and the phone
+	// page it is on. Started afresh only when the activity or its number of questions changes,
+	// not on every poll. Kept in memory only, like any answer not yet sent: a reload starts again.
 	let ratings = $state<(number | null)[]>([]);
+	let formPage = $state(0);
 	let ratingsFor: number | null = null;
 	$effect(() => {
 		if (ratingsFor === position && ratings.length === formItems.length) return;
 		ratingsFor = position;
 		ratings = formItems.map(() => null);
+		formPage = 0;
 	});
 	// Counted against the questions, not the list, so it is never 0 before the list is made.
 	const unrated = $derived(formItems.filter((_, q) => ratings[q] == null).length);
+	// Up to 3 questions a page (ADR-018). Next waits for every question on its page, as Send
+	// waits for every question on the form.
+	const pages = $derived(formPages(formItems.length));
+	const pageRange = $derived(pages[formPage] ?? [0, 0]);
+	const pageQuestions = $derived(formItems.slice(pageRange[0], pageRange[1]));
+	const pageUnrated = $derived(pageQuestions.filter((_, i) => ratings[pageRange[0] + i] == null).length);
+	const onLastPage = $derived(formPage >= pages.length - 1);
+	let formTop = $state<HTMLElement>();
 
 	async function poll() {
 		try {
@@ -216,11 +227,21 @@
 		await deliver(choice, [options[Number(choice)] ?? '']);
 	}
 
+	// Another page of the form: its top in view, and the keyboard on its first question
+	// (on the point already chosen, if there is one), as a tab into the group would land.
+	async function turnPage(to: number) {
+		formPage = to;
+		await tick();
+		formTop?.scrollIntoView({ block: 'start' });
+		const first = formTop?.parentElement?.querySelector('fieldset');
+		(first?.querySelector<HTMLInputElement>('input:checked') ?? first?.querySelector<HTMLInputElement>('input'))?.focus({ preventScroll: true });
+	}
+
 	// The whole form at once, as the list of ratings in question order. What the
 	// phone keeps is the ratings themselves, so it can show them back.
 	async function rate(event: SubmitEvent) {
 		event.preventDefault();
-		if (busy || unrated > 0) return;
+		if (busy || unrated > 0 || !onLastPage) return;
 		const form = formItems.map((_, q) => ratings[q]);
 		await deliver(JSON.stringify(form), form.map(String));
 	}
@@ -277,7 +298,9 @@
 		<h1 id="form-title">{prompt}</h1>
 		<p class="hint">Rate each one, then send. You can send it once.</p>
 		<form class="stack" aria-labelledby="form-title" onsubmit={rate}>
-			{#each formItems as question, q (q)}
+			{#if pages.length > 1}<p class="hint form-progress" bind:this={formTop}><span class="visually-hidden">Page</span> {formPage + 1} of {pages.length}</p>{/if}
+			{#each pageQuestions as question, i (pageRange[0] + i)}
+				{@const q = pageRange[0] + i}
 				<fieldset class="rating">
 					<legend class="rating__question">{question.text}</legend>
 					<div class="rating__scale rating__scale--{question.scale}">
@@ -305,9 +328,20 @@
 					{#if question.scale === 'stars'}<p class="rating__chosen" aria-hidden="true">{ratings[q] ? ratingLabel('stars', ratings[q]) : 'Not rated yet'}</p>{/if}
 				</fieldset>
 			{/each}
-			<button class="btn btn--block" disabled={busy || unrated > 0}>{busy ? 'Sending…' : 'Send'}</button>
+			<div class="form-nav">
+				{#if formPage > 0}<button type="button" class="btn btn--quiet" onclick={() => turnPage(formPage - 1)}>Back</button>{/if}
+				{#if onLastPage}
+					<button class="btn" disabled={busy || unrated > 0}>{busy ? 'Sending…' : 'Send'}</button>
+				{:else}
+					<button type="button" class="btn" disabled={pageUnrated > 0} onclick={() => turnPage(formPage + 1)}>Next</button>
+				{/if}
+			</div>
 			<!-- Always on the page, so a screen reader hears it change, including when the form is ready. -->
-			<p class="hint" aria-live="polite">{unrated > 0 ? `Rate every question to send. ${unrated} to go.` : 'Ready to send.'}</p>
+			<p class="hint" aria-live="polite">
+				{onLastPage
+					? unrated > 0 ? `Rate every question to send. ${unrated} to go.` : 'Ready to send.'
+					: pageUnrated > 0 ? `Rate these to go on. ${pageUnrated} to go.` : 'Ready for the next page.'}
+			</p>
 			{#if notice}<p class="error" role="alert">{notice}</p>{/if}
 		</form>
 	{:else if accepting && isFeedback}

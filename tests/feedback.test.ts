@@ -2,7 +2,7 @@
 // average to one decimal, checked against numbers worked out by hand.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { feedbackResults, formatAverage, formQuestions, ratingLabel, type FeedbackQuestion } from '../src/lib/feedback.ts';
+import { feedbackResults, formatAverage, formPages, formQuestions, ratingLabel, type FeedbackQuestion } from '../src/lib/feedback.ts';
 
 const QUESTIONS: FeedbackQuestion[] = [
 	{ text: 'The talk', scale: 'stars' },
@@ -68,4 +68,18 @@ test('formQuestions keeps only questions with text and a known scale', () => {
 	assert.deepEqual(formQuestions({ questions: [{ text: 'Proto', scale: 'toString' }] }), [], 'an inherited name is not a scale');
 	assert.deepEqual(formQuestions(null), []);
 	assert.deepEqual(formQuestions({ questions: 'no' }), []);
+});
+
+test('formPages: 1 to 3 questions are one phone page; 4 to 6 are two, the longer first, in order', () => {
+	assert.deepEqual(formPages(1), [[0, 1]]);
+	assert.deepEqual(formPages(3), [[0, 3]]);
+	assert.deepEqual(formPages(4), [[0, 2], [2, 4]]);
+	assert.deepEqual(formPages(5), [[0, 3], [3, 5]]);
+	assert.deepEqual(formPages(6), [[0, 3], [3, 6]]);
+	// No page ever holds more than 3, and together they hold every question once, in order.
+	for (let n = 1; n <= 6; n++) {
+		const pages = formPages(n);
+		assert.ok(pages.every(([from, to]) => to - from >= 1 && to - from <= 3), `${n}: 1 to 3 a page`);
+		assert.deepEqual(pages.flatMap(([from, to]) => Array.from({ length: to - from }, (_, i) => from + i)), Array.from({ length: n }, (_, i) => i));
+	}
 });

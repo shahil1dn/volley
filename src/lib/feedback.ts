@@ -35,6 +35,19 @@ export function formQuestions(settings: unknown): FeedbackQuestion[] {
 	return questions.flatMap((q) => (typeof q?.text === 'string' && isScale(q?.scale) ? [{ text: q.text, scale: q.scale }] : []));
 }
 
+// A phone shows at most this many questions at a time; the projector shows them all.
+const PER_PAGE = 3;
+
+/**
+ * A form split into phone pages, each as [first, end) question numbers. Up to 3 questions are
+ * one page; 4 to 6 are two pages as even as can be, the longer first: 2+2, 3+2, 3+3.
+ */
+export function formPages(count: number): [number, number][] {
+	if (count <= PER_PAGE) return [[0, count]];
+	const first = Math.ceil(count / 2);
+	return [[0, first], [first, count]];
+}
+
 export type QuestionResult = FeedbackQuestion & {
 	/** How many gave each rating: `counts[0]` is a 1. */
 	counts: number[];

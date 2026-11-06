@@ -231,6 +231,12 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 .rating__star { width: 40px; height: 40px; fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-linejoin: round; }
 .rating__point--lit .rating__star { fill: var(--accent); stroke: var(--accent); }
 .rating__chosen { font-size: 14px; color: var(--muted); }
+/* A form of 4 to 6 questions on two pages: Back beside the main button, which takes the rest
+   of the row. On a form of one page the main button is the whole row. */
+.form-nav { display: flex; gap: 8px; }
+.form-nav .btn { flex: 1 1 auto; }
+.form-nav .btn--quiet { flex: 0 0 auto; }
+.form-progress { margin: 0; scroll-margin-top: 16px; }
 /* After sending: what this phone sent, question by question. */
 .phone-thanks .sent-form__title { margin: 16px 0 0; }
 .sent-form { list-style: none; margin: 0; padding: 0; display: grid; }
