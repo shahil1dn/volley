@@ -131,12 +131,14 @@ export function thankYouBackground(background: ThankYouBackground | null | undef
 }
 
 // The pictures and the shade laid over them, as custom properties: nothing is fetched until
-// the thank-you slide draws its backdrop. The shade is the paper colour, so the words, in ink,
-// read on it as they do on the paper.
+// the thank-you slide draws its backdrop. The shade is the paper colour pushed away from the
+// ink (darker on a dark page, lighter on a light one), so the words, in ink, read on it better
+// than on the paper itself; a bright patch of picture is what it has to beat.
 export function thanksBackdropCss(background: ThankYouBackground | null | undefined, p: Palette): string {
 	const checked = thankYouBackground(background);
 	if (checked === null) return '';
-	const shade = parseHex(p.paper, 'paper').join(' ');
+	const away: Rgb = luminance(p.ink) > luminance(p.paper) ? [0, 0, 0] : [255, 255, 255];
+	const shade = parseHex(mix(parseHex(p.paper, 'paper'), away, 0.55), 'paper').join(' ');
 	return `:root{--thanks-phone:url("${checked.phone}");--thanks-projector:url("${checked.projector}");--thanks-shade:${shade}}`;
 }
 
