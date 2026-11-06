@@ -40,6 +40,9 @@
 	// Up to 6 questions, all at once, on a screen that can't scroll. Up to 3 sit in one row,
 	// so each chart gets the full height; 4 to 6 go in two rows: 2x2 or 3x2.
 	const resultColumns = $derived(formItems.length <= 3 ? Math.max(1, formItems.length) : Math.ceil(formItems.length / 2));
+	// Two rows of charts under the full join box get bars too short to show a shape, so once their
+	// results are up the box shrinks to the address and the code: people may still join for later.
+	const twoRows = $derived(results !== null && formItems.length > 3);
 	// The projector shows one question at a time, chosen by the host; phones see the whole list.
 	const shown = $derived(room?.shown ?? null);
 	const waiting = $derived(room?.waiting ?? 0);
@@ -139,9 +142,9 @@
 	<title>Room {data.code} · {brand.name}</title>
 </svelte:head>
 
-<main class="host">
+<main class="host" class:host--two-rows={twoRows}>
 	<header class="host__top">
-		<div>
+		<div class="host__lead">
 			<div class="host__meta"><Brand /><p class="label">Room {data.code}{room?.hostName ? ` · ${room.hostName} hosting` : ''}{note ? ` · ${note}` : ''}</p></div>
 			{#if !isThanks}<h1 class="host__question" class:host__question--form={isFeedback}>{missing ? "We can't find that room" : prompt}</h1>{/if}
 		</div>
@@ -153,7 +156,7 @@
 		{:else if !missing && !isThanks}
 			<div class="host__join">
 				<div class="host__qr" role="img" aria-label="QR code to join at {data.joinUrl}">{@html data.qrSvg}</div>
-				<div>
+				<div class="host__joinInfo">
 					<p class="host__joinText">Scan, or go to</p>
 					<p class="host__url">{data.joinUrl.replace(/^https?:\/\//, '')}</p>
 					<p class="host__code">{data.code}</p>

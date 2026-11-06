@@ -207,6 +207,20 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 .host__join--ended { display: grid; gap: 4px; }
 .host__ended { font-size: clamp(28px, 3.6vw, 68px); font-weight: 700; color: var(--ink); line-height: 1.1; }
 .host__count { font-size: clamp(16px, 1.9vw, 34px); color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
+/* A form's results in two rows (4 to 6 questions): the join box drops its QR code and sits on the
+   room's line as the address and the code, and the title runs the full width under it, smaller. */
+.host--two-rows { padding: clamp(12px, 2vw, 32px); gap: clamp(12px, 1.2vw, 24px); }
+.host--two-rows .host__top { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "meta join" "title title"; align-items: center; row-gap: 0; }
+.host--two-rows .host__lead { display: contents; }
+.host--two-rows .host__meta { grid-area: meta; }
+.host--two-rows .host__question { grid-area: title; }
+.host--two-rows .host__question--form { font-size: clamp(20px, 2.2vw, 44px); }
+.host--two-rows .host__join { grid-area: join; padding: clamp(6px, 0.6vw, 12px) clamp(12px, 1.2vw, 20px); }
+.host--two-rows .host__qr, .host--two-rows .host__joinText, .host--two-rows .host__count { display: none; }
+.host--two-rows .host__joinInfo { display: flex; align-items: baseline; gap: clamp(12px, 1.2vw, 24px); }
+.host--two-rows .host__code { font-size: clamp(24px, 2.6vw, 48px); margin: 0; }
+.host--two-rows .host__ended { font-size: clamp(20px, 2vw, 36px); }
+@media (max-width: 720px) { .host--two-rows .host__top { grid-template-columns: minmax(0, 1fr); grid-template-areas: "meta" "join" "title"; } }
 
 .cloud {
   min-height: 0; overflow: hidden;
@@ -312,6 +326,11 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 .form-result__track { width: 100%; min-height: 12px; display: flex; align-items: flex-end; background: var(--line); border-radius: 6px; overflow: hidden; }
 .form-result__fill { display: block; width: 100%; background: var(--accent); border-radius: 6px; transition: height 400ms ease; }
 .form-result__point { font-size: calc(var(--fit, 1) * clamp(11px, 1vw, 20px)); line-height: 1.15; color: var(--muted); text-align: center; overflow-wrap: anywhere; }
+/* Two rows of charts share the height, so each block's question, average and spacing are smaller
+   and the bars keep the rest. */
+.host--two-rows .form-result { row-gap: clamp(4px, 0.6vh, 8px); padding-top: clamp(6px, 1vh, 12px); margin-bottom: clamp(12px, 2vh, 24px); }
+.host--two-rows .form-result__question { font-size: calc(var(--fit, 1) * clamp(16px, 1.5vw, 30px)); }
+.host--two-rows .form-result__average { font-size: calc(var(--fit, 1) * clamp(28px, 2.9vw, 56px)); }
 
 /* Q&A on the phone: each question with its votes and an upvote toggle. */
 .questions { list-style: none; margin: 0; padding: 0; display: grid; }
