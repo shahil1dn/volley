@@ -283,7 +283,7 @@
 		<ThanksBackdrop picture="phone" />
 		<section class="phone-slide">
 			<h1 class="phone-slide__message">{prompt}</h1>
-			<p class="phone-slide__hint">You can close this page now.</p>
+			<p class="hint phone-slide__hint">You can close this page now.</p>
 		</section>
 	{:else if isFeedback && mine.words.length > 0}
 		<!-- Shown whatever the host does next with this form: what this phone sent, never the room's results. -->
