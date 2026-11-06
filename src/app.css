@@ -109,6 +109,11 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 /* The muted grey is checked only against flat paper (contrastChecks), so over the picture
    the quieter words, such as the room label, take the ink colour. */
 .phone:has(.thanks-backdrop), .host:has(.thanks-backdrop) { --muted: var(--ink); }
+/* Small words over a starry picture can land on a star at some window size, so the header's
+   words carry a soft shadow of the shade colour that darkens only the pixels round each letter. */
+.phone:has(.thanks-backdrop) .masthead, .host:has(.thanks-backdrop) .host__top {
+  text-shadow: 0 0 3px rgb(var(--thanks-shade)), 0 0 8px rgb(var(--thanks-shade)), 0 0 16px rgb(var(--thanks-shade));
+}
 /* What this phone has sent, straight under the question. */
 .sent { color: var(--ink); font-size: 16px; }
 .sent strong { font-weight: 600; }
