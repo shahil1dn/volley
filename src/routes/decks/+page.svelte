@@ -337,7 +337,7 @@
 		</ol>
 		<div class="adder adder--ruled">
 			<button type="button" class="btn btn--quiet" id="add-activity" disabled={!ready || rows.length >= MAX_ACTIVITIES} onclick={addRow}>Add activity</button>
-			<p class="hint">{rows.length} of {MAX_ACTIVITIES}{#if rows.length >= MAX_ACTIVITIES} · that's the most a session can hold{/if}</p>
+			<p class="hint">{rows.length} of {MAX_ACTIVITIES}{#if rows.length >= MAX_ACTIVITIES}{" · that's the most a session can hold"}{/if}</p>
 		</div>
 		</div>
 		<!-- Beside the list from 960px, under it on a phone. It repeats what was typed, so the
