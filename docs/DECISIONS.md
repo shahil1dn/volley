@@ -756,7 +756,12 @@ which listed scales as out of scope.
   first (2+2, 3+2, 3+3, `formPages` in `src/lib/feedback.ts`). Next waits until every question on its page is
   rated, Back keeps the ratings, and Send is on the last page only. The server still gets the whole form once.
   Unsent ratings live in memory only, like any unsent answer, so a reload starts the form again. The projector
-  shows all the questions at once: 1 to 3 in a row, 4 to 6 in two rows.
+  shows all the questions at once: 1 to 3 in a row, 4 to 6 in two rows. Once the results of a form of 4 to 6
+  are up, the join box drops its QR code and shrinks to the address and the room code on the room's line, and the
+  title runs the full width under it, smaller (owner, 2026-11-06: the bars were about 20px tall, so a 1 and a 3
+  looked the same). People can still join for a later activity by the address or the code. A form of 1 to 3
+  keeps the full join box. The longest form (6 questions, a 140-character title, an 80-character question) must
+  keep every bar track at least 120px tall at 1920x1080 and 80px at 1280x720 (`tests/e2e/form-results.spec.ts`).
 - **Results stay hidden until the host shows them.** While it runs, the projector shows the form's title, its
   questions and how many people have answered. The host sees the results live on the control page and in the
   CSV, and presses Show results to put them on the projector.

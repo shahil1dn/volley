@@ -76,7 +76,8 @@ own copy by telling an AI agent to follow `AGENTS.md`.
     box. While it runs, the projector shows the title, all the questions at once and
     how many have answered; the results stay out of the shared state until the
     host presses Show results. Then the projector shows each question's average
-    (one decimal) and the count for each point. The host sees the results live on
+    (one decimal) and the count for each point; for 4–6 questions the join box
+    shrinks to the address and the room code, so the bars keep the height. The host sees the results live on
     the control page and in the CSV. It can be a session's first activity.
 8. **Out of scope for the first release (ADR-007):** the timed quiz, with its
    scheduled start, server-clock countdown, speed bands, nickname leaderboard
@@ -199,7 +200,7 @@ Each check fails if the behaviour is missing.
 | A27 | DB test: `start_session` accepts a form of 1 and of 6 questions, and refuses 0, 7, an unknown scale, and an empty or 81-character question. |
 | A28 | Unit test: each question's counts and its average to one decimal match numbers worked out by hand. |
 | A29 | Retention: the purge removes a feedback form's answers, tallies and quotas with its run. |
-| A30 | Browser test: 3 phones rate; the projector shows how many answered, then the results within 3s of Show results. A 5-question form is two phone pages, 3 then 2: Next waits for its page, Back keeps the ratings, Send is on the last page (shown to fail with the Next rule removed). |
+| A30 | Browser test: 3 phones rate; the projector shows how many answered, then the results within 3s of Show results. A 5-question form is two phone pages, 3 then 2: Next waits for its page, Back keeps the ratings, Send is on the last page (shown to fail with the Next rule removed). The longest form's results (6 questions, 140-character title, 80-character question) keep every bar track at least 120px tall at 1920x1080 and 80px at 1280x720, with nothing scrolling or cut off and the room code on screen; 3 questions too. |
 
 ## Must verify before the slice that needs it
 
