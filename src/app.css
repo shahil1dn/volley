@@ -84,7 +84,6 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 /* A phone's thank-you after sending a feedback form: it fills the screen rather than
    sitting at the top of an empty page. */
 .phone-thanks { min-height: calc(100svh - 140px); display: flex; flex-direction: column; justify-content: center; gap: 16px; }
-.phone-thanks::before { content: ""; width: 48px; height: 4px; border-radius: 2px; background: var(--accent); }
 .phone .phone-thanks__message { font-size: clamp(36px, 11vw, 48px); line-height: 1.1; margin: 0; }
 /* The thank-you slide on a phone: the last thing people see, centred on the whole screen,
    not just the space under the masthead. The equal padding top and bottom keeps it clear
