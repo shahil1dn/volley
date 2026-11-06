@@ -1,12 +1,13 @@
 <script lang="ts">
 	import '../app.css';
 	import { brand } from '$lib/brand';
-	import { fontCss, logoCss, palette, themeCss } from '$lib/theme';
+	import { fontCss, logoCss, palette, thanksBackdropCss, themeCss } from '$lib/theme';
 
 	let { children } = $props();
 
 	// Built from src/lib/brand.ts, never from anything a visitor sends.
-	const theme = `<style>${themeCss(palette(brand.colours))}${fontCss(brand.fonts)}${logoCss(brand.logoHeight)}</style>`;
+	const colours = palette(brand.colours);
+	const theme = `<style>${themeCss(colours)}${fontCss(brand.fonts)}${logoCss(brand.logoHeight)}${thanksBackdropCss(brand.thankYou.background, colours)}</style>`;
 </script>
 
 <svelte:head>

@@ -81,11 +81,31 @@ a:hover { text-decoration-thickness: 2px; }
 .stack { display: grid; gap: 16px; margin-top: 24px; }
 fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 .phone__foot { margin-top: 24px; }
-/* The thank-you slide on a phone: the last thing people see, so it fills the screen
-   rather than sitting at the top of an empty page. */
+/* A phone's thank-you after sending a feedback form: it fills the screen rather than
+   sitting at the top of an empty page. */
 .phone-thanks { min-height: calc(100svh - 140px); display: flex; flex-direction: column; justify-content: center; gap: 16px; }
 .phone-thanks::before { content: ""; width: 48px; height: 4px; border-radius: 2px; background: var(--accent); }
 .phone .phone-thanks__message { font-size: clamp(36px, 11vw, 48px); line-height: 1.1; margin: 0; }
+/* The thank-you slide on a phone: the last thing people see, centred on the whole screen,
+   not just the space under the masthead. The equal padding top and bottom keeps it clear
+   of the masthead while its middle stays the screen's middle. */
+.phone-slide {
+  position: fixed; inset: 0; overflow-y: auto; padding: 88px 16px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center;
+}
+.phone-slide > * { max-width: 408px; }
+.phone .phone-slide__message { font-size: clamp(36px, 11vw, 48px); line-height: 1.1; margin: 0; }
+.phone-slide__hint { margin: 0; color: var(--ink); font-size: 16px; }
+/* The thank-you picture, when the copy has one (brand.thankYou.background), behind the whole
+   screen under a shade of the paper colour, strongest at the top where the words are. */
+.thanks-backdrop {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    linear-gradient(to bottom, rgb(var(--thanks-shade) / 0.5) 0%, rgb(var(--thanks-shade) / 0.42) 55%, rgb(var(--thanks-shade) / 0.12) 88%, rgb(var(--thanks-shade) / 0.05) 100%),
+    var(--thanks-picture) center bottom / cover no-repeat;
+}
+.thanks-backdrop--phone { --thanks-picture: var(--thanks-phone); }
+.thanks-backdrop--projector { --thanks-picture: var(--thanks-projector); }
 /* What this phone has sent, straight under the question. */
 .sent { color: var(--ink); font-size: 16px; }
 .sent strong { font-weight: 600; }
@@ -143,7 +163,8 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
   height: 100svh; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr);
   padding: clamp(16px, 3vw, 48px); gap: clamp(16px, 2.5vw, 48px);
 }
-.host__top { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: clamp(16px, 3vw, 48px); }
+/* Placed, not auto-placed, so the thank-you slide can share its row without pushing it down. */
+.host__top { grid-row: 1; grid-column: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: clamp(16px, 3vw, 48px); }
 /* A narrow window (a laptop split-screen, a phone): the join box goes under the question. */
 @media (max-width: 720px) { .host__top { grid-template-columns: minmax(0, 1fr); } }
 .host__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
@@ -164,7 +185,9 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 .host__joinText { font-size: clamp(16px, 1.9vw, 34px); color: var(--muted); }
 .host__url { font-size: clamp(18px, 2.1vw, 40px); color: var(--ink); font-weight: 600; }
 /* The thank-you slide: the message large in the middle, the copy's link as a QR under it. */
-.thanks { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(24px, 3vw, 64px); text-align: center; padding: 2vw; }
+/* The slide spans the header's row too, so its words sit in the middle of the whole screen
+   (the header has nothing to press, so it can sit under the slide's empty space). */
+.thanks { grid-row: 1 / -1; grid-column: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(24px, 3vw, 64px); text-align: center; padding: 2vw; }
 .thanks__message { font-size: clamp(40px, 6vw, 128px); max-width: 18ch; }
 .thanks__link { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .thanks__qr { width: clamp(140px, 18vw, 360px); line-height: 0; padding: 8px; background: #fff; border-radius: 8px; }

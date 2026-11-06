@@ -4,6 +4,7 @@
 	import { normaliseWord } from '$lib/words';
 	import { formPages, formQuestions, ratingLabel, SCALES } from '$lib/feedback';
 	import Brand from '$lib/Brand.svelte';
+	import ThanksBackdrop from '$lib/ThanksBackdrop.svelte';
 	import { brand } from '$lib/brand';
 	import {
 		connectionLost,
@@ -279,9 +280,10 @@
 		<h1>That's a wrap</h1>
 		<p class="hint">This session has ended. Thanks for joining in.</p>
 	{:else if isThanks}
-		<section class="phone-thanks">
-			<h1 class="phone-thanks__message">{prompt}</h1>
-			<p class="hint">You can close this page now.</p>
+		<ThanksBackdrop picture="phone" />
+		<section class="phone-slide">
+			<h1 class="phone-slide__message">{prompt}</h1>
+			<p class="phone-slide__hint">You can close this page now.</p>
 		</section>
 	{:else if isFeedback && mine.words.length > 0}
 		<!-- Shown whatever the host does next with this form: what this phone sent, never the room's results. -->

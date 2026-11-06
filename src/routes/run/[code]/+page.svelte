@@ -5,6 +5,7 @@
 	import { feedbackResults, formatAverage, formQuestions, pointLabel, ratingLabel, SCALES } from '$lib/feedback';
 	import { centreOut, wordSizeVw } from '$lib/words';
 	import Brand from '$lib/Brand.svelte';
+	import ThanksBackdrop from '$lib/ThanksBackdrop.svelte';
 	import { brand } from '$lib/brand';
 
 	let { data } = $props();
@@ -167,6 +168,7 @@
 	{:else if missing}
 		<p class="cloud__empty">Check the code and try again.</p>
 	{:else if isThanks}
+		<ThanksBackdrop picture="projector" />
 		<section class="thanks">
 			<h1 class="thanks__message">{prompt}</h1>
 			{#if data.thanks}
