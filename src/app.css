@@ -102,7 +102,9 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 .thanks-backdrop {
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background:
-    linear-gradient(to bottom, rgb(var(--thanks-shade) / 0.5) 0%, rgb(var(--thanks-shade) / 0.42) 55%, rgb(var(--thanks-shade) / 0.12) 88%, rgb(var(--thanks-shade) / 0.05) 100%),
+    linear-gradient(to bottom,
+      color-mix(in srgb, var(--thanks-shade) 50%, transparent) 0%, color-mix(in srgb, var(--thanks-shade) 42%, transparent) 55%,
+      color-mix(in srgb, var(--thanks-shade) 12%, transparent) 88%, color-mix(in srgb, var(--thanks-shade) 5%, transparent) 100%),
     var(--thanks-picture) center bottom / cover no-repeat;
 }
 .thanks-backdrop--phone { --thanks-picture: var(--thanks-phone); }
@@ -113,7 +115,7 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 /* Small words over a starry picture can land on a star at some window size, so the header's
    words carry a soft shadow of the shade colour that darkens only the pixels round each letter. */
 .phone:has(.thanks-backdrop) .masthead, .host:has(.thanks-backdrop) .host__top {
-  text-shadow: 0 0 3px rgb(var(--thanks-shade)), 0 0 8px rgb(var(--thanks-shade)), 0 0 16px rgb(var(--thanks-shade));
+  text-shadow: 0 0 3px var(--thanks-shade), 0 0 8px var(--thanks-shade), 0 0 16px var(--thanks-shade);
 }
 /* What this phone has sent, straight under the question. */
 .sent { color: var(--ink); font-size: 16px; }

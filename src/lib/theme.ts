@@ -138,7 +138,7 @@ export function thanksBackdropCss(background: ThankYouBackground | null | undefi
 	const checked = thankYouBackground(background);
 	if (checked === null) return '';
 	const away: Rgb = luminance(p.ink) > luminance(p.paper) ? [0, 0, 0] : [255, 255, 255];
-	const shade = parseHex(mix(parseHex(p.paper, 'paper'), away, 0.55), 'paper').join(' ');
+	const shade = mix(parseHex(p.paper, 'paper'), away, 0.55);
 	return `:root{--thanks-phone:url("${checked.phone}");--thanks-projector:url("${checked.projector}");--thanks-shade:${shade}}`;
 }
 

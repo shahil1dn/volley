@@ -162,10 +162,10 @@ test('thankYouBackground takes both pictures or none, each an image in static/',
 test('thanksBackdropCss names both pictures and a shade of the paper pushed away from the ink, and nothing without pictures', () => {
 	assert.equal(thanksBackdropCss(null, NIGHT), '');
 	// #2d214c darkened to #19122a, beside the approved mockup's #1a0e26.
-	assert.equal(thanksBackdropCss(PICTURES, NIGHT), ':root{--thanks-phone:url("/thanks/tall.webp");--thanks-projector:url("/thanks/wide.jpg");--thanks-shade:25 18 42}');
-	const shade = (paper: string, ink: string) => /--thanks-shade:([\d ]+)\}/.exec(thanksBackdropCss(PICTURES, palette({ accent: '#0e6f64', ink, paper })))?.[1];
-	assert.equal(shade('#ffffff', '#17191c'), '255 255 255', 'a white page stays white');
-	assert.equal(shade('#e0e0e0', '#17191c'), '238 238 238', 'a light page with dark words goes lighter');
+	assert.equal(thanksBackdropCss(PICTURES, NIGHT), ':root{--thanks-phone:url("/thanks/tall.webp");--thanks-projector:url("/thanks/wide.jpg");--thanks-shade:#19122a}');
+	const shade = (paper: string, ink: string) => /--thanks-shade:(#[0-9a-f]{6})\}/.exec(thanksBackdropCss(PICTURES, palette({ accent: '#0e6f64', ink, paper })))?.[1];
+	assert.equal(shade('#ffffff', '#17191c'), '#ffffff', 'a white page stays white');
+	assert.equal(shade('#e0e0e0', '#17191c'), '#eeeeee', 'a light page with dark words goes lighter');
 });
 
 test("this copy's thank-you pictures, if it has any, are files in static/", () => {
