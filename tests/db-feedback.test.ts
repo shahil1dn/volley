@@ -63,10 +63,10 @@ async function count(table: string, runId: string, client = db) {
 
 // ---------- A27: what a host may start ----------
 
-test('A27: a form of 1 and of 8 questions starts, stored trimmed and in order, and can come first', { skip }, async () => {
+test('A27: a form of 1 and of 6 questions starts, stored trimmed and in order, and can come first', { skip }, async () => {
 	await inRolledBackTransaction(db, async () => {
 		const { userId } = await makeRun(db);
-		for (const size of [1, 8]) {
+		for (const size of [1, 6]) {
 			const questions = Array.from({ length: size }, (_, n) => ({ text: `  Question ${n}  `, scale: ['stars', 'ten', 'words'][n % 3] }));
 			const started = await start(db, userId, [{ type: 'feedback', prompt: ' Feedback ', questions }]);
 			assert.equal(started.status, 'ok', `${size} questions`);
@@ -83,14 +83,14 @@ test('A27: a form of 1 and of 8 questions starts, stored trimmed and in order, a
 	});
 });
 
-test('A27: a form of 0 or 9 questions, an unknown scale, or an empty or 81-character question is refused', { skip }, async () => {
+test('A27: a form of 0 or 7 questions, an unknown scale, or an empty or 81-character question is refused', { skip }, async () => {
 	await inRolledBackTransaction(db, async () => {
 		const { userId } = await makeRun(db);
 		const form = (questions: unknown) => [{ type: 'word_cloud', prompt: 'Warm-up?' }, { type: 'feedback', prompt: 'Feedback', questions }];
 		const ok = { text: 'Fine?', scale: 'stars' };
 		const cases: [string, unknown][] = [
 			['0 questions', []],
-			['9 questions', Array(9).fill(ok)],
+			['7 questions', Array(7).fill(ok)],
 			['an unknown scale', [ok, { text: 'Hmm?', scale: 'thumbs' }]],
 			['no scale', [{ text: 'Hmm?' }]],
 			['a scale that is not text', [{ text: 'Hmm?', scale: 5 }]],
@@ -103,7 +103,7 @@ test('A27: a form of 0 or 9 questions, an unknown scale, or an empty or 81-chara
 		for (const [what, questions] of cases) assert.equal((await start(db, userId, form(questions))).status, 'invalid', what);
 		// The edges that must pass, so the refusals above are about the one thing wrong.
 		assert.equal((await start(db, userId, form([{ text: 'x'.repeat(80), scale: 'words' }]))).status, 'ok', '80 characters');
-		assert.equal((await start(db, userId, form(Array(8).fill(ok)))).status, 'ok', '8 questions after a word cloud');
+		assert.equal((await start(db, userId, form(Array(6).fill(ok)))).status, 'ok', '6 questions after a word cloud');
 		// A refused session leaves no deck behind.
 		const decks = await db.query(`select count(*) from public.decks where host_id = $1 and title = 'Session'`, [userId]);
 		assert.equal(Number(decks.rows[0].count), 2);
@@ -245,11 +245,11 @@ test('a form sent while Show results is being pressed is refused, never counted 
 
 // ---------- A24: results stay out of the shared state until Show ----------
 
-test('the largest form, 8 questions rated 10 out of 10, is stored and shown in full', { skip }, async () => {
+test('the largest form, 6 questions rated 10 out of 10, is stored and shown in full', { skip }, async () => {
 	await inRolledBackTransaction(db, async () => {
-		const form = await openForm(db, Array.from({ length: 8 }, (_, n) => ({ text: `Question ${n + 1}`, scale: 'ten' })));
-		assert.deepEqual(await send(form.code, Array(8).fill(10)), { status: 'ok', left: 0 });
-		const keys = Array.from({ length: 8 }, (_, q) => [`${q}:10`, 1]);
+		const form = await openForm(db, Array.from({ length: 6 }, (_, n) => ({ text: `Question ${n + 1}`, scale: 'ten' })));
+		assert.deepEqual(await send(form.code, Array(6).fill(10)), { status: 'ok', left: 0 });
+		const keys = Array.from({ length: 6 }, (_, q) => [`${q}:10`, 1]);
 		assert.deepEqual(await tallies(form.runId), Object.fromEntries([...keys, ['n', 1]]));
 		assert.equal((await act(db, form.userId, form.code, 'reveal')).status, 'ok');
 		assert.deepEqual((await state(form.code)).tallies, keys);

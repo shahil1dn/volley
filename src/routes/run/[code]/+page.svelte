@@ -36,8 +36,8 @@
 	// The state carries a form's ratings only once the host has shown them (ADR-018).
 	const results = $derived(isFeedback && room?.itemState === 'revealed' ? feedbackResults(formItems, room.tallies) : null);
 	const responses = $derived(room?.responses ?? 0);
-	// Up to 8 questions on one screen that can't scroll. Up to 3 sit in one row, so each
-	// chart gets the full height; more go in two rows: 2x2, 3x2 or 4x2.
+	// Up to 6 questions, all at once, on a screen that can't scroll. Up to 3 sit in one row,
+	// so each chart gets the full height; 4 to 6 go in two rows: 2x2 or 3x2.
 	const resultColumns = $derived(formItems.length <= 3 ? Math.max(1, formItems.length) : Math.ceil(formItems.length / 2));
 	// The projector shows one question at a time, chosen by the host; phones see the whole list.
 	const shown = $derived(room?.shown ?? null);
@@ -95,7 +95,7 @@
 		return () => observer.disconnect();
 	});
 
-	// A long form (up to 8 questions and their titles) shrinks to fit the screen the same
+	// A long form (up to 6 questions and their titles) shrinks to fit the screen the same
 	// way, again when its count changes or its results go up.
 	$effect(() => {
 		if (!formBox) return;

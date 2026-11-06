@@ -1,5 +1,5 @@
 -- A feedback form ('feedback', ADR-018): a title (stored as `prompt`, 1 to 140
--- characters) and 1 to 8 rating questions of 1 to 80 characters, each with its
+-- characters) and 1 to 6 rating questions of 1 to 80 characters, each with its
 -- own scale: 'stars' (1 to 5), 'ten' (1 to 10) or 'words' (Very bad to Very
 -- good, stored as 1 to 5). A phone sends the whole form once, as a JSON list of
 -- whole numbers, one per question in order.
@@ -653,7 +653,7 @@ return (
 );
 
 -- 0018's start_session plus the feedback form: [{type: 'feedback', prompt,
--- questions: [{text, scale}]}], 1 to 8 questions. It may come first.
+-- questions: [{text, scale}]}], 1 to 6 questions. It may come first.
 create or replace function public.start_session(p_host_id uuid, p_items jsonb) returns jsonb
 language plpgsql
 security definer
@@ -713,7 +713,7 @@ begin
 				if jsonb_typeof(v_item -> 'questions') is distinct from 'array' then
 					raise exception 'invalid item' using errcode = 'VQ002';
 				end if;
-				if jsonb_array_length(v_item -> 'questions') not between 1 and 8
+				if jsonb_array_length(v_item -> 'questions') not between 1 and 6
 					or exists (
 						select 1 from jsonb_array_elements(v_item -> 'questions') q
 						where jsonb_typeof(q -> 'text') is distinct from 'string'

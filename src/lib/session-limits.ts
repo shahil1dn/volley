@@ -9,7 +9,7 @@ export const MAX_PROMPT_CHARS = 140;
 export const MAX_OPTION_CHARS = 80;
 // A feedback form's rating questions (ADR-018); their scales are in feedback.ts.
 export const MIN_FORM_QUESTIONS = 1;
-export const MAX_FORM_QUESTIONS = 8;
+export const MAX_FORM_QUESTIONS = 6;
 export const MAX_FORM_QUESTION_CHARS = 80;
 
 export const ACTIVITY_TYPES = [

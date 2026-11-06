@@ -228,7 +228,7 @@ test('a feedback form comes back with its questions trimmed and in order, each w
 	});
 });
 
-test('a feedback form needs 1 to 8 questions, counted before the echo is cut', () => {
+test('a feedback form needs 1 to 6 questions, counted before the echo is cut', () => {
 	for (const n of [MIN_FORM_QUESTIONS, MAX_FORM_QUESTIONS]) {
 		const questions = Array.from({ length: n }, (_, j): [string, string] => [`Q${j}`, 'stars']);
 		assert.equal(parseSessionForm(post([form(questions)])).ok, true, `${n} questions`);
