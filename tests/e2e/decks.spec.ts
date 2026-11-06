@@ -64,7 +64,7 @@ test('the list starts at one activity, grows to the cap, and renumbers when one 
 	// What was typed stays with its activity when another is removed.
 	await question(page, 2).fill('Second');
 	await question(page, 3).fill('Third');
-	await page.getByRole('button', { name: 'Remove activity 2' }).click();
+	await page.getByRole('button', { name: 'Remove activity 2', exact: true }).click();
 	await expect(headings(page)).toHaveCount(MAX_ACTIVITIES - 1);
 	await expect(question(page, 2)).toHaveValue('Third');
 	await expect(addActivity(page), 'room again').toBeEnabled();
