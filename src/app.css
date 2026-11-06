@@ -217,7 +217,7 @@ fieldset.stack { border: 0; padding: 0; min-width: 0; margin: 0; }
 .host--two-rows .host__question--form { font-size: clamp(20px, 2.2vw, 44px); }
 .host--two-rows .host__join { grid-area: join; padding: clamp(6px, 0.6vw, 12px) clamp(12px, 1.2vw, 20px); }
 .host--two-rows .host__qr, .host--two-rows .host__joinText, .host--two-rows .host__count { display: none; }
-.host--two-rows .host__joinInfo { display: flex; align-items: baseline; gap: clamp(12px, 1.2vw, 24px); }
+.host--two-rows .host__joinInfo { display: flex; flex-wrap: wrap; align-items: baseline; gap: clamp(12px, 1.2vw, 24px); }
 .host--two-rows .host__code { font-size: clamp(24px, 2.6vw, 48px); margin: 0; }
 .host--two-rows .host__ended { font-size: clamp(20px, 2vw, 36px); }
 @media (max-width: 720px) { .host--two-rows .host__top { grid-template-columns: minmax(0, 1fr); grid-template-areas: "meta" "join" "title"; } }

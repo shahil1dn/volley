@@ -39,10 +39,11 @@
 	const responses = $derived(room?.responses ?? 0);
 	// Up to 6 questions, all at once, on a screen that can't scroll. Up to 3 sit in one row,
 	// so each chart gets the full height; 4 to 6 go in two rows: 2x2 or 3x2.
-	const resultColumns = $derived(formItems.length <= 3 ? Math.max(1, formItems.length) : Math.ceil(formItems.length / 2));
+	const twoRowForm = $derived(formItems.length > 3);
+	const resultColumns = $derived(twoRowForm ? Math.ceil(formItems.length / 2) : Math.max(1, formItems.length));
 	// Two rows of charts under the full join box get bars too short to show a shape, so once their
 	// results are up the box shrinks to the address and the code: people may still join for later.
-	const twoRows = $derived(results !== null && formItems.length > 3);
+	const twoRows = $derived(results !== null && twoRowForm);
 	// The projector shows one question at a time, chosen by the host; phones see the whole list.
 	const shown = $derived(room?.shown ?? null);
 	const waiting = $derived(room?.waiting ?? 0);

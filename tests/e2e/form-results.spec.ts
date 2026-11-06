@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { expect, request, test, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { activityBox, addHost, BASE, builderReady, signIn, statusValue } from './helpers.ts';
+import { SCALES } from '../../src/lib/feedback.ts';
 import { MAX_FORM_QUESTION_CHARS, MAX_FORM_QUESTIONS, MAX_PROMPT_CHARS } from '../../src/lib/session-limits.ts';
 
 const SCALE_NAMES = { stars: 'Stars, 1 to 5', ten: '1 to 10', words: 'Very bad to Very good' } as const;
@@ -70,7 +71,7 @@ const trackHeights = (projector: Page) =>
 async function checkSizes(projector: Page, code: string, questions: { scale: Scale }[]) {
 	for (const { width, height, minTrack } of SIZES) {
 		await projector.setViewportSize({ width, height });
-		await expect(projector.locator('.form-result__track')).toHaveCount(questions.reduce((sum, { scale }) => sum + (scale === 'ten' ? 10 : 5), 0));
+		await expect(projector.locator('.form-result__track')).toHaveCount(questions.reduce((sum, { scale }) => sum + SCALES[scale].points, 0));
 		await expect.poll(async () => Math.min(...(await trackHeights(projector))), { message: `shortest bar track at ${width}x${height}` }).toBeGreaterThanOrEqual(minTrack);
 		const layout = await projector.evaluate(() => {
 			const list = document.querySelector('.form-results') as HTMLElement;
