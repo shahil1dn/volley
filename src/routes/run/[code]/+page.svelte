@@ -169,7 +169,7 @@
 		<p class="cloud__empty">Check the code and try again.</p>
 	{:else if isThanks}
 		<ThanksBackdrop picture="projector" />
-		<section class="thanks">
+		<section class="thanks" class:thanks--alone={!data.thanks}>
 			<h1 class="thanks__message">{prompt}</h1>
 			{#if data.thanks}
 				<div class="thanks__link">
