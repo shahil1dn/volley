@@ -8,6 +8,7 @@ import type pg from 'pg';
 import { connectAsOwner } from '../../scripts/pg-connect.ts';
 import { spawnSync } from 'node:child_process';
 import { addHost, BASE, signIn, startSession } from './helpers.ts';
+import { brand } from '../../src/lib/brand.ts';
 
 const admin = createClient(process.env.SUPABASE_URL ?? '', process.env.SUPABASE_SECRET_KEY ?? '', {
 	auth: { persistSession: false, autoRefreshToken: false },
@@ -161,7 +162,9 @@ test('a page that does not exist gets the branded page with a way out, not a bar
 	await page.goto('/no-such-page');
 	await expect(page.getByRole('heading', { name: "We can't find that page" })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Join a session' })).toHaveAttribute('href', '/join');
-	await expect(page.getByText('Volley', { exact: true }).first()).toBeVisible();
+	// The copy's own mark, whatever it is called: its logo (named by its alt text) or its name.
+	const mark = brand.logo ? page.getByRole('img', { name: brand.name, exact: true }) : page.getByText(brand.name, { exact: true });
+	await expect(mark.first()).toBeVisible();
 });
 
 test('a signed-out host pressing Start is told they are signed out, with a way back, and keeps the form', async ({ browser }) => {
