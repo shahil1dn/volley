@@ -35,11 +35,16 @@ async function offCentre(page: Page, selector: string): Promise<[number, number]
 	});
 }
 
-// What is drawn behind a thing: the backdrop's picture under the words, or nothing.
+// What is drawn behind a thing: the backdrop's picture under the words, or nothing. The
+// backdrop takes no taps, which also hides it from elementsFromPoint, so it takes them
+// just for this look.
 async function pictureBehind(page: Page, selector: string): Promise<string | null> {
 	return page.locator(selector).evaluate((element) => {
+		const backdrops = [...document.querySelectorAll<HTMLElement>('.thanks-backdrop')];
+		for (const backdrop of backdrops) backdrop.style.pointerEvents = 'auto';
 		const box = element.getBoundingClientRect();
 		const behind = document.elementsFromPoint(box.left + box.width / 2, box.top + box.height / 2).find((e) => e.classList.contains('thanks-backdrop'));
+		for (const backdrop of backdrops) backdrop.style.pointerEvents = '';
 		return behind ? getComputedStyle(behind).backgroundImage : null;
 	});
 }
@@ -107,10 +112,14 @@ test('a session ends on a thank-you slide: nothing to answer, the message on pho
 	await expect(phonePage.getByText('Keep this page open')).toHaveCount(0);
 	// The phone's slide: no accent line, and its words in the middle of the whole screen.
 	expect(await phonePage.locator('.phone-slide').evaluate((element) => getComputedStyle(element, '::before').content)).toBe('none');
-	const [phoneAcross, phoneDown] = await offCentre(phonePage, '.phone-slide__message');
+	const [phoneAcross] = await offCentre(phonePage, '.phone-slide__message');
 	expect(phoneAcross, 'the message is centred across').toBeLessThan(2);
-	const [, hintDown] = await offCentre(phonePage, '.phone-slide__hint');
-	expect(Math.abs((phoneDown + hintDown) / 2), 'message and hint together sit mid-screen').toBeLessThan(40);
+	const blockDown = await phonePage.evaluate(() => {
+		const top = document.querySelector('.phone-slide__message')?.getBoundingClientRect().top ?? 0;
+		const bottom = document.querySelector('.phone-slide__hint')?.getBoundingClientRect().bottom ?? 0;
+		return Math.abs((top + bottom) / 2 - window.innerHeight / 2);
+	});
+	expect(blockDown, 'the message and hint, as one block, sit mid-screen').toBeLessThan(2);
 	await expect(phonePage.locator('.phone-slide__hint')).toHaveCSS('text-align', 'center');
 
 	await expect(projector.locator('.thanks__message')).toHaveText(brand.thankYou.message);
